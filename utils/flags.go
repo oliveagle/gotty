@@ -1,17 +1,16 @@
 package utils
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 	"reflect"
 	"strings"
 
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli/v2"
 	"github.com/fatih/structs"
 	"github.com/yudai/hcl"
 
-	"github.com/yudai/gotty/pkg/homedir"
+	"github.com/oliveagle/gotty/pkg/homedir"
 )
 
 func GenerateFlags(options ...interface{}) (flags []cli.Flag, mappings map[string]string, err error) {
@@ -28,33 +27,42 @@ func GenerateFlags(options ...interface{}) (flags []cli.Flag, mappings map[strin
 			mappings[flagName] = field.Name()
 
 			flagShortName := field.Tag("flagSName")
-			if flagShortName != "" {
-				flagName += ", " + flagShortName
-			}
-
 			flagDescription := field.Tag("flagDescribe")
 
 			switch field.Kind() {
 			case reflect.String:
-				flags = append(flags, cli.StringFlag{
-					Name:   flagName,
-					Value:  field.Value().(string),
-					Usage:  flagDescription,
-					EnvVar: envName,
-				})
+				sf := &cli.StringFlag{
+					Name:    flagName,
+					Usage:   flagDescription,
+					EnvVars: []string{envName},
+				}
+				if flagShortName != "" {
+					sf.Aliases = []string{flagShortName}
+				}
+				sf.Value = field.Value().(string)
+				flags = append(flags, sf)
 			case reflect.Bool:
-				flags = append(flags, cli.BoolFlag{
-					Name:   flagName,
-					Usage:  flagDescription,
-					EnvVar: envName,
-				})
+				bf := &cli.BoolFlag{
+					Name:    flagName,
+					Usage:   flagDescription,
+					EnvVars: []string{envName},
+				}
+				if flagShortName != "" {
+					bf.Aliases = []string{flagShortName}
+				}
+				flags = append(flags, bf)
 			case reflect.Int:
-				flags = append(flags, cli.IntFlag{
-					Name:   flagName,
-					Value:  field.Value().(int),
-					Usage:  flagDescription,
-					EnvVar: envName,
-				})
+				ifval := field.Value().(int)
+				iflag := &cli.IntFlag{
+					Name:    flagName,
+					Usage:   flagDescription,
+					EnvVars: []string{envName},
+					Value:   ifval,
+				}
+				if flagShortName != "" {
+					iflag.Aliases = []string{flagShortName}
+				}
+				flags = append(flags, iflag)
 			}
 		}
 	}
@@ -109,7 +117,7 @@ func ApplyConfigFile(filePath string, options ...interface{}) error {
 
 	fileString := []byte{}
 	log.Printf("Loading config file at: %s", filePath)
-	fileString, err := ioutil.ReadFile(filePath)
+	fileString, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
