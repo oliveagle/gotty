@@ -101,8 +101,24 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn) e
 	if err != nil {
 		return errors.Wrapf(err, "failed to authenticate websocket connection")
 	}
-	if init.AuthToken != server.options.Credential {
-		return errors.New("failed to authenticate websocket connection")
+
+	// Authenticate based on auth type
+	if server.options.EnableAuth || server.options.EnableBasicAuth {
+		if server.options.AuthType == "basic" || server.options.AuthType == "" {
+			// Basic authentication: verify AuthToken matches Credential
+			if init.AuthToken != server.options.Credential {
+				log.Printf("Authentication failed for %s", conn.RemoteAddr())
+				return errors.New("failed to authenticate websocket connection: invalid credential")
+			}
+			log.Printf("Authentication succeeded for %s", conn.RemoteAddr())
+		} else {
+			// Key-based authentication: verify AuthToken matches any authorized key
+			if !server.options.IsKeyAuthorized(init.AuthToken) {
+				log.Printf("Key authentication failed for %s", conn.RemoteAddr())
+				return errors.New("failed to authenticate websocket connection: invalid key")
+			}
+			log.Printf("Key authentication succeeded for %s", conn.RemoteAddr())
+		}
 	}
 
 	queryPath := "?"
@@ -202,8 +218,34 @@ func (server *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 func (server *Server) handleAuthToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript")
-	// @TODO hashing?
-	w.Write([]byte("var gotty_auth_token = '" + server.options.Credential + "';"))
+
+	if server.options.EnableAuth && server.options.AuthType == "key" {
+		// For key auth, send first authorized key as the token
+		// If using authorized_keys file, get the first one
+		if server.options.AuthorizedKeysFile != "" {
+			keys, err := server.options.GetAuthorizedKeys()
+			if err != nil {
+				log.Printf("Error reading authorized_keys: %v", err)
+				w.Write([]byte("var gotty_auth_token = '';"))
+				return
+			}
+			if len(keys) > 0 {
+				w.Write([]byte("var gotty_auth_token = '';"))
+				return
+			}
+			// Get the first key as default token
+			for _, key := range keys {
+				w.Write([]byte("var gotty_auth_token = '" + key + "';"))
+				return
+			}
+		} else {
+			// Single public key
+			w.Write([]byte("var gotty_auth_token = '" + server.options.PublicKey + "';"))
+		}
+	} else {
+		// Basic auth - return credential
+		w.Write([]byte("var gotty_auth_token = '" + server.options.Credential + "';"))
+	}
 }
 
 func (server *Server) handleConfig(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,11 @@
 package server
 
 import (
+	"bufio"
+	"os"
+	"strings"
+
+	"github.com/oliveagle/gotty/pkg/homedir"
 	"github.com/pkg/errors"
 )
 
@@ -8,9 +13,11 @@ type Options struct {
 	Address             string           `hcl:"address" flagName:"address" flagSName:"a" flagDescribe:"IP address to listen" default:"0.0.0.0"`
 	Port                string           `hcl:"port" flagName:"port" flagSName:"p" flagDescribe:"Port number to liten" default:"8080"`
 	EnableAuth         bool             `hcl:"enable_auth" flagName:"" flagSName:"" flagDescribe:"Enable authentication" default:"false"`
-	AuthType          string           `hcl:"auth_type" flagName:"auth-type" flagSName:"" flagDescribe:"Auth type: basic or key (default: basic)"`
+	EnableBasicAuth     bool             `hcl:"enable_basic_auth" flagName:"" flagSName:"" flagDescribe:"Enable basic authentication (deprecated, use enable_auth and auth_type)" default:"false"`
+	AuthType          string           `hcl:"auth_type" flagName:"auth-type" flagSName:"" flagDescribe:"Auth type: basic, key, or authorized_keys (default: basic)"`
 	Credential          string           `hcl:"credential" flagName:"credential" flagSName:"c" flagDescribe:"Credential for Basic Authentication (ex: user:pass, default disabled)" default:""`
 	PublicKey          string           `hcl:"public_key" flagName:"public-key" flagSName:"k" flagDescribe:"Public key for authentication (default: empty)" default:""`
+	AuthorizedKeysFile  string           `hcl:"authorized_keys_file" flagName:"authorized-keys-file" flagSName:"" flagDescribe:"Path to authorized_keys file for key authentication (default: ~/.ssh/authorized_keys)" default:"~/.ssh/authorized_keys"`
 	EnableRandomUrl     bool             `hcl:"enable_random_url" flagName:"random-url" flagSName:"r" flagDescribe:"Add a random string to the URL" default:"false"`
 	RandomUrlLength     int              `hcl:"random_url_length" flagName:"random-url-length" flagDescribe:"Random URL length" default:"8"`
 	EnableTLS           bool             `hcl:"enable_tls" flagName:"tls" flagSName:"t" flagDescribe:"Enable TLS/SSL" default:"false"`
@@ -25,6 +32,7 @@ type Options struct {
 	MaxConnection       int              `hcl:"max_connection" flagName:"max-connection" flagDescribe:"Maximum connection to gotty" default:"0"`
 	Once                bool             `hcl:"once" flagName:"once" flagDescribe:"Accept only one client and exit on disconnection" default:"false"`
 	Timeout             int              `hcl:"timeout" flagName:"timeout" flagDescribe:"Timeout seconds for waiting a client(0 to disable)" default:"0"`
+	PermitWrite         bool             `hcl:"permit_write" flagName:"permit-write" flagSName:"w" flagDescribe:"Permit clients to write to the TTY (BE CAREFUL)" default:"false"`
 	PermitArguments     bool             `hcl:"permit_arguments" flagName:"permit-arguments" flagDescribe:"Permit clients to send command line arguments in URL (e.g. http://example.com:8080/?arg=AAA&arg=BBB)" default:"true"`
 	Preferences         *HtermPrefernces `hcl:"preferences"`
 	Width               int              `hcl:"width" flagName:"width" flagDescribe:"Static width of the screen, 0(default) means dynamically resize" default:"0"`
@@ -40,10 +48,23 @@ func (options *Options) Validate() error {
 		options.AuthType = "basic"
 	}
 
+	// Backward compatibility: if EnableBasicAuth is true, set AuthType to basic
+	if options.EnableBasicAuth {
+		options.EnableAuth = true
+		if options.AuthType == "" {
+			options.AuthType = "basic"
+		}
+	}
+
+	// Only validate if authentication is enabled
+	if !options.EnableAuth && !options.EnableBasicAuth {
+		return nil
+	}
+
 	// Validate based on auth type
 	switch options.AuthType {
 	case "basic":
-		if options.Credential == "" && options.EnableAuth {
+		if options.Credential == "" {
 			return errors.New("credential is required for basic authentication")
 		}
 	case "key":
@@ -115,4 +136,130 @@ type HtermPrefernces struct {
 	SendEncoding                  string                       `hcl:"send_encoding" json:"send-encoding,omitempty"`
 	ShiftInsertPaste              bool                         `hcl:"shift_insert_paste" json:"shift-insert-paste,omitempty"`
 	UserCss                       string                       `hcl:"user_css" json:"user-css,omitempty"`
+}
+
+// GetAuthorizedKeys reads and parses an authorized_keys file, returning a map of public keys
+// The key in the map is the key comment/identifier (if any), and the value is the full public key
+func (options *Options) GetAuthorizedKeys() (map[string]string, error) {
+	keys := make(map[string]string)
+
+	filePath := homedir.Expand(options.AuthorizedKeysFile)
+	file, err := os.Open(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// If file doesn't exist, return empty map (no keys)
+			return keys, nil
+		}
+		return nil, errors.Wrapf(err, "failed to open authorized_keys file: %s", filePath)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Parse the key line
+		// Format: <key-type> <key-data> <comment>
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue // Invalid line, skip
+		}
+
+		keyType := parts[0]
+		keyData := parts[1]
+
+	// Build the full key (type + data)
+	fullKey := keyType + " " + keyData
+
+		// Use comment as key identifier if available, otherwise use a counter
+		var keyID string
+		if len(parts) >= 3 {
+			keyID = strings.Join(parts[2:], " ")
+		} else {
+			keyID = "key-" + string(rune(len(keys)+1))
+		}
+
+		keys[keyID] = fullKey
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, errors.Wrapf(err, "failed to read authorized_keys file")
+	}
+
+	return keys, nil
+}
+
+// IsKeyAuthorized checks if a given key matches any of the authorized keys
+func (options *Options) IsKeyAuthorized(token string) bool {
+	// Check single public key
+	if options.PublicKey != "" {
+		// Match either just the key data or the full key (type + data)
+		if token == options.PublicKey || token == extractKeyData(options.PublicKey) {
+			return true
+		}
+	}
+
+	// Check authorized_keys file
+	if options.AuthType == "authorized_keys" || (options.AuthType == "key" && options.AuthorizedKeysFile != "") {
+		keys, err := options.GetAuthorizedKeys()
+		if err != nil {
+			return false
+		}
+		for _, key := range keys {
+			if token == key || token == extractKeyData(key) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// extractKeyData extracts just the key data from a full key (removing the key type prefix)
+func extractKeyData(key string) string {
+	parts := strings.Fields(key)
+	if len(parts) >= 2 {
+		return strings.Join(parts[1:], " ")
+	}
+	return key
+}
+
+// GetAuthKeysList returns a formatted list of authorized keys for logging
+func (options *Options) GetAuthKeysList() []string {
+	if options.AuthType == "basic" || options.AuthType == "" {
+		return []string{"Basic Authentication"}
+	}
+
+	if options.AuthType == "key" && options.PublicKey != "" {
+		previewLen := min(50, len(options.PublicKey))
+		return []string{options.PublicKey[:previewLen] + "..."}
+	}
+
+	if options.AuthType == "authorized_keys" {
+		keys, err := options.GetAuthorizedKeys()
+		if err != nil {
+			return []string{"(error reading authorized_keys)"}
+		}
+		result := make([]string, 0, len(keys))
+		for id, key := range keys {
+			keyData := extractKeyData(key)
+			previewLen := min(30, len(keyData))
+			result = append(result, id+": "+keyData[:previewLen]+"...")
+		}
+		return result
+	}
+
+	return []string{"No authentication"}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

@@ -196,9 +196,22 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 
 	siteHandler := http.Handler(siteMux)
 
-	if server.options.EnableBasicAuth {
-		log.Printf("Using Basic Authentication")
-		siteHandler = server.wrapBasicAuth(siteHandler, server.options.Credential)
+	if server.options.EnableAuth || server.options.EnableBasicAuth {
+		if server.options.AuthType == "basic" || server.options.AuthType == "" {
+			log.Printf("Using Basic Authentication")
+			siteHandler = server.wrapBasicAuth(siteHandler, server.options.Credential)
+		} else {
+			// Key-based authentication (single key or authorized_keys file)
+			authKeys := server.options.GetAuthKeysList()
+			if server.options.AuthType == "key" && server.options.AuthorizedKeysFile != "" {
+				log.Printf("Using Key Authentication from authorized_keys file: %s", server.options.AuthorizedKeysFile)
+			} else if server.options.AuthType == "authorized_keys" {
+				log.Printf("Using Key Authentication from authorized_keys file: %s (%d keys)", server.options.AuthorizedKeysFile, len(authKeys))
+			} else {
+				log.Printf("Using Key Authentication (single key)")
+			}
+			// Key authentication is handled in WebSocket connection, no HTTP auth required
+		}
 	}
 
 	withGz := gziphandler.GzipHandler(server.wrapHeaders(siteHandler))
