@@ -3,11 +3,14 @@ package main
 const (
 	exampleTemplate = `
 EXAMPLES:
-   # Share your terminal as a web application (default port: 13562)
+   # Share your terminal as a web application
    gotty bash
 
    # Use custom port
    gotty --port 8080 bash
+
+   # Enable client input (BE CAREFUL!)
+   gotty -w bash
 
    # Enable basic authentication
    gotty --credential user:pass bash
