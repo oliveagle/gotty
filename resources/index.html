@@ -8,9 +8,207 @@
     <link rel="stylesheet" href="./css/xterm_customize.css" />
   </head>
   <body>
-    <div id="terminal"></div>
+    <div id="app">
+      <div id="sidebar">
+        <div class="sidebar-header">
+          <h3>Sessions</h3>
+          <button id="new-session-btn" class="btn-new" title="New Session">+</button>
+        </div>
+        <div id="session-list">
+          <div class="session-loading">Loading sessions...</div>
+        </div>
+      </div>
+      <div id="main">
+        <div id="terminal"></div>
+      </div>
+    </div>
+
     <script src="./auth_token.js"></script>
     <script src="./config.js"></script>
     <script src="./js/gotty-bundle.js"></script>
+
+    <script>
+      // Session Manager for frontend
+      class SessionManager {
+        constructor() {
+          this.sessions = [];
+          this.activeSessionId = null;
+          this.term = null;
+          this.wt = null;
+          this.closer = null;
+        }
+
+        init() {
+          // Listen for click on new session button
+          const newSessionBtn = document.getElementById('new-session-btn');
+          if (newSessionBtn) {
+            newSessionBtn.addEventListener('click', () => {
+              this.createSession();
+            });
+          }
+
+          // Initial fetch
+          this.fetchSessions();
+        }
+
+        async fetchSessions() {
+          try {
+            const response = await fetch('/api/sessions');
+            const data = await response.json();
+            this.sessions = data.sessions || [];
+            this.renderSessionList();
+
+            // Auto-select first session if none selected
+            if (!this.activeSessionId && this.sessions.length > 0) {
+              this.setActiveSession(this.sessions[0].id);
+            }
+          } catch (error) {
+            console.error('Failed to fetch sessions:', error);
+            this.renderSessionList();
+          }
+        }
+
+        async createSession() {
+          try {
+            const response = await fetch('/api/sessions', {
+              method: 'POST',
+            });
+            const data = await response.json();
+
+            if (data.id) {
+              await this.fetchSessions();
+              this.setActiveSession(data.id);
+            }
+          } catch (error) {
+            console.error('Failed to create session:', error);
+          }
+        }
+
+        async closeSession(id, event) {
+          event.stopPropagation();
+          try {
+            await fetch('/api/sessions/' + id, {
+              method: 'DELETE',
+            });
+
+            if (this.activeSessionId === id) {
+              this.disconnectTerminal();
+              this.activeSessionId = null;
+            }
+
+            await this.fetchSessions();
+
+            // Select another session if available
+            if (this.sessions.length > 0 && !this.activeSessionId) {
+              this.setActiveSession(this.sessions[0].id);
+            }
+          } catch (error) {
+            console.error('Failed to close session:', error);
+          }
+        }
+
+        renderSessionList() {
+          const container = document.getElementById('session-list');
+          if (!container) return;
+
+          if (this.sessions.length === 0) {
+            container.innerHTML = '<div class="session-empty">No sessions. Click + to create one.</div>';
+            return;
+          }
+
+          container.innerHTML = this.sessions.map(session => `
+            <div class="session-item ${session.id === this.activeSessionId ? 'active' : ''}"
+                 data-session-id="${session.id}"
+                 onclick="sessionManager.setActiveSession('${session.id}')">
+              <div class="session-info">
+                <div class="session-title">${session.title}</div>
+                <div class="session-time">${session.created_at}</div>
+              </div>
+              <button class="btn-close" onclick="sessionManager.closeSession('${session.id}', event)">×</button>
+            </div>
+          `).join('');
+        }
+
+        setActiveSession(id) {
+          // Reconnect terminal if needed
+          if (this.activeSessionId !== id) {
+            this.disconnectTerminal();
+            this.activeSessionId = id;
+            this.connectTerminal(id);
+          }
+
+          // Update UI
+          const sessionItems = document.querySelectorAll('.session-item');
+          sessionItems.forEach(item => {
+            item.classList.remove('active');
+            if (item.getAttribute('data-session-id') === id) {
+              item.classList.add('active');
+            }
+          });
+        }
+
+        disconnectTerminal() {
+          if (this.closer) {
+            this.closer();
+            this.closer = null;
+          }
+          if (this.wt) {
+            this.wt = null;
+          }
+          if (this.term) {
+            this.term = null;
+          }
+        }
+
+        connectTerminal(sessionId) {
+          // Get auth token from global
+          var authToken = '';
+          if (typeof gotty_auth_token !== 'undefined') {
+            authToken = gotty_auth_token;
+          }
+
+          var termType = 'xterm';
+          if (typeof gotty_term !== 'undefined') {
+            termType = gotty_term;
+          }
+
+          const elem = document.getElementById('terminal');
+          if (!elem) return;
+
+          // Use xterm by default
+          let term;
+          if (termType === 'hterm') {
+            term = new Hterm(elem);
+          } else {
+            term = new Xterm(elem);
+          }
+
+          const httpsEnabled = window.location.protocol === 'https:';
+          const baseUrl = (httpsEnabled ? 'wss://' : 'ws://') + window.location.host + window.location.pathname;
+          const wsUrl = baseUrl + 'ws?session_id=' + sessionId;
+          const args = window.location.search;
+          const factory = new ConnectionFactory(wsUrl, ['webtty']);
+          const wt = new WebTTY(term, factory, args, authToken);
+
+          this.term = term;
+          this.wt = wt;
+          this.closer = wt.open();
+
+          term.showMessage('Connecting...', 0);
+        }
+
+        getActiveSessionId() {
+          return this.activeSessionId;
+        }
+      }
+
+      // Initialize session manager after all scripts loaded
+      let sessionManager;
+      window.addEventListener('load', function() {
+        sessionManager = new SessionManager();
+        sessionManager.init();
+        window.sessionManager = sessionManager;
+      });
+    </script>
   </body>
 </html>

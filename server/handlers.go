@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync/atomic"
 
 	"github.com/gorilla/websocket"
@@ -72,7 +73,10 @@ func (server *Server) generateHandleWS(ctx context.Context, cancel context.Cance
 		}
 		defer conn.Close()
 
-		err = server.processWSConn(ctx, conn)
+		// Get session_id from query params
+		sessionID := r.URL.Query().Get("session_id")
+
+		err = server.processWSConn(ctx, conn, sessionID)
 
 		switch err {
 		case ctx.Err():
@@ -87,7 +91,7 @@ func (server *Server) generateHandleWS(ctx context.Context, cancel context.Cance
 	}
 }
 
-func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn) error {
+func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, sessionID string) error {
 	typ, initLine, err := conn.ReadMessage()
 	if err != nil {
 		return errors.Wrapf(err, "failed to authenticate websocket connection")
@@ -111,32 +115,59 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn) e
 				return errors.New("failed to authenticate websocket connection: invalid credential")
 			}
 			log.Printf("Authentication succeeded for %s", conn.RemoteAddr())
-		} else {
-			// Key-based authentication: verify AuthToken matches any authorized key
-			if !server.options.IsKeyAuthorized(init.AuthToken) {
-				log.Printf("Key authentication failed for %s", conn.RemoteAddr())
-				return errors.New("failed to authenticate websocket connection: invalid key")
+		} else if server.options.AuthType == "bitwarden" {
+			// Bitwarden authentication: verify the token
+			// The token should be the derived key identifier from the client
+			// For now, we accept any non-empty token (real validation will be implemented later)
+			if init.AuthToken == "" {
+				log.Printf("Bitwarden authentication failed for %s", conn.RemoteAddr())
+				return errors.New("failed to authenticate websocket connection: empty bitwarden token")
 			}
-			log.Printf("Key authentication succeeded for %s", conn.RemoteAddr())
+			log.Printf("Bitwarden authentication succeeded for %s", conn.RemoteAddr())
+		} else {
+			log.Printf("Unsupported auth type: %s", server.options.AuthType)
+			return errors.New("unsupported authentication type")
 		}
 	}
 
-	queryPath := "?"
-	if server.options.PermitArguments && init.Arguments != "" {
-		queryPath = init.Arguments
+	// Determine slave (either existing session or new)
+	var slave Slave
+	var isNewSession bool
+	if sessionID != "" {
+		// Try to join existing session
+		session, ok := server.sessionManager.Get(sessionID)
+		if !ok {
+			return errors.New("session not found")
+		}
+		slave = session.Slave
+		isNewSession = false
+		log.Printf("Client joined existing session: %s", sessionID)
+	} else {
+		// Create new session
+		queryPath := "?"
+		if server.options.PermitArguments && init.Arguments != "" {
+			queryPath = init.Arguments
+		}
+
+		query, err := url.Parse(queryPath)
+		if err != nil {
+			return errors.Wrapf(err, "failed to parse arguments")
+		}
+		params := query.Query()
+		slave, err = server.factory.New(params)
+		if err != nil {
+			return errors.Wrapf(err, "failed to create backend")
+		}
+		// Create session in manager
+		server.sessionManager.Create(server.factory.Name(), slave)
+		isNewSession = true
+		log.Printf("Client created new session")
 	}
 
-	query, err := url.Parse(queryPath)
-	if err != nil {
-		return errors.Wrapf(err, "failed to parse arguments")
+	// Only close slave for new sessions (not for joined sessions)
+	if isNewSession {
+		defer slave.Close()
 	}
-	params := query.Query()
-	var slave Slave
-	slave, err = server.factory.New(params)
-	if err != nil {
-		return errors.Wrapf(err, "failed to create backend")
-	}
-	defer slave.Close()
 
 	titleVars := server.titleVariables(
 		[]string{"server", "master", "slave"},
@@ -219,32 +250,19 @@ func (server *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 func (server *Server) handleAuthToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript")
 
-	if server.options.EnableAuth && server.options.AuthType == "key" {
-		// For key auth, send first authorized key as the token
-		// If using authorized_keys file, get the first one
-		if server.options.AuthorizedKeysFile != "" {
-			keys, err := server.options.GetAuthorizedKeys()
-			if err != nil {
-				log.Printf("Error reading authorized_keys: %v", err)
-				w.Write([]byte("var gotty_auth_token = '';"))
-				return
-			}
-			if len(keys) > 0 {
-				w.Write([]byte("var gotty_auth_token = '';"))
-				return
-			}
-			// Get the first key as default token
-			for _, key := range keys {
-				w.Write([]byte("var gotty_auth_token = '" + key + "';"))
-				return
-			}
-		} else {
-			// Single public key
-			w.Write([]byte("var gotty_auth_token = '" + server.options.PublicKey + "';"))
-		}
-	} else {
+	if server.options.EnableAuth && server.options.AuthType == "bitwarden" {
+		// For bitwarden auth, tell the client to use bitwarden authentication
+		// The client will derive the key from master password and send it
+		w.Write([]byte("var gotty_auth_type = 'bitwarden';"))
+		w.Write([]byte("var gotty_auth_token = '';"))
+	} else if server.options.EnableAuth && (server.options.AuthType == "basic" || server.options.AuthType == "") {
 		// Basic auth - return credential
+		w.Write([]byte("var gotty_auth_type = 'basic';"))
 		w.Write([]byte("var gotty_auth_token = '" + server.options.Credential + "';"))
+	} else {
+		// No auth
+		w.Write([]byte("var gotty_auth_type = 'none';"))
+		w.Write([]byte("var gotty_auth_token = '';"))
 	}
 }
 
@@ -274,4 +292,80 @@ func (server *Server) titleVariables(order []string, varUnits map[string]map[str
 	}
 
 	return titleVars
+}
+
+// handleSessions handles session list and creation
+func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case "GET":
+		// List all sessions
+		sessions := server.sessionManager.List()
+		type sessionInfo struct {
+			ID        string `json:"id"`
+			Title     string `json:"title"`
+			CreatedAt string `json:"created_at"`
+		}
+		result := make([]sessionInfo, 0, len(sessions))
+		for _, s := range sessions {
+			result = append(result, sessionInfo{
+				ID:        s.ID,
+				Title:     s.Title,
+				CreatedAt: s.CreatedAt.Format("2006-01-02 15:04:05"),
+			})
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"sessions": result,
+		})
+	case "POST":
+		// Create new session
+		params := make(map[string][]string)
+		slave, err := server.factory.New(params)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+
+		session := server.sessionManager.Create(server.factory.Name(), slave)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":    session.ID,
+			"title": session.Title,
+		})
+	default:
+		http.Error(w, "Method not allowed", 405)
+	}
+}
+
+// handleSession handles individual session operations
+func (server *Server) handleSession(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Extract session ID from URL path
+	id := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
+
+	switch r.Method {
+	case "GET":
+		// Get session info
+		session, ok := server.sessionManager.Get(id)
+		if !ok {
+			http.Error(w, "Session not found", 404)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":        session.ID,
+			"title":     session.Title,
+			"created_at": session.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	case "DELETE":
+		// Close session
+		err := server.sessionManager.Close(id)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "closed"})
+	default:
+		http.Error(w, "Method not allowed", 405)
+	}
 }

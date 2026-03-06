@@ -67,15 +67,13 @@ func main() {
 
 		utils.ApplyFlags(cliFlags, flagMappings, c, appOptions, backendOptions)
 
-		// Set EnableAuth based on credential or public key being set
-		if c.IsSet("credential") || c.IsSet("public-key") || c.IsSet("authorized-keys-file") || appOptions.EnableAuth {
+		// Set EnableAuth based on credential or auth-type being set
+		if c.IsSet("credential") || c.IsSet("auth-type") || appOptions.EnableAuth {
 			appOptions.EnableAuth = true
 		}
 		// Set EnableBasicAuth only for credential (basic auth)
 		if c.IsSet("credential") {
 			appOptions.EnableBasicAuth = true
-		} else if c.IsSet("public-key") || c.IsSet("authorized-keys-file") {
-			appOptions.EnableBasicAuth = false
 		}
 		appOptions.EnableTLSClientAuth = c.IsSet("tls-ca-crt")
 

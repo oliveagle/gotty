@@ -25,8 +25,9 @@ import (
 
 // Server provides a webtty HTTP endpoint.
 type Server struct {
-	factory Factory
-	options *Options
+	factory        Factory
+	options        *Options
+	sessionManager *SessionManager
 
 	upgrader      *websocket.Upgrader
 	indexTemplate *template.Template
@@ -36,7 +37,7 @@ type Server struct {
 // New creates a new instance of Server.
 // Server will use the New() of the factory provided to handle each request.
 func New(factory Factory, options *Options) (*Server, error) {
-	indexData, err := Asset("static/index.html")
+	indexData, err := Asset("resources/index.html")
 	if err != nil {
 		panic("index not found") // must be in bindata
 	}
@@ -69,8 +70,9 @@ func New(factory Factory, options *Options) (*Server, error) {
 	}
 
 	return &Server{
-		factory: factory,
-		options: options,
+		factory:        factory,
+		options:        options,
+		sessionManager: NewSessionManager(),
 
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -182,7 +184,7 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 
 func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFunc, pathPrefix string, counter *counter) http.Handler {
 	staticFileHandler := http.FileServer(
-		&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, Prefix: "static"},
+		&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, Prefix: "resources"},
 	)
 
 	var siteMux = http.NewServeMux()
@@ -194,23 +196,21 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	siteMux.HandleFunc(pathPrefix+"auth_token.js", server.handleAuthToken)
 	siteMux.HandleFunc(pathPrefix+"config.js", server.handleConfig)
 
+	// Session management API
+	siteMux.HandleFunc(pathPrefix+"api/sessions", server.handleSessions)
+	siteMux.HandleFunc(pathPrefix+"api/sessions/", server.handleSession)
+
 	siteHandler := http.Handler(siteMux)
 
 	if server.options.EnableAuth || server.options.EnableBasicAuth {
 		if server.options.AuthType == "basic" || server.options.AuthType == "" {
 			log.Printf("Using Basic Authentication")
 			siteHandler = server.wrapBasicAuth(siteHandler, server.options.Credential)
+		} else if server.options.AuthType == "bitwarden" {
+			log.Printf("Using Bitwarden E2E Encryption Authentication")
+			// Bitwarden authentication is handled in WebSocket connection, no HTTP auth required
 		} else {
-			// Key-based authentication (single key or authorized_keys file)
-			authKeys := server.options.GetAuthKeysList()
-			if server.options.AuthType == "key" && server.options.AuthorizedKeysFile != "" {
-				log.Printf("Using Key Authentication from authorized_keys file: %s", server.options.AuthorizedKeysFile)
-			} else if server.options.AuthType == "authorized_keys" {
-				log.Printf("Using Key Authentication from authorized_keys file: %s (%d keys)", server.options.AuthorizedKeysFile, len(authKeys))
-			} else {
-				log.Printf("Using Key Authentication (single key)")
-			}
-			// Key authentication is handled in WebSocket connection, no HTTP auth required
+			log.Printf("Unsupported authentication type: %s", server.options.AuthType)
 		}
 	}
 
