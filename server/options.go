@@ -7,9 +7,10 @@ import (
 type Options struct {
 	Address             string           `hcl:"address" flagName:"address" flagSName:"a" flagDescribe:"IP address to listen" default:"0.0.0.0"`
 	Port                string           `hcl:"port" flagName:"port" flagSName:"p" flagDescribe:"Port number to liten" default:"8080"`
-	PermitWrite         bool             `hcl:"permit_write" flagName:"permit-write" flagSName:"w" flagDescribe:"Permit clients to write to the TTY (BE CAREFUL)" default:"false"`
-	EnableBasicAuth     bool             `hcl:"enable_basic_auth" default:"false"`
+	EnableAuth         bool             `hcl:"enable_auth" flagName:"" flagSName:"" flagDescribe:"Enable authentication" default:"false"`
+	AuthType          string           `hcl:"auth_type" flagName:"auth-type" flagSName:"" flagDescribe:"Auth type: basic or key (default: basic)"`
 	Credential          string           `hcl:"credential" flagName:"credential" flagSName:"c" flagDescribe:"Credential for Basic Authentication (ex: user:pass, default disabled)" default:""`
+	PublicKey          string           `hcl:"public_key" flagName:"public-key" flagSName:"k" flagDescribe:"Public key for authentication (default: empty)" default:""`
 	EnableRandomUrl     bool             `hcl:"enable_random_url" flagName:"random-url" flagSName:"r" flagDescribe:"Add a random string to the URL" default:"false"`
 	RandomUrlLength     int              `hcl:"random_url_length" flagName:"random-url-length" flagDescribe:"Random URL length" default:"8"`
 	EnableTLS           bool             `hcl:"enable_tls" flagName:"tls" flagSName:"t" flagDescribe:"Enable TLS/SSL" default:"false"`
@@ -35,6 +36,24 @@ type Options struct {
 }
 
 func (options *Options) Validate() error {
+	if options.AuthType == "" {
+		options.AuthType = "basic"
+	}
+
+	// Validate based on auth type
+	switch options.AuthType {
+	case "basic":
+		if options.Credential == "" && options.EnableAuth {
+			return errors.New("credential is required for basic authentication")
+		}
+	case "key":
+		if options.PublicKey == "" {
+			return errors.New("public key is required for key authentication")
+		}
+	default:
+		return errors.New("invalid auth type: " + options.AuthType)
+	}
+
 	if options.EnableTLSClientAuth && !options.EnableTLS {
 		return errors.New("TLS client authentication is enabled, but TLS is not enabled")
 	}
