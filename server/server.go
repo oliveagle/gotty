@@ -103,21 +103,20 @@ func (server *Server) newSummaryService(sessionID string) *summary.Service {
 		LLMProvider: "openai", // llama.cpp uses OpenAI-compatible API
 		LLMModel:    server.options.SummaryModel,
 		LLMEndpoint: server.options.SummaryEndpoint,
-		MaxTokens:   50,
+		MaxTokens:   30,
 		SystemPrompt: `/no_think
-你是一个终端会话标题生成器。根据终端输出，生成一个简短的会话标题（不超过20个中文字或30个英文字符）。
+根据终端输出，用 2-5 个字描述当前正在运行的程序或命令。
 
 规则：
-1. 突出当前正在执行的主要任务
-2. 如果有错误，标注 [错误]
-3. 如果在等待输入，标注 [等待]
-4. 只输出标题，不要其他内容
+1. 只输出程序名，如：htop、vim、bash
+2. 如果有错误，加 [错]
+3. 不要其他解释
 
-示例：
-- "编辑 nginx 配置"
-- "git commit [错误]"
-- "python 脚本运行中"
-- "htop 系统监控"`,
+输出示例：
+htop
+vim test.py
+git [错]
+bash`,
 	}
 
 	svc := summary.NewService(config)

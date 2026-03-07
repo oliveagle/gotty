@@ -84,6 +84,9 @@ type Service struct {
 	outputBytes int
 	inputBytes  int
 	sessionID   string
+
+	// Stability - track last summary
+	lastSummary string
 }
 
 // NewService creates a new summary service
@@ -171,6 +174,7 @@ func (s *Service) generateSummary() {
 	inputData := s.inputBuf.Bytes()
 	outputBytes := s.outputBytes
 	inputBytes := s.inputBytes
+	lastSummary := s.lastSummary
 	s.buffer.Reset()
 	s.inputBuf.Reset()
 	s.mu.Unlock()
@@ -189,6 +193,26 @@ func (s *Service) generateSummary() {
 		log.Printf("[Summary] LLM error: %v", err)
 		summary = fmt.Sprintf("[LLM Error: %v]", err)
 	}
+
+	// Clean up summary
+	summary = strings.TrimSpace(summary)
+	summary = strings.Trim(summary, `"'`)
+
+	// Stability check: only update if summary changed significantly
+	// Skip if new summary is too short (likely incomplete)
+	if len(summary) < 3 {
+		return
+	}
+
+	// If last summary exists and new one is similar, keep the old one for stability
+	if lastSummary != "" && similarity(lastSummary, summary) > 0.7 {
+		summary = lastSummary
+	}
+
+	// Update last summary
+	s.mu.Lock()
+	s.lastSummary = summary
+	s.mu.Unlock()
 
 	sessionSummary := SessionSummary{
 		Timestamp:   time.Now(),
@@ -217,6 +241,43 @@ func (s *Service) generateSummary() {
 		sessionSummary.InputBytes,
 		sessionSummary.Summary,
 	)
+}
+
+// similarity calculates simple string similarity (0-1)
+func similarity(a, b string) float64 {
+	if a == b {
+		return 1.0
+	}
+	if len(a) == 0 || len(b) == 0 {
+		return 0.0
+	}
+
+	// Simple: check if one contains the other or they share common words
+	aWords := strings.Fields(strings.ToLower(a))
+	bWords := strings.Fields(strings.ToLower(b))
+
+	if len(aWords) == 0 || len(bWords) == 0 {
+		return 0.0
+	}
+
+	common := 0
+	for _, aw := range aWords {
+		for _, bw := range bWords {
+			if aw == bw {
+				common++
+				break
+			}
+		}
+	}
+
+	return float64(common) / float64(max(len(aWords), len(bWords)))
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // buildPrompt constructs the prompt for the LLM
