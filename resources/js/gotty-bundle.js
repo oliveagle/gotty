@@ -20916,7 +20916,8 @@ class WebTTY {
             connection.onClose(() => {
                 clearInterval(pingTimer);
                 this.term.deactivate();
-                this.term.showMessage("Connection Closed", 0);
+                // Show message for 3 seconds then auto-hide
+                this.term.showMessage("Connection Closed", 3000);
                 if (this.reconnect > 0) {
                     reconnectTimeout = setTimeout(() => {
                         connection = this.connectionFactory.create();
