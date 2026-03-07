@@ -95,6 +95,7 @@ html, body {
 .session-info {
     flex: 1;
     overflow: hidden;
+    min-height: 48px;
 }
 
 .session-title {
@@ -114,20 +115,22 @@ html, body {
 
 .session-subtitle {
     color: #6a9eff !important;
-    font-size: 10px !important;
-    margin-top: 1px;
+    font-size: 9px !important;
+    margin-top: 2px;
     font-style: italic;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    line-height: 1.2;
+    line-height: 1.1;
     max-width: 100%;
     display: block;
+    min-height: 10px;
 }
 
 /* Active session subtitle - 保持蓝色但更亮 */
 .session-item.active .session-subtitle {
     color: #a0c4ff !important;
+    font-size: 9px !important;
 }
 
 .btn-close {
