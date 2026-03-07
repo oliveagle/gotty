@@ -112,6 +112,16 @@ html, body {
     margin-top: 4px;
 }
 
+.session-subtitle {
+    color: #6a9eff;
+    font-size: 11px;
+    margin-top: 2px;
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .btn-close {
     background: transparent;
     border: none;

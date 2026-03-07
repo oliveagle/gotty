@@ -99,6 +99,14 @@ export class Xterm {
         document.title = title;
     }
 
+    setSubtitle(subtitle: string): void {
+        // Update session item subtitle in sidebar
+        const subtitleElem = document.querySelector('.session-item.active .session-subtitle');
+        if (subtitleElem) {
+            subtitleElem.textContent = subtitle;
+        }
+    }
+
     setPreferences(_value: object): void {
         // Apply preferences if needed
     }

@@ -15,6 +15,7 @@ export declare class Hterm {
     showMessage(message: string, timeout: number): void;
     removeMessage(): void;
     setWindowTitle(title: string): void;
+    setSubtitle(subtitle: string): void;
     setPreferences(value: Record<string, unknown>): void;
     onInput(callback: (input: string) => void): void;
     onResize(callback: (columns: number, rows: number) => void): void;

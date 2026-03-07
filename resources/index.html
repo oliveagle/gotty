@@ -187,12 +187,17 @@
               ? `<input class="session-title-input" data-session-id="${session.id}" value="${session.title}" onkeydown="sessionManager.finishEdit(event)" onblur="sessionManager.editingId=null;sessionManager.renderSessionList()">`
               : `<div class="session-title">${session.title}</div>`;
 
+            const subtitleHtml = session.subtitle
+              ? `<div class="session-subtitle">${session.subtitle}</div>`
+              : '';
+
             return `
               <div class="session-item ${session.id === this.activeSessionId ? 'active' : ''}"
                    data-session-id="${session.id}"
                    onclick="sessionManager.setActiveSession('${session.id}')">
                 <div class="session-info">
                   ${titleHtml}
+                  ${subtitleHtml}
                   <div class="session-time">${session.created_at}</div>
                 </div>
                 <div class="session-actions">

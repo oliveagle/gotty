@@ -28,4 +28,6 @@ const (
 	SetPreferences = '4'
 	// Make terminal to reconnect
 	SetReconnect = '5'
+	// Set session subtitle (short summary)
+	SetSubtitle = '6'
 )

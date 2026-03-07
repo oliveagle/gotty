@@ -11,6 +11,7 @@ export const msgPong = '2';
 export const msgSetWindowTitle = '3';
 export const msgSetPreferences = '4';
 export const msgSetReconnect = '5';
+export const msgSetSubtitle = '6';
 
 
 export interface Terminal {
@@ -19,6 +20,7 @@ export interface Terminal {
     showMessage(message: string, timeout: number): void;
     removeMessage(): void;
     setWindowTitle(title: string): void;
+    setSubtitle(subtitle: string): void;
     setPreferences(value: object): void;
     onInput(callback: (input: string) => void): void;
     onResize(callback: (columns: number, rows: number) => void): void;
@@ -122,6 +124,9 @@ export class WebTTY {
                         const autoReconnect = JSON.parse(payload);
                         console.log("Enabling reconnect: " + autoReconnect + " seconds");
                         this.reconnect = autoReconnect;
+                        break;
+                    case msgSetSubtitle:
+                        this.term.setSubtitle(payload);
                         break;
                 }
             });

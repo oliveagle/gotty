@@ -51,6 +51,14 @@ export class Hterm {
         this.term.setWindowTitle(title);
     }
 
+    setSubtitle(subtitle: string): void {
+        // Update session item subtitle in sidebar
+        const subtitleElem = document.querySelector('.session-item.active .session-subtitle');
+        if (subtitleElem) {
+            subtitleElem.textContent = subtitle;
+        }
+    }
+
     setPreferences(value: Record<string, unknown>): void {
         Object.keys(value).forEach((key) => {
             this.term.getPrefs().set(key, value[key] as string);

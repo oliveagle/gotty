@@ -33,6 +33,12 @@ type Options struct {
 	WSOrigin            string           `hcl:"ws_origin" flagName:"ws-origin" flagDescribe:"A regular expression that matches origin URLs to be accepted by WebSocket. No cross origin requests are acceptable by default" default:""`
 	Term                string           `hcl:"term" flagName:"term" flagDescribe:"Terminal name to use on the browser, one of xterm or hterm." default:"xterm"`
 
+	// Summary options
+	EnableSummary   bool   `hcl:"enable_summary" flagName:"summary" flagDescribe:"Enable session summarization using LLM" default:"false"`
+	SummaryInterval int    `hcl:"summary_interval" flagName:"summary-interval" flagDescribe:"Summary generation interval in seconds" default:"30"`
+	SummaryModel    string `hcl:"summary_model" flagName:"summary-model" flagDescribe:"LLM model for summarization" default:"qwen2.5:3b"`
+	SummaryEndpoint string `hcl:"summary_endpoint" flagName:"summary-endpoint" flagDescribe:"LLM API endpoint (Ollama or OpenAI compatible)" default:"http://localhost:11434"`
+
 	TitleVariables map[string]interface{}
 }
 

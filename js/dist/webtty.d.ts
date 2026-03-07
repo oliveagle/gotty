@@ -9,6 +9,7 @@ export declare const msgPong = "2";
 export declare const msgSetWindowTitle = "3";
 export declare const msgSetPreferences = "4";
 export declare const msgSetReconnect = "5";
+export declare const msgSetSubtitle = "6";
 export interface Terminal {
     info(): {
         columns: number;
@@ -18,6 +19,7 @@ export interface Terminal {
     showMessage(message: string, timeout: number): void;
     removeMessage(): void;
     setWindowTitle(title: string): void;
+    setSubtitle(subtitle: string): void;
     setPreferences(value: object): void;
     onInput(callback: (input: string) => void): void;
     onResize(callback: (columns: number, rows: number) => void): void;

@@ -3,6 +3,7 @@ package webtty
 import (
 	"encoding/json"
 
+	"github.com/oliveagle/gotty/summary"
 	"github.com/pkg/errors"
 )
 
@@ -57,6 +58,14 @@ func WithMasterPreferences(preferences interface{}) Option {
 			return errors.Wrapf(err, "failed to marshal preferences as JSON")
 		}
 		wt.masterPrefs = prefs
+		return nil
+	}
+}
+
+// WithSummaryService enables session summarization
+func WithSummaryService(svc *summary.Service) Option {
+	return func(wt *WebTTY) error {
+		wt.SetSummaryService(svc)
 		return nil
 	}
 }

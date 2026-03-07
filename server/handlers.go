@@ -243,6 +243,11 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 		opts = append(opts, webtty.WithMasterPreferences(server.options.Preferences))
 	}
 
+	// Add summary service if enabled
+	if server.summaryService != nil {
+		opts = append(opts, webtty.WithSummaryService(server.summaryService))
+	}
+
 	tty, err := webtty.New(&wsWrapper{conn}, slave, opts...)
 	if err != nil {
 		return errors.Wrapf(err, "failed to create webtty")

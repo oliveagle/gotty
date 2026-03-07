@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/oliveagle/gotty/summary"
 	"github.com/pkg/errors"
 )
 
@@ -27,6 +28,9 @@ type WebTTY struct {
 
 	bufferSize int
 	writeMutex sync.Mutex
+
+	// Summary service for generating session subtitles
+	summaryService *summary.Service
 }
 
 // New creates a new instance of WebTTY.
@@ -50,6 +54,17 @@ func New(masterConn Master, slave Slave, options ...Option) (*WebTTY, error) {
 	}
 
 	return wt, nil
+}
+
+// SetSummaryService sets the summary service for this session
+func (wt *WebTTY) SetSummaryService(svc *summary.Service) {
+	wt.summaryService = svc
+
+	// Set callback to send subtitle to frontend
+	svc.OnSummary(func(s summary.SessionSummary) {
+		// Send subtitle to browser
+		wt.masterWrite(append([]byte{SetSubtitle}, []byte(s.Summary)...))
+	})
 }
 
 // Run starts the main process of the WebTTY.
@@ -134,6 +149,11 @@ func (wt *WebTTY) sendInitializeMessage() error {
 }
 
 func (wt *WebTTY) handleSlaveReadEvent(data []byte) error {
+	// Capture output for summary
+	if wt.summaryService != nil {
+		wt.summaryService.CaptureOutput(data)
+	}
+
 	safeMessage := base64.StdEncoding.EncodeToString(data)
 	err := wt.masterWrite(append([]byte{Output}, []byte(safeMessage)...))
 	if err != nil {
@@ -168,6 +188,11 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 
 		if len(data) <= 1 {
 			return nil
+		}
+
+		// Capture input for summary context
+		if wt.summaryService != nil {
+			wt.summaryService.CaptureInput(data[1:])
 		}
 
 		_, err := wt.slave.Write(data[1:])

@@ -20,6 +20,7 @@ import (
 
 	"github.com/oliveagle/gotty/pkg/homedir"
 	"github.com/oliveagle/gotty/pkg/randomstring"
+	"github.com/oliveagle/gotty/summary"
 	"github.com/oliveagle/gotty/webtty"
 )
 
@@ -32,6 +33,9 @@ type Server struct {
 	upgrader      *websocket.Upgrader
 	indexTemplate *template.Template
 	titleTemplate *noesctmpl.Template
+
+	// Summary service
+	summaryService *summary.Service
 }
 
 // New creates a new instance of Server.
@@ -73,6 +77,35 @@ func New(factory Factory, options *Options) (*Server, error) {
 	sm.SetFactory(factory)
 	sm.RestoreSessions() // Restore sessions from persistent backends like zellij
 
+	// Initialize summary service if enabled
+	var summarySvc *summary.Service
+	if options.EnableSummary {
+		summaryConfig := summary.Config{
+			Enabled:     true,
+			Interval:    time.Duration(options.SummaryInterval) * time.Second,
+			BufferSize:  16384,
+			LLMProvider: "ollama",
+			LLMModel:    options.SummaryModel,
+			LLMEndpoint: options.SummaryEndpoint,
+			MaxTokens:   50,
+			SystemPrompt: `你是一个终端会话标题生成器。根据终端输出，生成一个简短的会话标题（不超过20个中文字或30个英文字符）。
+
+规则：
+1. 突出当前正在执行的主要任务
+2. 如果有错误，标注 [错误]
+3. 如果在等待输入，标注 [等待]
+4. 只输出标题，不要其他内容
+
+示例：
+- "编辑 nginx 配置"
+- "git commit [错误]"
+- "python 脚本运行中"
+- "htop 系统监控"`,
+		}
+		summarySvc = summary.NewService(summaryConfig)
+		log.Printf("Session summarization enabled with model: %s", options.SummaryModel)
+	}
+
 	return &Server{
 		factory:        factory,
 		options:        options,
@@ -84,8 +117,9 @@ func New(factory Factory, options *Options) (*Server, error) {
 			Subprotocols:    webtty.Protocols,
 			CheckOrigin:     originChekcer,
 		},
-		indexTemplate: indexTemplate,
-		titleTemplate: titleTemplate,
+		indexTemplate:  indexTemplate,
+		titleTemplate:  titleTemplate,
+		summaryService: summarySvc,
 	}, nil
 }
 
@@ -97,6 +131,12 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 	opts := &RunOptions{gracefullCtx: context.Background()}
 	for _, opt := range options {
 		opt(opts)
+	}
+
+	// Start summary service if enabled
+	if server.summaryService != nil {
+		server.summaryService.Start(cctx)
+		defer server.summaryService.Stop()
 	}
 
 	counter := newCounter(time.Duration(server.options.Timeout) * time.Second)
