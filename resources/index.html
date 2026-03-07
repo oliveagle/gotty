@@ -12,7 +12,10 @@
       <div id="sidebar">
         <div class="sidebar-header">
           <h3>Sessions</h3>
-          <button id="new-session-btn" class="btn-new" title="New Session">+</button>
+          <div style="display: flex; gap: 4px;">
+            <button id="new-session-btn" class="btn-new" title="New Session">+</button>
+            <button id="collapse-btn" class="btn-collapse" title="Toggle Sidebar">◀</button>
+          </div>
         </div>
         <div id="session-list">
           <div class="session-loading">Loading sessions...</div>
@@ -36,6 +39,7 @@
           this.term = null;
           this.wt = null;
           this.closer = null;
+          this.editingId = null;
         }
 
         init() {
@@ -47,8 +51,28 @@
             });
           }
 
+          // Listen for collapse button
+          const collapseBtn = document.getElementById('collapse-btn');
+          if (collapseBtn) {
+            collapseBtn.addEventListener('click', () => {
+              this.toggleSidebar();
+            });
+          }
+
+          // Restore sidebar state
+          const collapsed = localStorage.getItem('sidebar_collapsed') === 'true';
+          if (collapsed) {
+            document.getElementById('sidebar').classList.add('collapsed');
+          }
+
           // Initial fetch
           this.fetchSessions();
+        }
+
+        toggleSidebar() {
+          const sidebar = document.getElementById('sidebar');
+          sidebar.classList.toggle('collapsed');
+          localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
         }
 
         async fetchSessions() {
@@ -107,6 +131,39 @@
           }
         }
 
+        async renameSession(id, newTitle) {
+          try {
+            const response = await fetch('/api/sessions/' + id, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ title: newTitle })
+            });
+            if (response.ok) {
+              await this.fetchSessions();
+            }
+          } catch (error) {
+            console.error('Failed to rename session:', error);
+          }
+        }
+
+        startEdit(id, event) {
+          event.stopPropagation();
+          this.editingId = id;
+          this.renderSessionList();
+        }
+
+        finishEdit(event) {
+          if (event.key === 'Enter') {
+            const input = event.target;
+            const sessionId = input.dataset.sessionId;
+            this.renameSession(sessionId, input.value);
+            this.editingId = null;
+          } else if (event.key === 'Escape') {
+            this.editingId = null;
+            this.renderSessionList();
+          }
+        }
+
         renderSessionList() {
           const container = document.getElementById('session-list');
           if (!container) return;
@@ -116,17 +173,36 @@
             return;
           }
 
-          container.innerHTML = this.sessions.map(session => `
-            <div class="session-item ${session.id === this.activeSessionId ? 'active' : ''}"
-                 data-session-id="${session.id}"
-                 onclick="sessionManager.setActiveSession('${session.id}')">
-              <div class="session-info">
-                <div class="session-title">${session.title}</div>
-                <div class="session-time">${session.created_at}</div>
+          container.innerHTML = this.sessions.map(session => {
+            const isEditing = this.editingId === session.id;
+            const titleHtml = isEditing
+              ? `<input class="session-title-input" data-session-id="${session.id}" value="${session.title}" onkeydown="sessionManager.finishEdit(event)" onblur="sessionManager.editingId=null;sessionManager.renderSessionList()">`
+              : `<div class="session-title">${session.title}</div>`;
+
+            return `
+              <div class="session-item ${session.id === this.activeSessionId ? 'active' : ''}"
+                   data-session-id="${session.id}"
+                   onclick="sessionManager.setActiveSession('${session.id}')">
+                <div class="session-info">
+                  ${titleHtml}
+                  <div class="session-time">${session.created_at}</div>
+                </div>
+                <div class="session-actions">
+                  <button class="btn-edit" onclick="sessionManager.startEdit('${session.id}', event)" title="Rename">✏️</button>
+                  <button class="btn-close" onclick="sessionManager.closeSession('${session.id}', event)" title="Close">×</button>
+                </div>
               </div>
-              <button class="btn-close" onclick="sessionManager.closeSession('${session.id}', event)">×</button>
-            </div>
-          `).join('');
+            `;
+          }).join('');
+
+          // Focus on input if editing
+          if (this.editingId) {
+            const input = container.querySelector('.session-title-input');
+            if (input) {
+              input.focus();
+              input.select();
+            }
+          }
         }
 
         setActiveSession(id) {

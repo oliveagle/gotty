@@ -365,6 +365,27 @@ func (server *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		json.NewEncoder(w).Encode(map[string]string{"status": "closed"})
+	case "PATCH":
+		// Rename session
+		var req struct {
+			Title string `json:"title"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", 400)
+			return
+		}
+		if req.Title == "" {
+			http.Error(w, "Title cannot be empty", 400)
+			return
+		}
+		if !server.sessionManager.Rename(id, req.Title) {
+			http.Error(w, "Session not found", 404)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{
+			"id":    id,
+			"title": req.Title,
+		})
 	default:
 		http.Error(w, "Method not allowed", 405)
 	}

@@ -86,3 +86,16 @@ func (sm *SessionManager) Count() int {
 
 	return len(sm.sessions)
 }
+
+// Rename updates the title of a session
+func (sm *SessionManager) Rename(id string, newTitle string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, ok := sm.sessions[id]
+	if !ok {
+		return false
+	}
+	session.Title = newTitle
+	return true
+}
