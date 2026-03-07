@@ -42,9 +42,9 @@ func (p *SessionPoller) Start(ctx context.Context) {
 	go func() {
 		defer ticker.Stop()
 
-		// Initial poll after 30 seconds
+		// Initial poll after 5 seconds
 		select {
-		case <-time.After(30 * time.Second):
+		case <-time.After(5 * time.Second):
 			p.pollAll(ctx)
 		case <-ctx.Done():
 			return
