@@ -175,3 +175,27 @@ html, body {
     padding: 30px 20px;
     font-size: 13px;
 }
+
+/* Sidebar toggle button - transparent style */
+.sidebar-toggle {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #888;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: all 0.2s;
+    align-self: center;
+    margin: 8px 0;
+}
+
+.sidebar-toggle:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #e0e0e0;
+}
+
+/* When sidebar is collapsed */
+#sidebar.collapsed .sidebar-toggle {
+    background: rgba(255, 255, 255, 0.1);
+}
