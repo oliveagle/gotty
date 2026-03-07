@@ -13,6 +13,7 @@ export declare class Xterm {
     messageTimeout: number;
     messageTimer: ReturnType<typeof setTimeout> | null;
     constructor(elem: HTMLElement);
+    private setupCompositionViewFix;
     info(): {
         columns: number;
         rows: number;

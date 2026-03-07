@@ -63,6 +63,48 @@ export class Xterm {
         // Fit after everything is loaded
         this.fitAddon.fit();
         window.addEventListener("resize", this.resizeListener);
+
+        // Fix IME composition view position to follow cursor
+        this.setupCompositionViewFix();
+    }
+
+    private setupCompositionViewFix(): void {
+        const forcePosition = () => {
+            const compositionView = this.elem.querySelector('.composition-view') as HTMLElement;
+
+            if (!compositionView || !compositionView.classList.contains('active')) return false;
+
+            // Position at bottom of screen
+            compositionView.style.position = 'fixed';
+            compositionView.style.left = '50%';
+            compositionView.style.top = 'auto';
+            compositionView.style.bottom = '20px';
+            compositionView.style.transform = 'translateX(-50%)';
+
+            return true;
+        };
+
+        // Use MutationObserver to watch for style changes
+        const observer = new MutationObserver(() => {
+            forcePosition();
+        });
+
+        const observeComposition = () => {
+            const compositionView = this.elem.querySelector('.composition-view') as HTMLElement;
+            if (compositionView) {
+                observer.observe(compositionView, {
+                    attributes: true,
+                    attributeFilter: ['style', 'class']
+                });
+            }
+        };
+
+        setTimeout(observeComposition, 200);
+
+        // Update on composition events
+        this.elem.addEventListener('compositionstart', () => {
+            requestAnimationFrame(forcePosition);
+        });
     }
 
     info(): { columns: number; rows: number } {

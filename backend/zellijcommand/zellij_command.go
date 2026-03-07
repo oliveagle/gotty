@@ -144,10 +144,29 @@ func (zcmd *ZellijCommand) Write(p []byte) (n int, err error) {
 func (zcmd *ZellijCommand) Close() error {
 	// For zellij, we don't kill the session on close
 	// The session persists and can be reattached
-	// Just close the PTY connection
+	// But we need to properly terminate the attach process
+
+	// Close PTY first
 	if zcmd.pty != nil {
 		zcmd.pty.Close()
 	}
+
+	// Wait for process to exit with timeout
+	if zcmd.cmd != nil && zcmd.cmd.Process != nil {
+		done := make(chan error, 1)
+		go func() {
+			done <- zcmd.cmd.Wait()
+		}()
+
+		select {
+		case <-done:
+			// Process exited normally
+		case <-time.After(2 * time.Second):
+			// Force kill if it doesn't exit
+			zcmd.cmd.Process.Kill()
+		}
+	}
+
 	return nil
 }
 

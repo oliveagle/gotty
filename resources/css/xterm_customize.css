@@ -13,10 +13,10 @@
     left: 0 !important;
 }
 
-/* Fix helper textarea positioning to prevent layout shift during IME */
+/* Fix helper textarea - keep it positioned but invisible and non-interactive */
 .xterm .xterm-helper-textarea {
-    position: fixed !important;
-    left: 0 !important;
+    position: absolute !important;
+    left: -9999em !important;
     top: 0 !important;
     width: 1px !important;
     height: 1px !important;
@@ -26,11 +26,11 @@
     outline: none !important;
     resize: none !important;
     overflow: hidden !important;
+    opacity: 0 !important;
 }
 
-/* Fix composition view positioning */
+/* Composition view - allow JS to position it */
 .xterm .composition-view {
-    position: fixed !important;
     z-index: 1000 !important;
 }
 
