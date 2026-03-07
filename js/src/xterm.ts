@@ -77,6 +77,7 @@ export class Xterm {
         // Create a transparent input that covers the terminal
         this.imeInput = document.createElement('input');
         this.imeInput.type = 'text';
+        this.imeInput.className = 'xterm-ime-overlay';
         this.imeInput.style.cssText = `
             position: absolute;
             top: 0;
@@ -93,6 +94,7 @@ export class Xterm {
             z-index: 100;
             cursor: text;
         `;
+        console.log('[Xterm] Created IME overlay');
 
         // Handle composition events
         this.imeInput.addEventListener('compositionstart', () => {

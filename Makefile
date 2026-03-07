@@ -11,6 +11,7 @@ all: gotty
 frontend:
 	@echo "Building frontend JS..."
 	cd js && npm run build
+	@cp js/dist/gotty-bundle.js resources/js/gotty-bundle.js
 
 bindata:
 	@echo "Generating bindata..."
