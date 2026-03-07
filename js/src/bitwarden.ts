@@ -170,8 +170,22 @@ export function isBitwardenExtensionAvailable(): boolean {
     return false;
 }
 
-// Initialize crypto (no-op for Web Crypto API)
+// Check if Web Crypto API is available (requires secure context)
+export function isSecureContext(): boolean {
+    // crypto.subtle is only available in secure contexts (HTTPS or localhost)
+    return window.isSecureContext || location.protocol === 'https:' ||
+           location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+}
+
+// Initialize crypto (check for secure context)
 export async function initCrypto(): Promise<void> {
-    // Web Crypto API is available by default in modern browsers
+    if (!isSecureContext()) {
+        throw new Error('Bitwarden authentication requires HTTPS. Please access gotty via https:// or use localhost.');
+    }
+
+    if (!(window as any).crypto || !(window as any).crypto.subtle) {
+        throw new Error('Web Crypto API is not available in this browser.');
+    }
+
     console.log('Web Crypto API initialized');
 }

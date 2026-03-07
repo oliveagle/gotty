@@ -20663,10 +20663,22 @@ function isBitwardenExtensionAvailable() {
     return false;
 }
 exports.isBitwardenExtensionAvailable = isBitwardenExtensionAvailable;
-// Initialize crypto (no-op for Web Crypto API)
+// Check if Web Crypto API is available (requires secure context)
+function isSecureContext() {
+    // crypto.subtle is only available in secure contexts (HTTPS or localhost)
+    return window.isSecureContext || location.protocol === 'https:' ||
+        location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+}
+exports.isSecureContext = isSecureContext;
+// Initialize crypto (check for secure context)
 function initCrypto() {
     return __awaiter(this, void 0, void 0, function* () {
-        // Web Crypto API is available by default in modern browsers
+        if (!isSecureContext()) {
+            throw new Error('Bitwarden authentication requires HTTPS. Please access gotty via https:// or use localhost.');
+        }
+        if (!window.crypto || !window.crypto.subtle) {
+            throw new Error('Web Crypto API is not available in this browser.');
+        }
         console.log('Web Crypto API initialized');
     });
 }
@@ -24130,6 +24142,36 @@ function createBitwardenAuthUI(onAuthenticated) {
         align-items: center;
         z-index: 1000;
     `;
+    // Check for secure context upfront
+    const isSecure = window.isSecureContext || location.protocol === 'https:' ||
+        location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (!isSecure) {
+        const warningDiv = document.createElement("div");
+        warningDiv.style.cssText = `
+            background: #2d2d2d;
+            padding: 40px;
+            border-radius: 8px;
+            text-align: center;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 500px;
+        `;
+        const warningTitle = document.createElement("h2");
+        warningTitle.textContent = "HTTPS Required";
+        warningTitle.style.color = "#ff6b6b";
+        warningTitle.style.marginBottom = "20px";
+        const warningText = document.createElement("p");
+        warningText.innerHTML = `Bitwarden authentication requires a <strong>secure context</strong> (HTTPS or localhost).<br><br>
+            Please access gotty via:<br>
+            <code style="background:#444;padding:4px 8px;border-radius:4px;">https://your-host:port</code><br><br>
+            Or use localhost if running locally.`;
+        warningText.style.color = "#aaa";
+        warningText.style.lineHeight = "1.6";
+        warningDiv.appendChild(warningTitle);
+        warningDiv.appendChild(warningText);
+        container.appendChild(warningDiv);
+        return container;
+    }
     const form = document.createElement("div");
     form.style.cssText = `
         background: #1e1e1e;
@@ -24218,7 +24260,8 @@ function createBitwardenAuthUI(onAuthenticated) {
         }
         catch (error) {
             console.error("Authentication failed:", error);
-            errorMsg.textContent = "Failed to derive key. Please check your password.";
+            // Show the actual error message (e.g., HTTPS requirement)
+            errorMsg.textContent = error instanceof Error ? error.message : "Failed to derive key. Please check your password.";
             errorMsg.style.display = "block";
             button.textContent = "Unlock";
             button.disabled = false;
