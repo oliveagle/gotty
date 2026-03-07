@@ -294,7 +294,9 @@ func (server *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	indexVars := map[string]interface{}{
-		"title": titleBuf.String(),
+		"title":    titleBuf.String(),
+		"commit":   BuildCommit,
+		"buildAt":  BuildTime,
 	}
 
 	indexBuf := new(bytes.Buffer)

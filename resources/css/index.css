@@ -74,6 +74,14 @@ html, body {
     background: #4a9eff;
 }
 
+.sidebar-footer {
+    padding: 8px 12px;
+    color: #555;
+    font-size: 10px;
+    text-align: center;
+    font-family: monospace;
+}
+
 .sidebar-header {
     display: flex;
     justify-content: space-between;

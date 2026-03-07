@@ -1,7 +1,8 @@
 OUTPUT_DIR = ./builds
 GIT_COMMIT = $(shell git rev-parse HEAD 2>/dev/null | cut -c1-7 || echo "dev")
 VERSION = 2.0.0-alpha.3
-BUILD_OPTIONS = -ldflags "-X main.Version=$(VERSION) -X main.CommitID=$(GIT_COMMIT)"
+BUILD_TIME = $(shell date +"%Y-%m-%d_%H:%M")
+BUILD_OPTIONS = -ldflags "-X main.Version=$(VERSION) -X main.CommitID=$(GIT_COMMIT) -X main.BuildTime='$(BUILD_TIME)'"
 
 .PHONY: all gotty clean test build deps help
 

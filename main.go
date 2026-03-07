@@ -115,6 +115,11 @@ func main() {
 			"hostname": hostname,
 		}
 
+		// Set build info for server
+		server.BuildVersion = Version
+		server.BuildCommit = CommitID
+		server.BuildTime = BuildTime
+
 		srv, err := server.New(factory, appOptions)
 		if err != nil {
 			exit(err, 3)

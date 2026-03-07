@@ -24,6 +24,13 @@ import (
 	"github.com/oliveagle/gotty/webtty"
 )
 
+// Build info (set from main)
+var (
+	BuildVersion = "unknown"
+	BuildCommit  = "unknown"
+	BuildTime    = "unknown"
+)
+
 // Server provides a webtty HTTP endpoint.
 type Server struct {
 	factory        Factory
