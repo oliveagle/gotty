@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -126,6 +127,7 @@ func (s *Service) Start(ctx context.Context) {
 		return
 	}
 
+	log.Printf("[Summary] Service started, interval: %v, model: %s", s.config.Interval, s.config.LLMModel)
 	s.timer = time.NewTimer(s.config.Interval)
 
 	go func() {
@@ -174,7 +176,7 @@ func (s *Service) generateSummary() {
 	// Call LLM
 	summary, err := s.callLLM(prompt)
 	if err != nil {
-		// Log error but don't fail
+		log.Printf("[Summary] LLM error: %v", err)
 		summary = fmt.Sprintf("[LLM Error: %v]", err)
 	}
 
@@ -197,6 +199,14 @@ func (s *Service) generateSummary() {
 	if s.onSummary != nil {
 		s.onSummary(sessionSummary)
 	}
+
+	// Log the summary
+	log.Printf("[Summary] %s | bytes: %d/%d | title: %s",
+		sessionSummary.Timestamp.Format("15:04:05"),
+		sessionSummary.OutputBytes,
+		sessionSummary.InputBytes,
+		sessionSummary.Summary,
+	)
 }
 
 // buildPrompt constructs the prompt for the LLM
