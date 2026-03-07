@@ -114,13 +114,13 @@ html, body {
 
 .session-subtitle {
     color: #6a9eff !important;
-    font-size: 11px !important;
-    margin-top: 2px;
+    font-size: 10px !important;
+    margin-top: 1px;
     font-style: italic;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.3;
+    line-height: 1.2;
 }
 
 /* Active session subtitle - 保持蓝色但更亮 */
