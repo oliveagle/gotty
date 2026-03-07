@@ -41,9 +41,11 @@ export class Xterm {
             this.showMessage(`${this.term.cols}x${this.term.rows}`, this.messageTimeout);
         };
 
-        // Load addons
-        this.term.loadAddon(this.fitAddon);
+        // Open terminal FIRST (xterm v6 requirement)
         this.term.open(elem);
+
+        // Load addons AFTER open
+        this.term.loadAddon(this.fitAddon);
 
         // Try WebGL renderer for better performance
         try {
@@ -58,6 +60,7 @@ export class Xterm {
             this.webglAddon = null;
         }
 
+        // Fit after everything is loaded
         this.fitAddon.fit();
         window.addEventListener("resize", this.resizeListener);
     }
