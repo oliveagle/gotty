@@ -95,7 +95,7 @@ func New(factory Factory, options *Options) (*Server, error) {
 }
 
 // newSummaryService creates a new summary service for a specific session
-func (server *Server) newSummaryService(sessionID string) *summary.Service {
+func (server *Server) newSummaryService(sessionID string, command string, argv []string, workDir string) *summary.Service {
 	config := summary.Config{
 		Enabled:     true,
 		Interval:    time.Duration(server.options.SummaryInterval) * time.Second,
@@ -127,6 +127,7 @@ git 提交代码
 
 	svc := summary.NewService(config)
 	svc.SetSessionID(sessionID)
+	svc.SetContext(command, argv, workDir)
 
 	// Set callback to update session subtitle
 	svc.OnSummary(func(s summary.SessionSummary) {

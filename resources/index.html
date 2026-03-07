@@ -189,7 +189,7 @@
 
             const subtitleHtml = session.subtitle
               ? `<div class="session-subtitle">${session.subtitle}</div>`
-              : `<div class="session-subtitle" style="color: #666;">等待生成...</div>`;
+              : '';
 
             return `
               <div class="session-item ${session.id === this.activeSessionId ? 'active' : ''}"

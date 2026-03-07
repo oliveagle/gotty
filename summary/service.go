@@ -85,6 +85,11 @@ type Service struct {
 	inputBytes  int
 	sessionID   string
 
+	// Context
+	command string
+	argv    []string
+	workDir string
+
 	// Stability - track last summary
 	lastSummary string
 }
@@ -134,6 +139,15 @@ func (s *Service) SetSessionID(id string) {
 	s.sessionID = id
 }
 
+// SetContext sets the command context
+func (s *Service) SetContext(command string, argv []string, workDir string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.command = command
+	s.argv = argv
+	s.workDir = workDir
+}
+
 // Start begins periodic summarization
 func (s *Service) Start(ctx context.Context) {
 	if !s.config.Enabled {
@@ -175,6 +189,9 @@ func (s *Service) generateSummary() {
 	outputBytes := s.outputBytes
 	inputBytes := s.inputBytes
 	lastSummary := s.lastSummary
+	command := s.command
+	argv := s.argv
+	workDir := s.workDir
 	s.buffer.Reset()
 	s.inputBuf.Reset()
 	s.mu.Unlock()
@@ -185,7 +202,7 @@ func (s *Service) generateSummary() {
 	}
 
 	// Build prompt
-	prompt := s.buildPrompt(outputData, inputData)
+	prompt := s.buildPrompt(outputData, inputData, command, argv, workDir)
 
 	// Call LLM
 	summary, err := s.callLLM(prompt)
@@ -281,14 +298,34 @@ func max(a, b int) int {
 }
 
 // buildPrompt constructs the prompt for the LLM
-func (s *Service) buildPrompt(output, input []byte) string {
+func (s *Service) buildPrompt(output, input []byte, command string, argv []string, workDir string) string {
 	var sb strings.Builder
 
 	sb.WriteString(s.config.SystemPrompt)
-	sb.WriteString("\n\n--- 终端输出 ---\n")
+
+	// Add context
+	sb.WriteString("\n\n--- 上下文 ---\n")
+	if command != "" {
+		sb.WriteString("命令: ")
+		sb.WriteString(command)
+		if len(argv) > 0 {
+			for _, arg := range argv {
+				sb.WriteString(" ")
+				sb.WriteString(arg)
+			}
+		}
+		sb.WriteString("\n")
+	}
+	if workDir != "" {
+		sb.WriteString("目录: ")
+		sb.WriteString(workDir)
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("\n--- 终端输出 ---\n")
 
 	// Truncate if too large
-	maxOutput := 8000
+	maxOutput := 4000
 	if len(output) > maxOutput {
 		sb.WriteString("... (前 ")
 		sb.WriteString(fmt.Sprintf("%d", len(output)-maxOutput))
@@ -300,7 +337,7 @@ func (s *Service) buildPrompt(output, input []byte) string {
 
 	if len(input) > 0 {
 		sb.WriteString("\n--- 用户输入 ---\n")
-		maxInput := 2000
+		maxInput := 500
 		if len(input) > maxInput {
 			sb.WriteString(string(input[len(input)-maxInput:]))
 		} else {

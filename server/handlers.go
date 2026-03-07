@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync/atomic"
 
@@ -246,7 +247,13 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 
 	// Add summary service if enabled
 	if server.options.EnableSummary && currentSessionID != "" {
-		summarySvc := server.newSummaryService(currentSessionID)
+		// Get context from slave
+		slaveVars := slave.WindowTitleVariables()
+		command, _ := slaveVars["command"].(string)
+		argv, _ := slaveVars["argv"].([]string)
+		workDir, _ := os.Getwd()
+
+		summarySvc := server.newSummaryService(currentSessionID, command, argv, workDir)
 		opts = append(opts, webtty.WithSummaryService(summarySvc))
 	}
 
