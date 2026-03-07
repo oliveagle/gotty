@@ -79,6 +79,12 @@ func (wt *WebTTY) Run(ctx context.Context) error {
 		return errors.Wrapf(err, "failed to send initializing message")
 	}
 
+	// Start summary service if configured
+	if wt.summaryService != nil {
+		wt.summaryService.Start(ctx)
+		defer wt.summaryService.Stop()
+	}
+
 	errs := make(chan error, 2)
 
 	go func() {

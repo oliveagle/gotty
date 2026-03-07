@@ -133,7 +133,7 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 	// Determine slave (either existing session or new)
 	var slave Slave
 	var isNewSession bool
-	var createdSessionID string
+	var currentSessionID string
 
 	if sessionID != "" {
 		// Try to join existing session
@@ -141,6 +141,7 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 		if !ok {
 			return errors.New("session not found")
 		}
+		currentSessionID = sessionID
 
 		// For persistent backends (like zellij), create a new slave to attach
 		// For non-persistent backends, reuse existing slave
@@ -186,7 +187,7 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 		}
 		if session != nil {
 			slave = session.Slave
-			createdSessionID = session.ID
+			currentSessionID = session.ID
 		} else {
 			// Fallback to old method if CreateWithID returned nil (no factory set)
 			slave, err = server.factory.New(params)
@@ -194,10 +195,10 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 				return errors.Wrapf(err, "failed to create backend")
 			}
 			s := server.sessionManager.Create(server.factory.Name(), slave)
-			createdSessionID = s.ID
+			currentSessionID = s.ID
 		}
 		isNewSession = true
-		log.Printf("Client created new session: %s", createdSessionID)
+		log.Printf("Client created new session: %s", currentSessionID)
 	}
 
 	// Close slave when done
@@ -244,8 +245,9 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 	}
 
 	// Add summary service if enabled
-	if server.summaryService != nil {
-		opts = append(opts, webtty.WithSummaryService(server.summaryService))
+	if server.options.EnableSummary && currentSessionID != "" {
+		summarySvc := server.newSummaryService(currentSessionID)
+		opts = append(opts, webtty.WithSummaryService(summarySvc))
 	}
 
 	tty, err := webtty.New(&wsWrapper{conn}, slave, opts...)
@@ -348,6 +350,7 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		type sessionInfo struct {
 			ID        string `json:"id"`
 			Title     string `json:"title"`
+			Subtitle  string `json:"subtitle,omitempty"`
 			CreatedAt string `json:"created_at"`
 		}
 		result := make([]sessionInfo, 0, len(sessions))
@@ -355,6 +358,7 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			result = append(result, sessionInfo{
 				ID:        s.ID,
 				Title:     s.Title,
+				Subtitle:  s.Subtitle,
 				CreatedAt: s.CreatedAt.Format("2006-01-02 15:04:05"),
 			})
 		}

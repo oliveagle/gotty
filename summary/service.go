@@ -65,6 +65,9 @@ type SessionSummary struct {
 	InputBytes  int       `json:"input_bytes"`
 }
 
+// SummaryCallback is called when a summary is generated
+type SummaryCallback func(sessionID string, summary string)
+
 // Service handles terminal session summarization
 type Service struct {
 	config   Config
@@ -119,6 +122,13 @@ func (s *Service) CaptureInput(data []byte) {
 	defer s.mu.Unlock()
 	s.inputBuf.Write(data)
 	s.inputBytes += len(data)
+}
+
+// SetSessionID sets the current session ID
+func (s *Service) SetSessionID(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessionID = id
 }
 
 // Start begins periodic summarization

@@ -12,6 +12,7 @@ import (
 type Session struct {
 	ID        string
 	Title     string
+	Subtitle  string // AI-generated short summary
 	CreatedAt time.Time
 	Slave     Slave
 	// For persistent backends, store the session ID for re-attachment
@@ -179,5 +180,18 @@ func (sm *SessionManager) Rename(id string, newTitle string) bool {
 		return false
 	}
 	session.Title = newTitle
+	return true
+}
+
+// UpdateSubtitle updates the AI-generated subtitle of a session
+func (sm *SessionManager) UpdateSubtitle(id string, subtitle string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, ok := sm.sessions[id]
+	if !ok {
+		return false
+	}
+	session.Subtitle = subtitle
 	return true
 }
