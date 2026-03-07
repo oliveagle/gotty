@@ -135,8 +135,8 @@ html, body {
 }
 
 .session-item.active {
-    background: #4a9eff;
-    border-color: #3a8eef;
+    background: #4c85c7;
+    border-color: #3a6fa8;
 }
 
 .session-item.active .session-title,
@@ -181,7 +181,7 @@ html, body {
 
 /* Active session subtitle */
 .session-item.active .session-subtitle {
-    color: #a0c4ff !important;
+    color: #f0c040 !important;
     font-size: 9px !important;
 }
 
@@ -280,7 +280,7 @@ html, body {
 }
 
 .session-item.active .session-title-input {
-    background: #3a8eef;
+    background: #3a6fa8;
     border-color: #fff;
     color: white;
 }

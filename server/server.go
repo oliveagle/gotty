@@ -136,6 +136,11 @@ git 提交代码
 		log.Printf("[Summary] Session %s: %s", sessionID, s.Summary)
 	})
 
+	// Set callback to capture output to session buffer
+	svc.OnOutput(func(data []byte) {
+		server.sessionManager.CaptureOutput(sessionID, data)
+	})
+
 	return svc
 }
 
@@ -167,6 +172,38 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 	}
 	if server.options.Once {
 		log.Printf("Once option is provided, accepting only one client")
+	}
+
+	// Start session poller for background subtitle updates
+	if server.options.EnableSummary {
+		pollerConfig := summary.Config{
+			Enabled:     true,
+			LLMProvider: "openai",
+			LLMModel:    server.options.SummaryModel,
+			LLMEndpoint: server.options.SummaryEndpoint,
+			MaxTokens:   30,
+			SystemPrompt: `/no_think
+根据终端输出，简短描述用户正在做什么活动（不超过15字）。
+
+关注：
+1. 正在操作的文件或目录
+2. 正在监控或查看的内容
+3. 正在执行的任务
+
+规则：
+1. 突出具体操作对象，不只说程序名
+2. 有错误标注 [错]
+3. 只输出一句话
+
+示例：
+编辑 nginx.conf
+查看系统监控
+编译 Go 项目
+git 提交代码
+查看日志文件`,
+		}
+		poller := NewSessionPoller(server.sessionManager, pollerConfig, 120*time.Second)
+		poller.Start(cctx)
 	}
 
 	if server.options.Port == "0" {

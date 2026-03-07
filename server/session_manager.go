@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/oliveagle/gotty/pkg/randomstring"
+	"github.com/oliveagle/gotty/summary"
 )
 
 // Session represents an active terminal session
@@ -18,6 +19,13 @@ type Session struct {
 	Slave     Slave
 	// For persistent backends, store the session ID for re-attachment
 	// Slave will be nil after first disconnect
+
+	// Output buffer for subtitle generation
+	outputBuffer *summary.RingBuffer
+	outputMu     sync.RWMutex
+
+	// Track last output hash for change detection
+	lastOutputHash string
 }
 
 // SessionManager manages terminal sessions
@@ -66,10 +74,11 @@ func (sm *SessionManager) restoreFromZellij() {
 			// Check if already exists
 			if _, exists := sm.sessions[id]; !exists {
 				sm.sessions[id] = &Session{
-					ID:        id,
-					Title:     name,
-					CreatedAt: time.Now(), // We don't have exact creation time
-					Slave:     nil,         // Will be created on demand
+					ID:           id,
+					Title:        name,
+					CreatedAt:    time.Now(), // We don't have exact creation time
+					Slave:        nil,         // Will be created on demand
+					outputBuffer: summary.NewRingBuffer(16384),
 				}
 			}
 		}
@@ -92,10 +101,11 @@ func (sm *SessionManager) Create(title string, slave Slave) *Session {
 
 	id := randomstring.Generate(8)
 	session := &Session{
-		ID:        id,
-		Title:     title,
-		CreatedAt: time.Now(),
-		Slave:     slave,
+		ID:           id,
+		Title:        title,
+		CreatedAt:    time.Now(),
+		Slave:        slave,
+		outputBuffer: summary.NewRingBuffer(16384), // 16KB buffer
 	}
 	sm.sessions[id] = session
 	return session
@@ -119,10 +129,11 @@ func (sm *SessionManager) CreateWithID(title string, params map[string][]string)
 	}
 
 	session := &Session{
-		ID:        id,
-		Title:     title,
-		CreatedAt: time.Now(),
-		Slave:     slave,
+		ID:           id,
+		Title:        title,
+		CreatedAt:    time.Now(),
+		Slave:        slave,
+		outputBuffer: summary.NewRingBuffer(16384), // 16KB buffer
 	}
 	sm.sessions[id] = session
 	return session, nil
@@ -207,5 +218,73 @@ func (sm *SessionManager) UpdateWorkDir(id string, workDir string) bool {
 		return false
 	}
 	session.WorkDir = workDir
+	return true
+}
+
+// CaptureOutput captures output to a session's buffer for subtitle generation
+func (sm *SessionManager) CaptureOutput(id string, data []byte) {
+	sm.mu.RLock()
+	session, ok := sm.sessions[id]
+	sm.mu.RUnlock()
+
+	if !ok || session.outputBuffer == nil {
+		return
+	}
+
+	session.outputMu.Lock()
+	session.outputBuffer.Write(data)
+	session.outputMu.Unlock()
+}
+
+// GetOutputBuffer returns a copy of the session's output buffer
+func (sm *SessionManager) GetOutputBuffer(id string) []byte {
+	sm.mu.RLock()
+	session, ok := sm.sessions[id]
+	sm.mu.RUnlock()
+
+	if !ok || session.outputBuffer == nil {
+		return nil
+	}
+
+	session.outputMu.RLock()
+	defer session.outputMu.RUnlock()
+	return session.outputBuffer.Bytes()
+}
+
+// HasOutputChanged checks if the output has changed since last check
+// Returns true if changed, and updates the internal hash
+func (sm *SessionManager) HasOutputChanged(id string) bool {
+	sm.mu.RLock()
+	session, ok := sm.sessions[id]
+	sm.mu.RUnlock()
+
+	if !ok || session.outputBuffer == nil {
+		return false
+	}
+
+	session.outputMu.Lock()
+	defer session.outputMu.Unlock()
+
+	output := session.outputBuffer.Bytes()
+	if len(output) == 0 {
+		return false
+	}
+
+	// Simple hash: use length as a quick check
+	newHash := ""
+	if len(output) > 0 {
+		// Use last 100 bytes as a "fingerprint"
+		fingerprint := output
+		if len(fingerprint) > 100 {
+			fingerprint = fingerprint[len(fingerprint)-100:]
+		}
+		newHash = string(fingerprint)
+	}
+
+	if session.lastOutputHash == newHash {
+		return false
+	}
+
+	session.lastOutputHash = newHash
 	return true
 }

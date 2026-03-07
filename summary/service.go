@@ -78,7 +78,8 @@ type Service struct {
 	mu       sync.Mutex
 
 	// Callbacks
-	onSummary func(summary SessionSummary)
+	onSummary  func(summary SessionSummary)
+	onOutput   func(data []byte) // Called when output is captured
 
 	// Stats
 	outputBytes int
@@ -110,6 +111,11 @@ func (s *Service) OnSummary(callback func(summary SessionSummary)) {
 	s.onSummary = callback
 }
 
+// OnOutput sets a callback for when output is captured
+func (s *Service) OnOutput(callback func(data []byte)) {
+	s.onOutput = callback
+}
+
 // CaptureOutput captures PTY output for summarization
 func (s *Service) CaptureOutput(data []byte) {
 	if !s.config.Enabled {
@@ -119,6 +125,11 @@ func (s *Service) CaptureOutput(data []byte) {
 	defer s.mu.Unlock()
 	s.buffer.Write(data)
 	s.outputBytes += len(data)
+
+	// Call output callback if set
+	if s.onOutput != nil {
+		s.onOutput(data)
+	}
 }
 
 // CaptureInput captures user input for context
@@ -564,4 +575,39 @@ func (s *Service) GetStats() map[string]interface{} {
 		"input_bytes":  s.inputBytes,
 		"buffer_used":  s.buffer.Used(),
 	}
+}
+
+// GenerateFromOutput generates a summary directly from provided output
+// This is useful for polling inactive sessions
+func (s *Service) GenerateFromOutput(ctx context.Context, output []byte) (string, error) {
+	if len(output) == 0 {
+		return "", nil
+	}
+
+	prompt := s.buildPrompt(output, nil, "", nil, "")
+
+	summary, err := s.callLLM(prompt)
+	if err != nil {
+		return "", err
+	}
+
+	summary = strings.TrimSpace(summary)
+	summary = strings.Trim(summary, `"'`)
+
+	// Limit length
+	if len(summary) > 30 {
+		runes := []rune(summary)
+		if len(runes) > 20 {
+			summary = string(runes[:20]) + "..."
+		}
+	}
+
+	return summary, nil
+}
+
+// GetBuffer returns a copy of the current output buffer
+func (s *Service) GetBuffer() []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buffer.Bytes()
 }
