@@ -13,6 +13,7 @@ type Session struct {
 	ID        string
 	Title     string
 	Subtitle  string // AI-generated short summary
+	WorkDir   string // Working directory
 	CreatedAt time.Time
 	Slave     Slave
 	// For persistent backends, store the session ID for re-attachment
@@ -193,5 +194,18 @@ func (sm *SessionManager) UpdateSubtitle(id string, subtitle string) bool {
 		return false
 	}
 	session.Subtitle = subtitle
+	return true
+}
+
+// UpdateWorkDir updates the working directory of a session
+func (sm *SessionManager) UpdateWorkDir(id string, workDir string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, ok := sm.sessions[id]
+	if !ok {
+		return false
+	}
+	session.WorkDir = workDir
 	return true
 }

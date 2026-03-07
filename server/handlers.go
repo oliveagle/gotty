@@ -189,6 +189,10 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 		if session != nil {
 			slave = session.Slave
 			currentSessionID = session.ID
+			// Set workdir for new session
+			if workDir, err := os.Getwd(); err == nil {
+				server.sessionManager.UpdateWorkDir(currentSessionID, workDir)
+			}
 		} else {
 			// Fallback to old method if CreateWithID returned nil (no factory set)
 			slave, err = server.factory.New(params)
@@ -197,6 +201,10 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 			}
 			s := server.sessionManager.Create(server.factory.Name(), slave)
 			currentSessionID = s.ID
+			// Set workdir for new session
+			if workDir, err := os.Getwd(); err == nil {
+				server.sessionManager.UpdateWorkDir(currentSessionID, workDir)
+			}
 		}
 		isNewSession = true
 		log.Printf("Client created new session: %s", currentSessionID)
@@ -358,6 +366,7 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			ID        string `json:"id"`
 			Title     string `json:"title"`
 			Subtitle  string `json:"subtitle,omitempty"`
+			WorkDir   string `json:"workdir,omitempty"`
 			CreatedAt string `json:"created_at"`
 		}
 		result := make([]sessionInfo, 0, len(sessions))
@@ -366,6 +375,7 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 				ID:        s.ID,
 				Title:     s.Title,
 				Subtitle:  s.Subtitle,
+				WorkDir:   s.WorkDir,
 				CreatedAt: s.CreatedAt.Format("2006-01-02 15:04:05"),
 			})
 		}

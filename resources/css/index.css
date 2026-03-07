@@ -185,6 +185,23 @@ html, body {
     font-size: 9px !important;
 }
 
+.session-workdir {
+    color: #666 !important;
+    font-size: 8px !important;
+    margin-top: 1px;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    line-height: 1.1;
+    font-family: monospace;
+}
+
+/* Active session workdir */
+.session-item.active .session-workdir {
+    color: #9ab !important;
+    font-size: 8px !important;
+}
+
 .btn-close {
     background: transparent;
     border: none;

@@ -191,6 +191,10 @@
               ? `<div class="session-subtitle">${session.subtitle}</div>`
               : '<div class="session-subtitle">&nbsp;</div>';
 
+            const workdirHtml = session.workdir
+              ? `<div class="session-workdir" title="${session.workdir}">${session.workdir}</div>`
+              : '';
+
             return `
               <div class="session-item ${session.id === this.activeSessionId ? 'active' : ''}"
                    data-session-id="${session.id}"
@@ -198,6 +202,7 @@
                 <div class="session-info">
                   ${titleHtml}
                   ${subtitleHtml}
+                  ${workdirHtml}
                   <div class="session-time">${session.created_at}</div>
                 </div>
                 <div class="session-actions">
