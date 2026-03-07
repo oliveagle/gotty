@@ -81,17 +81,17 @@ func New(sessionName string, command string, argv []string, options ...Option) (
 	exists := sessionExists(sessionName)
 
 	if exists {
-		// Attach to existing session
+		// Attach to existing session via PTY
 		cmd = exec.Command("zellij", "attach", sessionName)
 	} else {
-		// Create new session with optional command
-		args := []string{"-s", sessionName}
-		if command != "" {
-			// Run command in zellij
-			args = append(args, "--", command)
-			args = append(args, argv...)
+		// Create new session in background first, then attach
+		// This avoids the panic when zellij can't get terminal attributes
+		createCmd := exec.Command("zellij", "attach", "-c", "-b", sessionName)
+		if err := createCmd.Run(); err != nil {
+			// Session might have been created by another process, continue anyway
 		}
-		cmd = exec.Command("zellij", args...)
+		// Now attach to the session via PTY
+		cmd = exec.Command("zellij", "attach", sessionName)
 	}
 
 	pty, err := pty.Start(cmd)

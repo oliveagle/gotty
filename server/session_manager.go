@@ -13,6 +13,8 @@ type Session struct {
 	Title     string
 	CreatedAt time.Time
 	Slave     Slave
+	// For persistent backends, store the session ID for re-attachment
+	// Slave will be nil after first disconnect
 }
 
 // SessionManager manages terminal sessions

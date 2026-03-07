@@ -64,6 +64,11 @@ func (factory *Factory) NewWithID(sessionID string, params map[string][]string) 
 	return New(sessionName, factory.command, argv, factory.opts...)
 }
 
+// IsPersistent returns true - zellij sessions persist after client disconnect
+func (factory *Factory) IsPersistent() bool {
+	return true
+}
+
 func generateSessionID() string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, 8)

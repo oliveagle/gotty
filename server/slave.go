@@ -17,4 +17,7 @@ type Factory interface {
 	// NewWithID creates a slave with a specific session ID (for persistent backends like zellij)
 	// If the backend doesn't support it, this should behave like New()
 	NewWithID(sessionID string, params map[string][]string) (Slave, error)
+	// IsPersistent returns true if the backend supports reconnection to existing sessions
+	// For persistent backends (like zellij), sessions survive client disconnect
+	IsPersistent() bool
 }

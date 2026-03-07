@@ -134,15 +134,38 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 	var slave Slave
 	var isNewSession bool
 	var createdSessionID string
+
 	if sessionID != "" {
 		// Try to join existing session
 		session, ok := server.sessionManager.Get(sessionID)
 		if !ok {
 			return errors.New("session not found")
 		}
-		slave = session.Slave
+
+		// For persistent backends (like zellij), create a new slave to attach
+		// For non-persistent backends, reuse existing slave
+		if server.factory.IsPersistent() {
+			// Create new slave to attach to existing zellij session
+			queryPath := "?"
+			if server.options.PermitArguments && init.Arguments != "" {
+				queryPath = init.Arguments
+			}
+			query, parseErr := url.Parse(queryPath)
+			if parseErr != nil {
+				return errors.Wrapf(parseErr, "failed to parse arguments")
+			}
+			params := query.Query()
+
+			var attachErr error
+			slave, attachErr = server.factory.NewWithID(sessionID, params)
+			if attachErr != nil {
+				return errors.Wrapf(attachErr, "failed to attach to session")
+			}
+			log.Printf("Client attached to persistent session: %s", sessionID)
+		} else {
+			slave = session.Slave
+		}
 		isNewSession = false
-		log.Printf("Client joined existing session: %s", sessionID)
 	} else {
 		// Create new session
 		queryPath := "?"
@@ -177,8 +200,10 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 		log.Printf("Client created new session: %s", createdSessionID)
 	}
 
-	// Only close slave for new sessions (not for joined sessions)
-	if isNewSession {
+	// Close slave when done
+	// For persistent backends, this just closes the PTY connection, not the underlying session
+	// For non-persistent backends with existing session, don't close (shared)
+	if isNewSession || server.factory.IsPersistent() {
 		defer slave.Close()
 	}
 

@@ -51,3 +51,8 @@ func (factory *Factory) New(params map[string][]string) (server.Slave, error) {
 func (factory *Factory) NewWithID(sessionID string, params map[string][]string) (server.Slave, error) {
 	return factory.New(params)
 }
+
+// IsPersistent returns false - local command sessions don't persist
+func (factory *Factory) IsPersistent() bool {
+	return false
+}
