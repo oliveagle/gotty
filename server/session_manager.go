@@ -1,6 +1,7 @@
 package server
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -34,6 +35,52 @@ func NewSessionManager() *SessionManager {
 // SetFactory sets the factory for creating new slaves
 func (sm *SessionManager) SetFactory(factory Factory) {
 	sm.factory = factory
+}
+
+// RestoreSessions restores sessions from persistent storage (e.g., zellij)
+// This should be called after SetFactory
+func (sm *SessionManager) RestoreSessions() {
+	if sm.factory == nil || !sm.factory.IsPersistent() {
+		return
+	}
+
+	// For zellij backend, restore sessions from zellij list
+	if sm.factory.Name() == "zellij" {
+		sm.restoreFromZellij()
+	}
+}
+
+// restoreFromZellij restores gotty sessions from existing zellij sessions
+func (sm *SessionManager) restoreFromZellij() {
+	// Import zellij session listing
+	sessions := listZellijSessions()
+	for _, name := range sessions {
+		// Only restore sessions with gotty- prefix
+		if strings.HasPrefix(name, "gotty-") {
+			id := strings.TrimPrefix(name, "gotty-")
+			if id == "" {
+				continue
+			}
+			// Check if already exists
+			if _, exists := sm.sessions[id]; !exists {
+				sm.sessions[id] = &Session{
+					ID:        id,
+					Title:     name,
+					CreatedAt: time.Now(), // We don't have exact creation time
+					Slave:     nil,         // Will be created on demand
+				}
+			}
+		}
+	}
+}
+
+// listZellijSessions lists all zellij session names
+// This is implemented in the zellij backend package
+var listZellijSessions func() []string
+
+// SetZellijSessionLister sets the function used to list zellij sessions
+func SetZellijSessionLister(fn func() []string) {
+	listZellijSessions = fn
 }
 
 // Create creates a new session with the given slave

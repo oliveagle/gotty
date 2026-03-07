@@ -12,6 +12,8 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/pkg/errors"
+
+	"github.com/oliveagle/gotty/server"
 )
 
 const (
@@ -233,4 +235,22 @@ func ListZellijSessions() ([]SessionInfo, error) {
 		}
 	}
 	return sessions, nil
+}
+
+// GetSessionNames returns a list of all zellij session names
+func GetSessionNames() []string {
+	sessions, err := ListZellijSessions()
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(sessions))
+	for _, s := range sessions {
+		names = append(names, s.Name)
+	}
+	return names
+}
+
+func init() {
+	// Register the zellij session lister for session restoration
+	server.SetZellijSessionLister(GetSessionNames)
 }

@@ -71,6 +71,7 @@ func New(factory Factory, options *Options) (*Server, error) {
 
 	sm := NewSessionManager()
 	sm.SetFactory(factory)
+	sm.RestoreSessions() // Restore sessions from persistent backends like zellij
 
 	return &Server{
 		factory:        factory,
