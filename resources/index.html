@@ -236,11 +236,22 @@
             this.closer();
             this.closer = null;
           }
+          if (this.term) {
+            // Properly close the terminal
+            if (this.term.close) {
+              this.term.close();
+            } else if (this.term.deactivate) {
+              this.term.deactivate();
+            }
+            this.term = null;
+          }
           if (this.wt) {
             this.wt = null;
           }
-          if (this.term) {
-            this.term = null;
+          // Clear the terminal element
+          const elem = document.getElementById('terminal');
+          if (elem) {
+            elem.innerHTML = '';
           }
         }
 
