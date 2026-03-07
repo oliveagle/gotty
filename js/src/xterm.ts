@@ -100,9 +100,32 @@ export class Xterm {
     }
 
     setSubtitle(subtitle: string): void {
-        // Update session item subtitle in sidebar
-        const subtitleElem = document.querySelector('.session-item.active .session-subtitle');
-        if (subtitleElem) {
+        // Update session object if sessionManager exists
+        if ((window as any).sessionManager) {
+            const sm = (window as any).sessionManager;
+            if (sm.activeSessionId) {
+                const session = sm.sessions.find((s: any) => s.id === sm.activeSessionId);
+                if (session) {
+                    session.subtitle = subtitle;
+                }
+            }
+        }
+
+        // Update or create subtitle element in the active session item
+        const activeItem = document.querySelector('.session-item.active .session-info');
+        if (activeItem) {
+            let subtitleElem = activeItem.querySelector('.session-subtitle');
+            if (!subtitleElem) {
+                // Create subtitle element if it doesn't exist
+                subtitleElem = document.createElement('div');
+                subtitleElem.className = 'session-subtitle';
+                const timeElem = activeItem.querySelector('.session-time');
+                if (timeElem) {
+                    activeItem.insertBefore(subtitleElem, timeElem);
+                } else {
+                    activeItem.appendChild(subtitleElem);
+                }
+            }
             subtitleElem.textContent = subtitle;
         }
     }
