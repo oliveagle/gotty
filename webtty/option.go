@@ -69,3 +69,11 @@ func WithSummaryService(svc *summary.Service) Option {
 		return nil
 	}
 }
+
+// WithActivityCallback sets a callback to be called on input/output activity
+func WithActivityCallback(callback func()) Option {
+	return func(wt *WebTTY) error {
+		wt.activityCallback = callback
+		return nil
+	}
+}

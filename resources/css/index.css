@@ -119,6 +119,28 @@ html, body {
     background: #3a8eef;
 }
 
+.btn-folder {
+    background: transparent;
+    border: 1px solid #555;
+    color: #888;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    margin-right: 4px;
+}
+
+.btn-folder:hover {
+    color: #4a9eff;
+    border-color: #4a9eff;
+}
+
 #session-list {
     flex: 1;
     overflow-y: auto;
@@ -129,22 +151,43 @@ html, body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 4px 8px;
-    margin-bottom: 2px;
+    padding: 2px 6px;
+    margin-bottom: 1px;
     background: #3a3a3a;
     border-radius: 4px;
     cursor: pointer;
-    transition: background 0.2s;
-    border: 2px solid transparent;
+    border: 1px solid transparent;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.session-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    right: 100%;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(74, 158, 255, 0.15), rgba(74, 158, 255, 0.2), rgba(74, 158, 255, 0.15), transparent);
+    transition: left 0.4s ease;
+    pointer-events: none;
 }
 
 .session-item:hover {
-    background: #444444;
+    background: #404040;
+}
+
+.session-item:hover::before {
+    left: 100%;
+    right: -100%;
 }
 
 .session-item.active {
-    background: #4c85c7;
-    border-color: #3a6fa8;
+    background: linear-gradient(135deg, #4a9eff 0%, #3a7bc8 100%);
+    border-color: #5ab0ff;
+    border-width: 1px;
+    box-shadow: 0 0 8px rgba(74, 158, 255, 0.4);
 }
 
 .session-item.active .session-title,
@@ -152,15 +195,23 @@ html, body {
     color: white;
 }
 
+.session-item.active:hover {
+    background: linear-gradient(135deg, #5aabff 0%, #4a8bd8 100%);
+}
+
+/* Disable hover animation on active item */
+.session-item.active::before {
+    display: none;
+}
+
 .session-info {
     flex: 1;
     overflow: hidden;
-    min-height: 48px;
 }
 
 .session-title {
     color: #e0e0e0;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
@@ -176,7 +227,6 @@ html, body {
 .session-subtitle {
     color: #6a9eff !important;
     font-size: 9px !important;
-    margin-top: 2px;
     font-style: italic;
     white-space: nowrap !important;
     overflow: hidden !important;
@@ -184,7 +234,6 @@ html, body {
     line-height: 1.1;
     max-width: 100%;
     display: block;
-    min-height: 10px;
 }
 
 /* Active session subtitle */
@@ -196,7 +245,6 @@ html, body {
 .session-workdir {
     color: #666 !important;
     font-size: 8px !important;
-    margin-top: 1px;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -215,9 +263,9 @@ html, body {
     border: none;
     color: #888;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 2px 4px;
     border-radius: 4px;
-    font-size: 16px;
+    font-size: 14px;
     line-height: 1;
     transition: color 0.2s, background 0.2s;
 }
@@ -308,9 +356,9 @@ html, body {
     border: none;
     color: #888;
     cursor: pointer;
-    padding: 4px 6px;
+    padding: 2px 4px;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1;
     transition: color 0.2s, background 0.2s;
 }
@@ -318,4 +366,172 @@ html, body {
 .btn-edit:hover {
     color: #4a9eff;
     background: rgba(74, 158, 255, 0.1);
+}
+
+/* Tree structure styles */
+.session-expand {
+    width: 14px;
+    height: 14px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #888;
+    font-size: 9px;
+    padding: 0;
+    margin-right: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, color 0.2s;
+    flex-shrink: 0;
+}
+
+.session-expand:hover {
+    color: #4a9eff;
+}
+
+.session-expand.expanded {
+    transform: rotate(90deg);
+}
+
+.session-expand-placeholder {
+    width: 14px;
+    height: 14px;
+    margin-right: 2px;
+    flex-shrink: 0;
+}
+
+.session-children {
+    margin-left: 12px;
+    border-left: 1px solid #444;
+    padding-left: 2px;
+    min-height: 4px;
+}
+
+.session-children.collapsed {
+    display: none;
+}
+
+/* Drop zone for folders */
+.folder-drop-zone {
+    min-height: 20px;
+    border-radius: 4px;
+    transition: background 0.2s, border 0.2s;
+}
+
+.folder-drop-zone.drag-over {
+    background: rgba(74, 158, 255, 0.15);
+    border-left: 2px solid #4a9eff;
+    margin-left: 11px;
+}
+
+.session-item.child {
+    background: #333;
+    border-left: 1px solid #4a9eff;
+}
+
+.session-item.child .session-title {
+    font-size: 12px;
+}
+
+.btn-add-child {
+    background: transparent;
+    border: none;
+    color: #4a9eff;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1;
+    transition: color 0.2s, background 0.2s;
+    opacity: 0;
+}
+
+.session-item:hover .btn-add-child {
+    opacity: 1;
+}
+
+.btn-add-child:hover {
+    color: #6ab7ff;
+    background: rgba(74, 158, 255, 0.15);
+}
+
+/* Adjust session-item for tree layout */
+.session-item.parent {
+    display: flex;
+    align-items: center;
+}
+
+/* Folder styles */
+.session-item.folder {
+    background: #353535;
+}
+
+.session-item.folder .session-title {
+    color: #aaa;
+    font-weight: 600;
+}
+
+.session-item.folder:hover {
+    background: #404040;
+}
+
+.session-item.folder.active {
+    background: #3a6fa8;
+}
+
+/* Drag and drop styles */
+.session-item[draggable="true"] {
+    cursor: grab;
+}
+
+.session-item[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.session-item.dragging {
+    opacity: 0.5;
+    background: #555;
+}
+
+.session-item.folder.drag-over {
+    background: #4a7ab8 !important;
+    border: 2px dashed #6ab7ff !important;
+}
+
+/* Activity indicator */
+.activity-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 4px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+/* Active session - glowing green dot with animation */
+.activity-dot.active {
+    background: #4ade80;
+    box-shadow: 0 0 6px #4ade80, 0 0 12px rgba(74, 222, 128, 0.5);
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+        box-shadow: 0 0 4px #4ade80, 0 0 8px rgba(74, 222, 128, 0.4);
+    }
+    50% {
+        transform: scale(1.3);
+        opacity: 0.8;
+        box-shadow: 0 0 8px #4ade80, 0 0 16px rgba(74, 222, 128, 0.6);
+    }
+}
+
+/* Inactive session - static gray dot */
+.activity-dot.inactive {
+    background: #555;
+    box-shadow: none;
 }

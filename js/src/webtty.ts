@@ -51,12 +51,42 @@ export class WebTTY {
     authToken: string;
     reconnect: number;
 
+    // Chunk size for large inputs (characters)
+    // Most terminals can handle ~4KB at a time, but we use smaller chunks for reliability
+    private static readonly INPUT_CHUNK_SIZE = 1024;
+    // Delay between chunks (ms) to allow PTY to process
+    private static readonly CHUNK_DELAY = 10;
+
     constructor(term: Terminal, connectionFactory: ConnectionFactory, args: string, authToken: string) {
         this.term = term;
         this.connectionFactory = connectionFactory;
         this.args = args;
         this.authToken = authToken;
         this.reconnect = -1;
+    }
+
+    // Send input in chunks to handle large pastes
+    private sendInputChunked(connection: Connection, input: string): void {
+        if (input.length <= WebTTY.INPUT_CHUNK_SIZE) {
+            connection.send(msgInput + input);
+            return;
+        }
+
+        // Split into chunks and send with delays
+        let offset = 0;
+        const sendNextChunk = () => {
+            if (offset >= input.length) return;
+
+            const chunk = input.slice(offset, offset + WebTTY.INPUT_CHUNK_SIZE);
+            connection.send(msgInput + chunk);
+            offset += WebTTY.INPUT_CHUNK_SIZE;
+
+            if (offset < input.length) {
+                setTimeout(sendNextChunk, WebTTY.CHUNK_DELAY);
+            }
+        };
+
+        sendNextChunk();
     }
 
     open() {
@@ -95,7 +125,7 @@ export class WebTTY {
 
                 this.term.onInput(
                     (input: string) => {
-                        connection.send(msgInput + input);
+                        this.sendInputChunked(connection, input);
                     }
                 );
 

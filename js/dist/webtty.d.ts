@@ -45,7 +45,10 @@ export declare class WebTTY {
     args: string;
     authToken: string;
     reconnect: number;
+    private static readonly INPUT_CHUNK_SIZE;
+    private static readonly CHUNK_DELAY;
     constructor(term: Terminal, connectionFactory: ConnectionFactory, args: string, authToken: string);
+    private sendInputChunked;
     open(): () => void;
 }
 //# sourceMappingURL=webtty.d.ts.map

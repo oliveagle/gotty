@@ -265,6 +265,13 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 		opts = append(opts, webtty.WithSummaryService(summarySvc))
 	}
 
+	// Add activity callback for session activity tracking
+	if currentSessionID != "" {
+		opts = append(opts, webtty.WithActivityCallback(func() {
+			server.sessionManager.UpdateActivity(currentSessionID)
+		}))
+	}
+
 	tty, err := webtty.New(&wsWrapper{conn}, slave, opts...)
 	if err != nil {
 		return errors.Wrapf(err, "failed to create webtty")
@@ -365,27 +372,78 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		// List all sessions
 		sessions := server.sessionManager.List()
 		type sessionInfo struct {
-			ID        string `json:"id"`
-			Title     string `json:"title"`
-			Subtitle  string `json:"subtitle,omitempty"`
-			WorkDir   string `json:"workdir,omitempty"`
-			CreatedAt string `json:"created_at"`
+			ID              string `json:"id"`
+			Title           string `json:"title"`
+			Subtitle        string `json:"subtitle,omitempty"`
+			WorkDir         string `json:"workdir,omitempty"`
+			ParentID        string `json:"parent_id,omitempty"`
+			IsFolder        bool   `json:"is_folder"`
+			HasChildren     bool   `json:"has_children"`
+			IsActive        bool   `json:"is_active"`
+			LastActiveAgo   int64  `json:"last_active_ago"`
+			CreatedAt       string `json:"created_at"`
 		}
 		result := make([]sessionInfo, 0, len(sessions))
 		for _, s := range sessions {
+			isActive, lastActiveAgo := server.sessionManager.GetActivity(s.ID)
 			result = append(result, sessionInfo{
-				ID:        s.ID,
-				Title:     s.Title,
-				Subtitle:  s.Subtitle,
-				WorkDir:   s.WorkDir,
-				CreatedAt: s.CreatedAt.Format("2006-01-02 15:04:05"),
+				ID:            s.ID,
+				Title:         s.Title,
+				Subtitle:      s.Subtitle,
+				WorkDir:       s.WorkDir,
+				ParentID:      s.ParentID,
+				IsFolder:      s.IsFolder,
+				HasChildren:   server.sessionManager.HasChildren(s.ID),
+				IsActive:      isActive,
+				LastActiveAgo: lastActiveAgo,
+				CreatedAt:     s.CreatedAt.Format("2006-01-02 15:04:05"),
 			})
 		}
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"sessions": result,
 		})
 	case "POST":
-		// Create new session
+		// Parse request body
+		var req struct {
+			ParentID string `json:"parent_id"`
+			IsFolder bool   `json:"is_folder"`
+			Title    string `json:"title"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			// If no body, that's fine - create root session
+			req.ParentID = ""
+		}
+
+		// Validate parent exists if parent_id is provided
+		if req.ParentID != "" {
+			parent, ok := server.sessionManager.Get(req.ParentID)
+			if !ok {
+				http.Error(w, "Parent not found", 404)
+				return
+			}
+			// Parent must be a folder
+			if !parent.IsFolder {
+				http.Error(w, "Parent must be a folder", 400)
+				return
+			}
+		}
+
+		// Create folder or session
+		if req.IsFolder {
+			title := req.Title
+			if title == "" {
+				title = "New Folder"
+			}
+			session := server.sessionManager.CreateFolder(title, req.ParentID)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":        session.ID,
+				"title":     session.Title,
+				"is_folder": true,
+			})
+			return
+		}
+
+		// Create regular session
 		params := make(map[string][]string)
 		slave, err := server.factory.New(params)
 		if err != nil {
@@ -393,10 +451,17 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		session := server.sessionManager.Create(server.factory.Name(), slave)
+		var session *Session
+		if req.ParentID != "" {
+			session = server.sessionManager.CreateChild(server.factory.Name(), req.ParentID, slave)
+		} else {
+			session = server.sessionManager.Create(server.factory.Name(), slave)
+		}
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"id":    session.ID,
-			"title": session.Title,
+			"id":        session.ID,
+			"title":     session.Title,
+			"parent_id": session.ParentID,
+			"is_folder": false,
 		})
 	default:
 		http.Error(w, "Method not allowed", 405)
@@ -451,6 +516,23 @@ func (server *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{
 			"id":    id,
 			"title": req.Title,
+		})
+	case "PUT":
+		// Move session to folder
+		var req struct {
+			FolderID string `json:"folder_id"` // Empty string means move to root
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", 400)
+			return
+		}
+		if !server.sessionManager.MoveToFolder(id, req.FolderID) {
+			http.Error(w, "Failed to move session", 400)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{
+			"id":        id,
+			"parent_id": req.FolderID,
 		})
 	default:
 		http.Error(w, "Method not allowed", 405)

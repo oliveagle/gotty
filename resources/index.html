@@ -12,6 +12,7 @@
       <div id="sidebar">
         <div class="sidebar-header">
           <h3>Sessions</h3>
+          <button id="new-folder-btn" class="btn-folder" title="New Folder">📁</button>
           <button id="new-session-btn" class="btn-new" title="New Session">+</button>
         </div>
         <div id="session-list">
@@ -39,6 +40,9 @@
           this.wt = null;
           this.closer = null;
           this.editingId = null;
+          this.expandedSessions = new Set();
+          this.draggedId = null;
+          this.refreshInterval = null;
         }
 
         init() {
@@ -47,6 +51,14 @@
           if (newSessionBtn) {
             newSessionBtn.addEventListener('click', () => {
               this.createSession();
+            });
+          }
+
+          // Listen for click on new folder button
+          const newFolderBtn = document.getElementById('new-folder-btn');
+          if (newFolderBtn) {
+            newFolderBtn.addEventListener('click', () => {
+              this.createFolder();
             });
           }
 
@@ -68,8 +80,56 @@
             }
           }
 
+          // Restore expanded sessions state
+          const expanded = localStorage.getItem('expanded_sessions');
+          if (expanded) {
+            try {
+              this.expandedSessions = new Set(JSON.parse(expanded));
+            } catch (e) {
+              this.expandedSessions = new Set();
+            }
+          }
+
           // Initial fetch
           this.fetchSessions();
+
+          // Periodically refresh activity status (every 5 seconds)
+          this.refreshInterval = setInterval(() => {
+            this.refreshActivity();
+          }, 5000);
+        }
+
+        async refreshActivity() {
+          try {
+            const response = await fetch('/api/sessions');
+            const data = await response.json();
+            const newSessions = data.sessions || [];
+
+            // Update activity status without full re-render
+            newSessions.forEach(newS => {
+              const existing = this.sessions.find(s => s.id === newS.id);
+              if (existing) {
+                existing.is_active = newS.is_active;
+                existing.last_active_ago = newS.last_active_ago;
+              }
+            });
+
+            // Update activity dots
+            newSessions.forEach(s => {
+              const dot = document.querySelector(`[data-session-id="${s.id}"] .activity-dot`);
+              if (dot) {
+                if (s.is_active) {
+                  dot.classList.remove('inactive');
+                  dot.classList.add('active');
+                } else {
+                  dot.classList.remove('active');
+                  dot.classList.add('inactive');
+                }
+              }
+            });
+          } catch (error) {
+            // Silently ignore refresh errors
+          }
         }
 
         toggleSidebar() {
@@ -78,10 +138,20 @@
           sidebar.classList.toggle('collapsed');
           const isCollapsed = sidebar.classList.contains('collapsed');
           localStorage.setItem('sidebar_collapsed', isCollapsed);
-          // Change arrow direction
           if (toggleBtn) {
             toggleBtn.textContent = isCollapsed ? '▶' : '◀';
           }
+        }
+
+        toggleExpand(sessionId, event) {
+          event.stopPropagation();
+          if (this.expandedSessions.has(sessionId)) {
+            this.expandedSessions.delete(sessionId);
+          } else {
+            this.expandedSessions.add(sessionId);
+          }
+          localStorage.setItem('expanded_sessions', JSON.stringify([...this.expandedSessions]));
+          this.renderSessionList();
         }
 
         async fetchSessions() {
@@ -91,9 +161,12 @@
             this.sessions = data.sessions || [];
             this.renderSessionList();
 
-            // Auto-select first session if none selected
+            // Auto-select first non-folder session if none selected
             if (!this.activeSessionId && this.sessions.length > 0) {
-              this.setActiveSession(this.sessions[0].id);
+              const firstSession = this.findFirstSession();
+              if (firstSession) {
+                this.setActiveSession(firstSession.id);
+              }
             }
           } catch (error) {
             console.error('Failed to fetch sessions:', error);
@@ -101,20 +174,64 @@
           }
         }
 
-        async createSession() {
+        findFirstSession() {
+          // Find first non-folder session (depth-first)
+          const rootItems = this.sessions.filter(s => !s.parent_id);
+          for (const item of rootItems) {
+            if (!item.is_folder) return item;
+            const child = this.sessions.find(s => s.parent_id === item.id && !s.is_folder);
+            if (child) return child;
+          }
+          return null;
+        }
+
+        async createSession(folderId = null) {
           try {
-            const response = await fetch('/api/sessions', {
+            const options = {
               method: 'POST',
-            });
+              headers: { 'Content-Type': 'application/json' },
+            };
+            if (folderId) {
+              options.body = JSON.stringify({ parent_id: folderId });
+            }
+            const response = await fetch('/api/sessions', options);
             const data = await response.json();
 
             if (data.id) {
+              if (folderId) {
+                this.expandedSessions.add(folderId);
+                localStorage.setItem('expanded_sessions', JSON.stringify([...this.expandedSessions]));
+              }
               await this.fetchSessions();
               this.setActiveSession(data.id);
             }
           } catch (error) {
             console.error('Failed to create session:', error);
           }
+        }
+
+        async createFolder() {
+          try {
+            const response = await fetch('/api/sessions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ is_folder: true, title: 'New Folder' })
+            });
+            const data = await response.json();
+            if (data.id) {
+              await this.fetchSessions();
+              // Start editing the folder name
+              this.editingId = data.id;
+              this.renderSessionList();
+            }
+          } catch (error) {
+            console.error('Failed to create folder:', error);
+          }
+        }
+
+        async createSessionInFolder(folderId, event) {
+          event.stopPropagation();
+          await this.createSession(folderId);
         }
 
         async closeSession(id, event) {
@@ -131,9 +248,11 @@
 
             await this.fetchSessions();
 
-            // Select another session if available
             if (this.sessions.length > 0 && !this.activeSessionId) {
-              this.setActiveSession(this.sessions[0].id);
+              const firstSession = this.findFirstSession();
+              if (firstSession) {
+                this.setActiveSession(firstSession.id);
+              }
             }
           } catch (error) {
             console.error('Failed to close session:', error);
@@ -155,6 +274,25 @@
           }
         }
 
+        async moveToFolder(sessionId, folderId) {
+          try {
+            const response = await fetch('/api/sessions/' + sessionId, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ folder_id: folderId || '' })
+            });
+            if (response.ok) {
+              if (folderId) {
+                this.expandedSessions.add(folderId);
+                localStorage.setItem('expanded_sessions', JSON.stringify([...this.expandedSessions]));
+              }
+              await this.fetchSessions();
+            }
+          } catch (error) {
+            console.error('Failed to move session:', error);
+          }
+        }
+
         startEdit(id, event) {
           event.stopPropagation();
           this.editingId = id;
@@ -173,6 +311,57 @@
           }
         }
 
+        // Drag and drop handlers
+        handleDragStart(id, event) {
+          this.draggedId = id;
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', id);
+          event.target.classList.add('dragging');
+        }
+
+        handleDragEnd(event) {
+          event.target.classList.remove('dragging');
+          this.draggedId = null;
+          document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        }
+
+        handleDragOver(event) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+        }
+
+        handleDragEnter(folderId, event) {
+          event.preventDefault();
+          const folder = this.sessions.find(s => s.id === folderId);
+          if (folder && folder.is_folder && this.draggedId !== folderId) {
+            // Clear all drag-over first, then add to current
+            document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+            event.currentTarget.classList.add('drag-over');
+          }
+        }
+
+        handleDragLeave(event) {
+          // Only remove if leaving the element itself (not entering a child)
+          const rect = event.currentTarget.getBoundingClientRect();
+          const x = event.clientX;
+          const y = event.clientY;
+          if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+            event.currentTarget.classList.remove('drag-over');
+          }
+        }
+
+        handleDrop(folderId, event) {
+          event.preventDefault();
+          event.currentTarget.classList.remove('drag-over');
+
+          if (this.draggedId && this.draggedId !== folderId) {
+            const folder = this.sessions.find(s => s.id === folderId);
+            if (folder && folder.is_folder) {
+              this.moveToFolder(this.draggedId, folderId);
+            }
+          }
+        }
+
         renderSessionList() {
           const container = document.getElementById('session-list');
           if (!container) return;
@@ -182,36 +371,38 @@
             return;
           }
 
-          container.innerHTML = this.sessions.map(session => {
-            const isEditing = this.editingId === session.id;
-            const titleHtml = isEditing
-              ? `<input class="session-title-input" data-session-id="${session.id}" value="${session.title}" onkeydown="sessionManager.finishEdit(event)" onblur="sessionManager.editingId=null;sessionManager.renderSessionList()">`
-              : `<div class="session-title">${session.title}</div>`;
+          // Build tree structure
+          const rootItems = this.sessions.filter(s => !s.parent_id);
+          const childrenMap = new Map();
+          this.sessions.filter(s => s.parent_id).forEach(child => {
+            if (!childrenMap.has(child.parent_id)) {
+              childrenMap.set(child.parent_id, []);
+            }
+            childrenMap.get(child.parent_id).push(child);
+          });
 
-            const subtitleHtml = session.subtitle
-              ? `<div class="session-subtitle">${session.subtitle}</div>`
-              : '<div class="session-subtitle">&nbsp;</div>';
+          // Render recursively
+          const renderItems = (items, depth = 0) => {
+            let html = '';
+            items.forEach(item => {
+              const children = childrenMap.get(item.id) || [];
+              const hasChildren = children.length > 0 || item.has_children;
+              const isExpanded = this.expandedSessions.has(item.id);
 
-            const workdirHtml = session.workdir
-              ? `<div class="session-workdir" title="${session.workdir}">${session.workdir}</div>`
-              : '';
+              html += this.renderItem(item, depth, hasChildren, isExpanded);
 
-            return `
-              <div class="session-item ${session.id === this.activeSessionId ? 'active' : ''}"
-                   data-session-id="${session.id}"
-                   onclick="sessionManager.setActiveSession('${session.id}')">
-                <div class="session-info">
-                  ${titleHtml}
-                  ${subtitleHtml}
-                  ${workdirHtml}
-                </div>
-                <div class="session-actions">
-                  <button class="btn-edit" onclick="sessionManager.startEdit('${session.id}', event)" title="Rename">✏️</button>
-                  <button class="btn-close" onclick="sessionManager.closeSession('${session.id}', event)" title="Close">×</button>
-                </div>
-              </div>
-            `;
-          }).join('');
+              // Children container - also a drop zone if parent is a folder
+              if (isExpanded && (children.length > 0 || item.is_folder)) {
+                const dropZoneClass = item.is_folder ? 'folder-drop-zone' : '';
+                html += `<div class="session-children ${dropZoneClass}" data-parent-id="${item.id}">`;
+                html += renderItems(children, depth + 1);
+                html += '</div>';
+              }
+            });
+            return html;
+          };
+
+          container.innerHTML = renderItems(rootItems);
 
           // Focus on input if editing
           if (this.editingId) {
@@ -221,21 +412,109 @@
               input.select();
             }
           }
+
+          // Add drag and drop event listeners
+          container.querySelectorAll('.session-item[draggable="true"]').forEach(el => {
+            el.addEventListener('dragstart', (e) => this.handleDragStart(el.dataset.sessionId, e));
+            el.addEventListener('dragend', (e) => this.handleDragEnd(e));
+          });
+          // Folders and their children containers are drop targets
+          container.querySelectorAll('.session-item.folder, .folder-drop-zone').forEach(el => {
+            el.addEventListener('dragover', (e) => this.handleDragOver(e));
+            el.addEventListener('dragenter', (e) => this.handleDragEnter(el.dataset.folderId || el.dataset.parentId, e));
+            el.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+            el.addEventListener('drop', (e) => this.handleDrop(el.dataset.folderId || el.dataset.parentId, e));
+          });
+        }
+
+        renderItem(item, depth, hasChildren, isExpanded) {
+          const isEditing = this.editingId === item.id;
+          const isFolder = item.is_folder;
+
+          // Activity indicator (only for non-folder sessions)
+          const activityDot = !isFolder
+            ? `<div class="activity-dot ${item.is_active ? 'active' : 'inactive'}" title="${item.is_active ? 'Active' : 'Idle'}"></div>`
+            : '';
+
+          // Expand button
+          const expandBtn = hasChildren
+            ? `<button class="session-expand ${isExpanded ? 'expanded' : ''}" onclick="sessionManager.toggleExpand('${item.id}', event)" title="Expand/Collapse">▶</button>`
+            : '<div class="session-expand-placeholder"></div>';
+
+          // Title
+          const titleHtml = isEditing
+            ? `<input class="session-title-input" data-session-id="${item.id}" value="${item.title}" onkeydown="sessionManager.finishEdit(event)" onblur="sessionManager.editingId=null;sessionManager.renderSessionList()">`
+            : `<div class="session-title">${item.title}</div>`;
+
+          // Subtitle (only for sessions, not folders)
+          const subtitleHtml = !isFolder && item.subtitle
+            ? `<div class="session-subtitle">${item.subtitle}</div>`
+            : '';
+
+          // Workdir (only for sessions)
+          const workdirHtml = !isFolder && item.workdir
+            ? `<div class="session-workdir" title="${item.workdir}">${item.workdir}</div>`
+            : '';
+
+          // Add session button (only for folders)
+          const addBtn = isFolder
+            ? `<button class="btn-add-child" onclick="sessionManager.createSessionInFolder('${item.id}', event)" title="Add session to folder">+</button>`
+            : '';
+
+          // Item classes
+          const itemClasses = [
+            'session-item',
+            item.id === this.activeSessionId ? 'active' : '',
+            isFolder ? 'folder' : '',
+            depth > 0 ? 'child' : ''
+          ].filter(Boolean).join(' ');
+
+          // Draggable attribute (sessions are draggable, folders are drop targets)
+          const draggableAttr = !isFolder ? 'draggable="true"' : '';
+
+          // Click handler (folders don't connect to terminal)
+          const clickHandler = isFolder
+            ? `onclick="sessionManager.toggleExpand('${item.id}', event)"`
+            : `onclick="sessionManager.setActiveSession('${item.id}')"`;
+
+          // Folder data attribute for drop target
+          const folderAttr = isFolder ? `data-folder-id="${item.id}"` : '';
+
+          return `
+            <div class="${itemClasses}"
+                 data-session-id="${item.id}"
+                 ${folderAttr}
+                 ${draggableAttr}
+                 ${clickHandler}>
+              ${activityDot}
+              ${expandBtn}
+              <div class="session-info">
+                ${titleHtml}
+                ${subtitleHtml}
+                ${workdirHtml}
+              </div>
+              <div class="session-actions">
+                ${addBtn}
+                <button class="btn-edit" onclick="sessionManager.startEdit('${item.id}', event)" title="Rename">✏️</button>
+                <button class="btn-close" onclick="sessionManager.closeSession('${item.id}', event)" title="Close">×</button>
+              </div>
+            </div>
+          `;
         }
 
         setActiveSession(id) {
-          // Reconnect terminal if needed
+          const session = this.sessions.find(s => s.id === id);
+          if (!session || session.is_folder) return;
+
           if (this.activeSessionId !== id) {
             this.disconnectTerminal();
             this.activeSessionId = id;
             this.connectTerminal(id);
           }
 
-          // Update UI
-          const sessionItems = document.querySelectorAll('.session-item');
-          sessionItems.forEach(item => {
+          document.querySelectorAll('.session-item').forEach(item => {
             item.classList.remove('active');
-            if (item.getAttribute('data-session-id') === id) {
+            if (item.dataset.sessionId === id) {
               item.classList.add('active');
             }
           });
@@ -247,7 +526,6 @@
             this.closer = null;
           }
           if (this.term) {
-            // Properly close the terminal
             if (this.term.close) {
               this.term.close();
             } else if (this.term.deactivate) {
@@ -258,7 +536,6 @@
           if (this.wt) {
             this.wt = null;
           }
-          // Clear the terminal element
           const elem = document.getElementById('terminal');
           if (elem) {
             elem.innerHTML = '';
@@ -266,7 +543,6 @@
         }
 
         connectTerminal(sessionId) {
-          // Get auth token from global
           var authToken = '';
           if (typeof gotty_auth_token !== 'undefined') {
             authToken = gotty_auth_token;
@@ -280,7 +556,6 @@
           const elem = document.getElementById('terminal');
           if (!elem) return;
 
-          // Use xterm by default
           let term;
           if (termType === 'hterm') {
             term = new window.Hterm(elem);
@@ -299,7 +574,6 @@
           this.wt = wt;
           this.closer = wt.open();
 
-          // Show connecting message, will be removed when connection opens
           term.showMessage('Connecting...', 10000);
         }
 

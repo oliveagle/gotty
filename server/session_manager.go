@@ -1,6 +1,10 @@
 package server
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -11,12 +15,16 @@ import (
 
 // Session represents an active terminal session
 type Session struct {
-	ID        string
-	Title     string
-	Subtitle  string // AI-generated short summary
-	WorkDir   string // Working directory
-	CreatedAt time.Time
-	Slave     Slave
+	ID           string
+	Title        string
+	Subtitle     string // AI-generated short summary
+	WorkDir      string // Working directory
+	ParentID     string // Parent session ID, empty for root sessions
+	IsFolder     bool   // True if this is a folder (container) not a real session
+	Order        int    // Sort order within parent
+	CreatedAt    time.Time
+	LastActiveAt time.Time // Last activity time
+	Slave        Slave
 	// For persistent backends, store the session ID for re-attachment
 	// Slave will be nil after first disconnect
 
@@ -28,18 +36,100 @@ type Session struct {
 	lastOutputHash string
 }
 
+// sessionMetadata is used for JSON serialization of session data
+type sessionMetadata struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	ParentID  string `json:"parent_id,omitempty"`
+	IsFolder  bool   `json:"is_folder"`
+	Order     int    `json:"order"`
+	WorkDir   string `json:"workdir,omitempty"`
+	CreatedAt string `json:"created_at"`
+}
+
 // SessionManager manages terminal sessions
 type SessionManager struct {
-	sessions map[string]*Session
-	mu       sync.RWMutex
-	factory  Factory
+	sessions     map[string]*Session
+	mu           sync.RWMutex
+	factory      Factory
+	metadataFile string // Path to metadata file for persistence
+	nextOrder    int    // Next order number for new sessions
 }
 
 // NewSessionManager creates a new session manager
 func NewSessionManager() *SessionManager {
+	// Default metadata file location
+	homeDir, _ := os.UserHomeDir()
+	metadataFile := filepath.Join(homeDir, ".config", "gotty", "sessions.json")
+
 	return &SessionManager{
-		sessions: make(map[string]*Session),
+		sessions:     make(map[string]*Session),
+		metadataFile: metadataFile,
+		nextOrder:    1,
 	}
+}
+
+// SetMetadataFile sets a custom metadata file path
+func (sm *SessionManager) SetMetadataFile(path string) {
+	sm.metadataFile = path
+}
+
+// saveMetadata saves session metadata to file
+func (sm *SessionManager) saveMetadata() {
+	if sm.metadataFile == "" {
+		return
+	}
+
+	// Create directory if needed
+	dir := filepath.Dir(sm.metadataFile)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return
+	}
+
+	// Collect metadata
+	metadata := make([]sessionMetadata, 0, len(sm.sessions))
+	for _, s := range sm.sessions {
+		metadata = append(metadata, sessionMetadata{
+			ID:        s.ID,
+			Title:     s.Title,
+			ParentID:  s.ParentID,
+			IsFolder:  s.IsFolder,
+			Order:     s.Order,
+			WorkDir:   s.WorkDir,
+			CreatedAt: s.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	// Write to file
+	data, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		return
+	}
+	os.WriteFile(sm.metadataFile, data, 0644)
+}
+
+// loadMetadata loads session metadata from file
+func (sm *SessionManager) loadMetadata() map[string]sessionMetadata {
+	if sm.metadataFile == "" {
+		return nil
+	}
+
+	data, err := os.ReadFile(sm.metadataFile)
+	if err != nil {
+		return nil
+	}
+
+	var metadata []sessionMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil
+	}
+
+	// Convert to map for easy lookup
+	result := make(map[string]sessionMetadata)
+	for _, m := range metadata {
+		result[m.ID] = m
+	}
+	return result
 }
 
 // SetFactory sets the factory for creating new slaves
@@ -62,7 +152,32 @@ func (sm *SessionManager) RestoreSessions() {
 
 // restoreFromZellij restores gotty sessions from existing zellij sessions
 func (sm *SessionManager) restoreFromZellij() {
-	// Import zellij session listing
+	// Load saved metadata
+	metadata := sm.loadMetadata()
+
+	// First, restore folders (they don't have zellij sessions)
+	for id, m := range metadata {
+		if m.IsFolder {
+			if _, exists := sm.sessions[id]; !exists {
+				session := &Session{
+					ID:           id,
+					Title:        m.Title,
+					ParentID:     m.ParentID,
+					IsFolder:     true,
+					Order:        m.Order,
+					CreatedAt:    time.Now(),
+					Slave:        nil,
+					outputBuffer: nil, // Folders don't need output buffer
+				}
+				if t, err := time.Parse(time.RFC3339, m.CreatedAt); err == nil {
+					session.CreatedAt = t
+				}
+				sm.sessions[id] = session
+			}
+		}
+	}
+
+	// Then, restore zellij sessions
 	sessions := listZellijSessions()
 	for _, name := range sessions {
 		// Only restore sessions with gotty- prefix
@@ -73,14 +188,34 @@ func (sm *SessionManager) restoreFromZellij() {
 			}
 			// Check if already exists
 			if _, exists := sm.sessions[id]; !exists {
-				sm.sessions[id] = &Session{
+				session := &Session{
 					ID:           id,
 					Title:        name,
-					CreatedAt:    time.Now(), // We don't have exact creation time
-					Slave:        nil,         // Will be created on demand
+					CreatedAt:    time.Now(),
+					Slave:        nil,
 					outputBuffer: summary.NewRingBuffer(16384),
 				}
+
+				// Apply saved metadata if exists
+				if m, ok := metadata[id]; ok {
+					session.Title = m.Title
+					session.ParentID = m.ParentID
+					session.Order = m.Order
+					session.WorkDir = m.WorkDir
+					if t, err := time.Parse(time.RFC3339, m.CreatedAt); err == nil {
+						session.CreatedAt = t
+					}
+				}
+
+				sm.sessions[id] = session
 			}
+		}
+	}
+
+	// Update nextOrder to be greater than any existing order
+	for _, s := range sm.sessions {
+		if s.Order >= sm.nextOrder {
+			sm.nextOrder = s.Order + 1
 		}
 	}
 }
@@ -100,15 +235,113 @@ func (sm *SessionManager) Create(title string, slave Slave) *Session {
 	defer sm.mu.Unlock()
 
 	id := randomstring.Generate(8)
+	order := sm.nextOrder
+	sm.nextOrder++
+	now := time.Now()
+
 	session := &Session{
 		ID:           id,
 		Title:        title,
-		CreatedAt:    time.Now(),
+		Order:        order,
+		CreatedAt:    now,
+		LastActiveAt: now,
 		Slave:        slave,
 		outputBuffer: summary.NewRingBuffer(16384), // 16KB buffer
 	}
 	sm.sessions[id] = session
+	sm.saveMetadata()
 	return session
+}
+
+// CreateChild creates a new child session under the given parent
+func (sm *SessionManager) CreateChild(title string, parentID string, slave Slave) *Session {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	id := randomstring.Generate(8)
+	order := sm.nextOrder
+	sm.nextOrder++
+	now := time.Now()
+
+	session := &Session{
+		ID:           id,
+		Title:        title,
+		ParentID:     parentID,
+		Order:        order,
+		CreatedAt:    now,
+		LastActiveAt: now,
+		Slave:        slave,
+		outputBuffer: summary.NewRingBuffer(16384), // 16KB buffer
+	}
+	sm.sessions[id] = session
+	sm.saveMetadata()
+	return session
+}
+
+// CreateFolder creates a new folder (container for sessions)
+func (sm *SessionManager) CreateFolder(title string, parentID string) *Session {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	id := randomstring.Generate(8)
+	order := sm.nextOrder
+	sm.nextOrder++
+
+	session := &Session{
+		ID:           id,
+		Title:        title,
+		ParentID:     parentID,
+		IsFolder:     true,
+		Order:        order,
+		CreatedAt:    time.Now(),
+		Slave:        nil,
+		outputBuffer: nil,
+	}
+	sm.sessions[id] = session
+	sm.saveMetadata()
+	return session
+}
+
+// MoveToFolder moves a session to a folder (or root if folderID is empty)
+func (sm *SessionManager) MoveToFolder(sessionID string, folderID string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, ok := sm.sessions[sessionID]
+	if !ok {
+		return false
+	}
+
+	// Validate folder exists if folderID is provided
+	if folderID != "" {
+		folder, ok := sm.sessions[folderID]
+		if !ok || !folder.IsFolder {
+			return false
+		}
+		// Prevent moving a folder into itself or its descendants
+		if session.IsFolder && sm.isDescendant(folderID, sessionID) {
+			return false
+		}
+	}
+
+	session.ParentID = folderID
+	sm.saveMetadata()
+	return true
+}
+
+// isDescendant checks if target is a descendant of ancestor
+func (sm *SessionManager) isDescendant(targetID string, ancestorID string) bool {
+	current := sm.sessions[targetID]
+	for current != nil {
+		if current.ParentID == ancestorID {
+			return true
+		}
+		if current.ParentID == "" {
+			return false
+		}
+		current = sm.sessions[current.ParentID]
+	}
+	return false
 }
 
 // CreateWithID creates a new session with a specific ID using the factory
@@ -122,6 +355,9 @@ func (sm *SessionManager) CreateWithID(title string, params map[string][]string)
 	defer sm.mu.Unlock()
 
 	id := randomstring.Generate(8)
+	order := sm.nextOrder
+	sm.nextOrder++
+	now := time.Now()
 
 	slave, err := sm.factory.NewWithID(id, params)
 	if err != nil {
@@ -131,11 +367,14 @@ func (sm *SessionManager) CreateWithID(title string, params map[string][]string)
 	session := &Session{
 		ID:           id,
 		Title:        title,
-		CreatedAt:    time.Now(),
+		Order:        order,
+		CreatedAt:    now,
+		LastActiveAt: now,
 		Slave:        slave,
 		outputBuffer: summary.NewRingBuffer(16384), // 16KB buffer
 	}
 	sm.sessions[id] = session
+	sm.saveMetadata()
 	return session, nil
 }
 
@@ -148,7 +387,7 @@ func (sm *SessionManager) Get(id string) (*Session, bool) {
 	return session, ok
 }
 
-// List returns all sessions
+// List returns all sessions sorted by order
 func (sm *SessionManager) List() []*Session {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -157,7 +396,60 @@ func (sm *SessionManager) List() []*Session {
 	for _, s := range sm.sessions {
 		sessions = append(sessions, s)
 	}
+	// Sort by order
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].Order < sessions[j].Order
+	})
 	return sessions
+}
+
+// GetRootSessions returns all root sessions (sessions without a parent) sorted by order
+func (sm *SessionManager) GetRootSessions() []*Session {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	sessions := make([]*Session, 0)
+	for _, s := range sm.sessions {
+		if s.ParentID == "" {
+			sessions = append(sessions, s)
+		}
+	}
+	// Sort by order
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].Order < sessions[j].Order
+	})
+	return sessions
+}
+
+// GetChildren returns all child sessions of a given parent sorted by order
+func (sm *SessionManager) GetChildren(parentID string) []*Session {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	sessions := make([]*Session, 0)
+	for _, s := range sm.sessions {
+		if s.ParentID == parentID {
+			sessions = append(sessions, s)
+		}
+	}
+	// Sort by order
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].Order < sessions[j].Order
+	})
+	return sessions
+}
+
+// HasChildren checks if a session has any children
+func (sm *SessionManager) HasChildren(id string) bool {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	for _, s := range sm.sessions {
+		if s.ParentID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // Close closes and removes a session by ID
@@ -170,7 +462,15 @@ func (sm *SessionManager) Close(id string) error {
 		return nil // Session not found, consider it closed
 	}
 
+	// Remove children first (cascade delete)
+	for _, child := range sm.sessions {
+		if child.ParentID == id {
+			delete(sm.sessions, child.ID)
+		}
+	}
+
 	delete(sm.sessions, id)
+	sm.saveMetadata()
 	return session.Slave.Close()
 }
 
@@ -192,6 +492,7 @@ func (sm *SessionManager) Rename(id string, newTitle string) bool {
 		return false
 	}
 	session.Title = newTitle
+	sm.saveMetadata()
 	return true
 }
 
@@ -218,22 +519,57 @@ func (sm *SessionManager) UpdateWorkDir(id string, workDir string) bool {
 		return false
 	}
 	session.WorkDir = workDir
+	sm.saveMetadata()
 	return true
+}
+
+// UpdateActivity updates the last active time of a session
+func (sm *SessionManager) UpdateActivity(id string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, ok := sm.sessions[id]
+	if !ok {
+		return
+	}
+	session.LastActiveAt = time.Now()
+}
+
+// GetActivity returns the activity status of a session
+// Returns: is_active (true if active within threshold), seconds since last activity
+func (sm *SessionManager) GetActivity(id string) (bool, int64) {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	session, ok := sm.sessions[id]
+	if !ok {
+		return false, 0
+	}
+
+	// Consider active if activity within last 30 seconds
+	threshold := int64(30)
+	secondsSinceActivity := int64(time.Since(session.LastActiveAt).Seconds())
+	isActive := secondsSinceActivity < threshold
+
+	return isActive, secondsSinceActivity
 }
 
 // CaptureOutput captures output to a session's buffer for subtitle generation
 func (sm *SessionManager) CaptureOutput(id string, data []byte) {
-	sm.mu.RLock()
+	sm.mu.Lock()
 	session, ok := sm.sessions[id]
-	sm.mu.RUnlock()
-
 	if !ok || session.outputBuffer == nil {
+		sm.mu.Unlock()
 		return
 	}
+
+	// Update activity time
+	session.LastActiveAt = time.Now()
 
 	session.outputMu.Lock()
 	session.outputBuffer.Write(data)
 	session.outputMu.Unlock()
+	sm.mu.Unlock()
 }
 
 // GetOutputBuffer returns a copy of the session's output buffer

@@ -31,6 +31,9 @@ type WebTTY struct {
 
 	// Summary service for generating session subtitles
 	summaryService *summary.Service
+
+	// Activity callback - called on input/output activity
+	activityCallback func()
 }
 
 // New creates a new instance of WebTTY.
@@ -160,6 +163,11 @@ func (wt *WebTTY) handleSlaveReadEvent(data []byte) error {
 		wt.summaryService.CaptureOutput(data)
 	}
 
+	// Notify activity
+	if wt.activityCallback != nil {
+		wt.activityCallback()
+	}
+
 	safeMessage := base64.StdEncoding.EncodeToString(data)
 	err := wt.masterWrite(append([]byte{Output}, []byte(safeMessage)...))
 	if err != nil {
@@ -199,6 +207,11 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 		// Capture input for summary context
 		if wt.summaryService != nil {
 			wt.summaryService.CaptureInput(data[1:])
+		}
+
+		// Notify activity
+		if wt.activityCallback != nil {
+			wt.activityCallback()
 		}
 
 		_, err := wt.slave.Write(data[1:])
