@@ -15,11 +15,6 @@ export class Xterm {
     messageTimeout: number;
     messageTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // IME handling
-    imeInput: HTMLInputElement | null = null;
-    isComposing: boolean = false;
-    dataCallback: ((data: string) => void) | null = null;
-
     constructor(elem: HTMLElement) {
         this.elem = elem;
         this.term = new Terminal({
@@ -68,89 +63,6 @@ export class Xterm {
         // Fit after everything is loaded
         this.fitAddon.fit();
         window.addEventListener("resize", this.resizeListener);
-
-        // Create IME input overlay
-        this.createImeOverlay();
-    }
-
-    private createImeOverlay(): void {
-        // Create a transparent input that covers the terminal
-        this.imeInput = document.createElement('input');
-        this.imeInput.type = 'text';
-        this.imeInput.className = 'xterm-ime-overlay';
-        this.imeInput.style.cssText = `
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0.01;
-            background: transparent;
-            border: none;
-            outline: none;
-            color: transparent;
-            caret-color: transparent;
-            font-size: 16px;
-            z-index: 100;
-            cursor: text;
-        `;
-        console.log('[Xterm] Created IME overlay');
-
-        // Handle composition events
-        this.imeInput.addEventListener('compositionstart', () => {
-            this.isComposing = true;
-        });
-
-        this.imeInput.addEventListener('compositionend', () => {
-            this.isComposing = false;
-            if (this.imeInput && this.imeInput.value && this.dataCallback) {
-                this.dataCallback(this.imeInput.value);
-                this.imeInput.value = '';
-            }
-        });
-
-        // Handle regular input (non-IME)
-        this.imeInput.addEventListener('input', () => {
-            if (!this.isComposing && this.imeInput && this.dataCallback) {
-                const value = this.imeInput.value;
-                if (value) {
-                    this.dataCallback(value);
-                    this.imeInput.value = '';
-                }
-            }
-        });
-
-        // Forward keyboard events to xterm
-        this.imeInput.addEventListener('keydown', (e) => {
-            if (this.isComposing) return;
-
-            // Special keys - forward to xterm
-            const specialKeys = ['Enter', 'Backspace', 'Delete', 'Tab', 'Escape',
-                                  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-                                  'Home', 'End', 'PageUp', 'PageDown'];
-
-            if (specialKeys.includes(e.key)) {
-                // Let these go through to the terminal
-                e.stopPropagation();
-            }
-        });
-
-        // Click to focus
-        this.elem.addEventListener('click', () => {
-            if (this.imeInput) {
-                this.imeInput.focus();
-            }
-        });
-
-        this.elem.style.position = 'relative';
-        this.elem.appendChild(this.imeInput);
-
-        // Focus the input
-        setTimeout(() => {
-            if (this.imeInput) {
-                this.imeInput.focus();
-            }
-        }, 100);
     }
 
     info(): { columns: number; rows: number } {
@@ -223,8 +135,6 @@ export class Xterm {
     }
 
     onInput(callback: (input: string) => void): void {
-        this.dataCallback = callback;
-        // Also register with xterm for special keys that bypass our input
         this.term.onData(callback);
     }
 
@@ -234,9 +144,6 @@ export class Xterm {
 
     deactivate(): void {
         this.term.blur();
-        if (this.imeInput) {
-            this.imeInput.blur();
-        }
     }
 
     reset(): void {
@@ -246,9 +153,6 @@ export class Xterm {
 
     close(): void {
         window.removeEventListener("resize", this.resizeListener);
-        if (this.imeInput && this.imeInput.parentNode) {
-            this.imeInput.parentNode.removeChild(this.imeInput);
-        }
         this.webglAddon?.dispose();
         this.term.dispose();
     }
