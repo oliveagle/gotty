@@ -15,10 +15,11 @@ export declare class Hterm {
     showMessage(message: string, timeout: number): void;
     removeMessage(): void;
     setWindowTitle(title: string): void;
-    setPreferences(value: object): void;
+    setPreferences(value: Record<string, unknown>): void;
     onInput(callback: (input: string) => void): void;
-    onResize(callback: (colmuns: number, rows: number) => void): void;
+    onResize(callback: (columns: number, rows: number) => void): void;
     deactivate(): void;
     reset(): void;
     close(): void;
 }
+//# sourceMappingURL=hterm.d.ts.map

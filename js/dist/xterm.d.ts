@@ -1,13 +1,17 @@
-import * as bare from "xterm";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { lib } from "libapps";
 export declare class Xterm {
     elem: HTMLElement;
-    term: bare;
+    term: Terminal;
+    fitAddon: FitAddon;
+    webglAddon: WebglAddon | null;
     resizeListener: () => void;
     decoder: lib.UTF8Decoder;
     message: HTMLElement;
     messageTimeout: number;
-    messageTimer: number;
+    messageTimer: ReturnType<typeof setTimeout> | null;
     constructor(elem: HTMLElement);
     info(): {
         columns: number;
@@ -17,10 +21,11 @@ export declare class Xterm {
     showMessage(message: string, timeout: number): void;
     removeMessage(): void;
     setWindowTitle(title: string): void;
-    setPreferences(value: object): void;
+    setPreferences(_value: object): void;
     onInput(callback: (input: string) => void): void;
-    onResize(callback: (colmuns: number, rows: number) => void): void;
+    onResize(callback: (columns: number, rows: number) => void): void;
     deactivate(): void;
     reset(): void;
     close(): void;
 }
+//# sourceMappingURL=xterm.d.ts.map

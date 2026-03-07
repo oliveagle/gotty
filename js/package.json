@@ -1,15 +1,23 @@
 {
-    "devDependencies": {
-        "copy-webpack-plugin": "^8.1.1",
-        "license-loader": "^0.5.0",
-        "ts-loader": "^2.0.3",
-        "typescript": "^2.3.2",
-        "uglifyjs-webpack-plugin": "^1.0.0-beta.2",
-        "webpack": "^2.5.1"
-    },
-    "dependencies": {
-        "@bitwarden/sdk-internal": "^0.2.0-main.583",
-        "libapps": "github:yudai/libapps#release-hterm-1.70",
-        "xterm": "^2.7.0"
-    }
+  "name": "gotty",
+  "version": "2.0.0",
+  "description": "Share your terminal as a web application",
+  "private": true,
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch"
+  },
+  "devDependencies": {
+    "copy-webpack-plugin": "^12.0.2",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.7.3",
+    "webpack": "^5.98.0",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0",
+    "libapps": "github:yudai/libapps#release-hterm-1.70"
+  }
 }

@@ -15,3 +15,4 @@ export declare class Connection {
     onReceive(callback: (data: string) => void): void;
     onClose(callback: () => void): void;
 }
+//# sourceMappingURL=websocket.d.ts.map

@@ -6,11 +6,11 @@ export class Hterm {
     term: bare.hterm.Terminal;
     io: bare.hterm.IO;
 
-    columns: number;
-    rows: number;
+    columns: number = 80;
+    rows: number = 24;
 
     // to "show" the current message when removeMessage() is called
-    message: string;
+    message: string = "";
 
     constructor(elem: HTMLElement) {
         this.elem = elem;
@@ -21,63 +21,63 @@ export class Hterm {
 
         this.io = this.term.io.push();
         this.term.installKeyboard();
-    };
+    }
 
-    info(): { columns: number, rows: number } {
+    info(): { columns: number; rows: number } {
         return { columns: this.columns, rows: this.rows };
-    };
+    }
 
-    output(data: string) {
+    output(data: string): void {
         if (this.term.io != null) {
             this.term.io.writeUTF8(data);
         }
-    };
+    }
 
-    showMessage(message: string, timeout: number) {
+    showMessage(message: string, timeout: number): void {
         this.message = message;
         if (timeout > 0) {
             this.term.io.showOverlay(message, timeout);
         } else {
             this.term.io.showOverlay(message, null);
         }
-    };
+    }
 
     removeMessage(): void {
         // there is no hideOverlay(), so show the same message with 0 sec
         this.term.io.showOverlay(this.message, 0);
     }
 
-    setWindowTitle(title: string) {
+    setWindowTitle(title: string): void {
         this.term.setWindowTitle(title);
-    };
+    }
 
-    setPreferences(value: object) {
+    setPreferences(value: Record<string, unknown>): void {
         Object.keys(value).forEach((key) => {
-            this.term.getPrefs().set(key, value[key]);
+            this.term.getPrefs().set(key, value[key] as string);
         });
-    };
+    }
 
-    onInput(callback: (input: string) => void) {
+    onInput(callback: (input: string) => void): void {
         this.io.onVTKeystroke = (data) => {
             callback(data);
         };
         this.io.sendString = (data) => {
             callback(data);
         };
-    };
+    }
 
-    onResize(callback: (colmuns: number, rows: number) => void) {
+    onResize(callback: (columns: number, rows: number) => void): void {
         this.io.onTerminalResize = (columns: number, rows: number) => {
             this.columns = columns;
             this.rows = rows;
             callback(columns, rows);
         };
-    };
+    }
 
     deactivate(): void {
-        this.io.onVTKeystroke    = function(){};
-        this.io.sendString       = function(){};
-        this.io.onTerminalResize = function(){};
+        this.io.onVTKeystroke = function () {};
+        this.io.sendString = function () {};
+        this.io.onTerminalResize = function () {};
         this.term.uninstallKeyboard();
     }
 

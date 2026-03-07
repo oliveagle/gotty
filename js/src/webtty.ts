@@ -14,14 +14,14 @@ export const msgSetReconnect = '5';
 
 
 export interface Terminal {
-    info(): { columns: number, rows: number };
+    info(): { columns: number; rows: number };
     output(data: string): void;
     showMessage(message: string, timeout: number): void;
     removeMessage(): void;
     setWindowTitle(title: string): void;
     setPreferences(value: object): void;
     onInput(callback: (input: string) => void): void;
-    onResize(callback: (colmuns: number, rows: number) => void): void;
+    onResize(callback: (columns: number, rows: number) => void): void;
     reset(): void;
     deactivate(): void;
     close(): void;
@@ -55,12 +55,12 @@ export class WebTTY {
         this.args = args;
         this.authToken = authToken;
         this.reconnect = -1;
-    };
+    }
 
     open() {
         let connection = this.connectionFactory.create();
-        let pingTimer: number;
-        let reconnectTimeout: number;
+        let pingTimer: ReturnType<typeof setInterval>;
+        let reconnectTimeout: ReturnType<typeof setTimeout>;
 
         const setup = () => {
             connection.onOpen(() => {
@@ -77,11 +77,11 @@ export class WebTTY {
                 ));
 
 
-                const resizeHandler = (colmuns: number, rows: number) => {
+                const resizeHandler = (columns: number, rows: number) => {
                     connection.send(
                         msgResizeTerminal + JSON.stringify(
                             {
-                                columns: colmuns,
+                                columns: columns,
                                 rows: rows
                             }
                         )
@@ -98,7 +98,7 @@ export class WebTTY {
                 );
 
                 pingTimer = setInterval(() => {
-                    connection.send(msgPing)
+                    connection.send(msgPing);
                 }, 30 * 1000);
 
             });
@@ -120,7 +120,7 @@ export class WebTTY {
                         break;
                     case msgSetReconnect:
                         const autoReconnect = JSON.parse(payload);
-                        console.log("Enabling reconnect: " + autoReconnect + " seconds")
+                        console.log("Enabling reconnect: " + autoReconnect + " seconds");
                         this.reconnect = autoReconnect;
                         break;
                 }
@@ -141,12 +141,12 @@ export class WebTTY {
             });
 
             connection.open();
-        }
+        };
 
         setup();
         return () => {
             clearTimeout(reconnectTimeout);
             connection.close();
-        }
-    };
-};
+        };
+    }
+}

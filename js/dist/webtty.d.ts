@@ -20,7 +20,7 @@ export interface Terminal {
     setWindowTitle(title: string): void;
     setPreferences(value: object): void;
     onInput(callback: (input: string) => void): void;
-    onResize(callback: (colmuns: number, rows: number) => void): void;
+    onResize(callback: (columns: number, rows: number) => void): void;
     reset(): void;
     deactivate(): void;
     close(): void;
@@ -46,3 +46,4 @@ export declare class WebTTY {
     constructor(term: Terminal, connectionFactory: ConnectionFactory, args: string, authToken: string);
     open(): () => void;
 }
+//# sourceMappingURL=webtty.d.ts.map
