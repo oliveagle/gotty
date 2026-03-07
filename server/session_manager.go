@@ -19,6 +19,7 @@ type Session struct {
 type SessionManager struct {
 	sessions map[string]*Session
 	mu       sync.RWMutex
+	factory  Factory
 }
 
 // NewSessionManager creates a new session manager
@@ -26,6 +27,11 @@ func NewSessionManager() *SessionManager {
 	return &SessionManager{
 		sessions: make(map[string]*Session),
 	}
+}
+
+// SetFactory sets the factory for creating new slaves
+func (sm *SessionManager) SetFactory(factory Factory) {
+	sm.factory = factory
 }
 
 // Create creates a new session with the given slave
@@ -42,6 +48,33 @@ func (sm *SessionManager) Create(title string, slave Slave) *Session {
 	}
 	sm.sessions[id] = session
 	return session
+}
+
+// CreateWithID creates a new session with a specific ID using the factory
+// This is useful for persistent backends like zellij that need session ID to match
+func (sm *SessionManager) CreateWithID(title string, params map[string][]string) (*Session, error) {
+	if sm.factory == nil {
+		return nil, nil
+	}
+
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	id := randomstring.Generate(8)
+
+	slave, err := sm.factory.NewWithID(id, params)
+	if err != nil {
+		return nil, err
+	}
+
+	session := &Session{
+		ID:        id,
+		Title:     title,
+		CreatedAt: time.Now(),
+		Slave:     slave,
+	}
+	sm.sessions[id] = session
+	return session, nil
 }
 
 // Get returns a session by ID

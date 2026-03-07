@@ -14,4 +14,7 @@ type Slave interface {
 type Factory interface {
 	Name() string
 	New(params map[string][]string) (Slave, error)
+	// NewWithID creates a slave with a specific session ID (for persistent backends like zellij)
+	// If the backend doesn't support it, this should behave like New()
+	NewWithID(sessionID string, params map[string][]string) (Slave, error)
 }

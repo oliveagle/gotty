@@ -133,6 +133,7 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 	// Determine slave (either existing session or new)
 	var slave Slave
 	var isNewSession bool
+	var createdSessionID string
 	if sessionID != "" {
 		// Try to join existing session
 		session, ok := server.sessionManager.Get(sessionID)
@@ -154,14 +155,26 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 			return errors.Wrapf(err, "failed to parse arguments")
 		}
 		params := query.Query()
-		slave, err = server.factory.New(params)
-		if err != nil {
-			return errors.Wrapf(err, "failed to create backend")
+
+		// Use CreateWithID for backends that need session ID (like zellij)
+		session, createErr := server.sessionManager.CreateWithID(server.factory.Name(), params)
+		if createErr != nil {
+			return errors.Wrapf(createErr, "failed to create backend")
 		}
-		// Create session in manager
-		server.sessionManager.Create(server.factory.Name(), slave)
+		if session != nil {
+			slave = session.Slave
+			createdSessionID = session.ID
+		} else {
+			// Fallback to old method if CreateWithID returned nil (no factory set)
+			slave, err = server.factory.New(params)
+			if err != nil {
+				return errors.Wrapf(err, "failed to create backend")
+			}
+			s := server.sessionManager.Create(server.factory.Name(), slave)
+			createdSessionID = s.ID
+		}
 		isNewSession = true
-		log.Printf("Client created new session")
+		log.Printf("Client created new session: %s", createdSessionID)
 	}
 
 	// Only close slave for new sessions (not for joined sessions)

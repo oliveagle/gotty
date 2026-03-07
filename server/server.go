@@ -69,10 +69,13 @@ func New(factory Factory, options *Options) (*Server, error) {
 		}
 	}
 
+	sm := NewSessionManager()
+	sm.SetFactory(factory)
+
 	return &Server{
 		factory:        factory,
 		options:        options,
-		sessionManager: NewSessionManager(),
+		sessionManager: sm,
 
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize:  1024,

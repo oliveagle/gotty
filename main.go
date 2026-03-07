@@ -12,6 +12,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/oliveagle/gotty/backend/localcommand"
+	"github.com/oliveagle/gotty/backend/zellijcommand"
 	"github.com/oliveagle/gotty/pkg/homedir"
 	"github.com/oliveagle/gotty/server"
 	"github.com/oliveagle/gotty/utils"
@@ -47,6 +48,12 @@ func main() {
 			Usage:   "Config file path",
 			EnvVars: []string{"GOTTY_CONFIG"},
 		},
+		&cli.StringFlag{
+			Name:    "backend",
+			Value:   "local",
+			Usage:   "Backend type: 'local' for direct command, 'zellij' for persistent sessions",
+			EnvVars: []string{"GOTTY_BACKEND"},
+		},
 	)
 
 	app.Action = func(c *cli.Context) error {
@@ -80,9 +87,25 @@ func main() {
 			exit(err, 6)
 		}
 
-		factory, err := localcommand.NewFactory(args[0], args[1:], backendOptions)
-		if err != nil {
-			exit(err, 3)
+		// Create factory based on backend type
+		var factory server.Factory
+		backendType := c.String("backend")
+		switch backendType {
+		case "zellij":
+			zellijOptions := &zellijcommand.Options{}
+			if err := utils.ApplyDefaultValues(zellijOptions); err != nil {
+				exit(err, 1)
+			}
+			factory, err = zellijcommand.NewFactory(args[0], args[1:], zellijOptions)
+			if err != nil {
+				exit(err, 3)
+			}
+			log.Printf("Using zellij backend for persistent sessions")
+		default:
+			factory, err = localcommand.NewFactory(args[0], args[1:], backendOptions)
+			if err != nil {
+				exit(err, 3)
+			}
 		}
 
 		hostname, _ := os.Hostname()

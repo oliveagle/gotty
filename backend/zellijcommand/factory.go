@@ -1,4 +1,4 @@
-package localcommand
+package zellijcommand
 
 import (
 	"syscall"
@@ -34,7 +34,7 @@ func NewFactory(command string, argv []string, options *Options) (*Factory, erro
 }
 
 func (factory *Factory) Name() string {
-	return "local command"
+	return "zellij"
 }
 
 func (factory *Factory) New(params map[string][]string) (server.Slave, error) {
@@ -44,10 +44,31 @@ func (factory *Factory) New(params map[string][]string) (server.Slave, error) {
 		argv = append(argv, params["arg"]...)
 	}
 
-	return New(factory.command, argv, factory.opts...)
+	// Generate a session name - this will be overridden by session manager
+	sessionName := "gotty-" + generateSessionID()
+
+	return New(sessionName, factory.command, argv, factory.opts...)
 }
 
-// NewWithID implements Factory interface - for localcommand, it's the same as New
+// NewWithID creates a zellij session with the given ID
 func (factory *Factory) NewWithID(sessionID string, params map[string][]string) (server.Slave, error) {
-	return factory.New(params)
+	argv := make([]string, len(factory.argv))
+	copy(argv, factory.argv)
+	if params["arg"] != nil && len(params["arg"]) > 0 {
+		argv = append(argv, params["arg"]...)
+	}
+
+	// Use gotty- prefix for zellij session name
+	sessionName := "gotty-" + sessionID
+
+	return New(sessionName, factory.command, argv, factory.opts...)
+}
+
+func generateSessionID() string {
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 8)
+	for i := range b {
+		b[i] = charset[i%len(charset)]
+	}
+	return string(b)
 }
