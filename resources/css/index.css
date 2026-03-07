@@ -121,10 +121,10 @@ html, body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px;
-    margin-bottom: 8px;
+    padding: 4px 8px;
+    margin-bottom: 2px;
     background: #3a3a3a;
-    border-radius: 6px;
+    border-radius: 4px;
     cursor: pointer;
     transition: background 0.2s;
     border: 2px solid transparent;

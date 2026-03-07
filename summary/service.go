@@ -121,14 +121,20 @@ func (s *Service) CaptureOutput(data []byte) {
 	if !s.config.Enabled {
 		return
 	}
+
+	// Copy data to avoid holding lock during callback
+	dataCopy := make([]byte, len(data))
+	copy(dataCopy, data)
+
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.buffer.Write(data)
 	s.outputBytes += len(data)
+	callback := s.onOutput
+	s.mu.Unlock()
 
-	// Call output callback if set
-	if s.onOutput != nil {
-		s.onOutput(data)
+	// Call callback outside of lock
+	if callback != nil {
+		callback(dataCopy)
 	}
 }
 
