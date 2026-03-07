@@ -20869,6 +20869,8 @@ class WebTTY {
         let reconnectTimeout;
         const setup = () => {
             connection.onOpen(() => {
+                // Remove "Connecting..." message
+                this.term.removeMessage();
                 const termInfo = this.term.info();
                 connection.send(JSON.stringify({
                     Arguments: this.args,
@@ -24364,37 +24366,50 @@ function startTerminal(authToken) {
 }
 // Main initialization
 const elem = document.getElementById("terminal");
+// Check if session management is enabled (look for session-list element)
+const sessionListElem = document.getElementById("session-list");
+const sessionMode = sessionListElem !== null;
 if (elem !== null) {
-    // Check authentication type
-    const authType = (typeof gotty_auth_type !== "undefined") ? gotty_auth_type : "none";
-    const authToken = (typeof gotty_auth_token !== "undefined") ? gotty_auth_token : "";
-    if (authType === "bitwarden" && !authToken) {
-        // Show Bitwarden authentication UI
-        const authUI = createBitwardenAuthUI((token) => {
-            // Remove auth UI
-            const ui = document.getElementById("bitwarden-auth");
-            if (ui)
-                ui.remove();
-            // Start terminal with the token
-            startTerminal(token);
-        });
-        document.body.appendChild(authUI);
-    }
-    else if (authType === "basic" && !authToken) {
-        // Show basic authentication UI
-        const authUI = createBasicAuthUI((token) => {
-            // Remove auth UI
-            const ui = document.getElementById("basic-auth");
-            if (ui)
-                ui.remove();
-            // Start terminal with the token
-            startTerminal(token);
-        });
-        document.body.appendChild(authUI);
+    // In session mode, SessionManager in index.html handles everything
+    // We only handle authentication UI and export classes
+    if (sessionMode) {
+        // Session management mode - don't auto-start
+        // SessionManager in index.html will handle terminal connection
+        console.log("Session management mode enabled");
     }
     else {
-        // No auth required or token already provided
-        startTerminal(authToken);
+        // Legacy mode - auto-start terminal (no session management)
+        // Check authentication type
+        const authType = (typeof gotty_auth_type !== "undefined") ? gotty_auth_type : "none";
+        const authToken = (typeof gotty_auth_token !== "undefined") ? gotty_auth_token : "";
+        if (authType === "bitwarden" && !authToken) {
+            // Show Bitwarden authentication UI
+            const authUI = createBitwardenAuthUI((token) => {
+                // Remove auth UI
+                const ui = document.getElementById("bitwarden-auth");
+                if (ui)
+                    ui.remove();
+                // Start terminal with the token
+                startTerminal(token);
+            });
+            document.body.appendChild(authUI);
+        }
+        else if (authType === "basic" && !authToken) {
+            // Show basic authentication UI
+            const authUI = createBasicAuthUI((token) => {
+                // Remove auth UI
+                const ui = document.getElementById("basic-auth");
+                if (ui)
+                    ui.remove();
+                // Start terminal with the token
+                startTerminal(token);
+            });
+            document.body.appendChild(authUI);
+        }
+        else {
+            // No auth required or token already provided
+            startTerminal(authToken);
+        }
     }
 }
 ;

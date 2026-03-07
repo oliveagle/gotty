@@ -64,6 +64,9 @@ export class WebTTY {
 
         const setup = () => {
             connection.onOpen(() => {
+                // Remove "Connecting..." message
+                this.term.removeMessage();
+
                 const termInfo = this.term.info();
 
                 connection.send(JSON.stringify(
