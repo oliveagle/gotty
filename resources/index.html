@@ -12,14 +12,12 @@
       <div id="sidebar">
         <div class="sidebar-header">
           <h3>Sessions</h3>
-          <div style="display: flex; gap: 4px;">
-            <button id="new-session-btn" class="btn-new" title="New Session">+</button>
-            <button id="collapse-btn" class="btn-collapse" title="Toggle Sidebar">◀</button>
-          </div>
+          <button id="new-session-btn" class="btn-new" title="New Session">+</button>
         </div>
         <div id="session-list">
           <div class="session-loading">Loading sessions...</div>
         </div>
+        <button class="sidebar-toggle" title="Toggle Sidebar">◀</button>
       </div>
       <div id="main">
         <div id="terminal"></div>
@@ -52,9 +50,9 @@
           }
 
           // Listen for collapse button
-          const collapseBtn = document.getElementById('collapse-btn');
-          if (collapseBtn) {
-            collapseBtn.addEventListener('click', () => {
+          const toggleBtn = document.querySelector('.sidebar-toggle');
+          if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
               this.toggleSidebar();
             });
           }
@@ -63,6 +61,10 @@
           const collapsed = localStorage.getItem('sidebar_collapsed') === 'true';
           if (collapsed) {
             document.getElementById('sidebar').classList.add('collapsed');
+            const toggleBtn = document.querySelector('.sidebar-toggle');
+            if (toggleBtn) {
+              toggleBtn.textContent = '▶';
+            }
           }
 
           // Initial fetch
@@ -71,8 +73,14 @@
 
         toggleSidebar() {
           const sidebar = document.getElementById('sidebar');
+          const toggleBtn = document.querySelector('.sidebar-toggle');
           sidebar.classList.toggle('collapsed');
-          localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+          const isCollapsed = sidebar.classList.contains('collapsed');
+          localStorage.setItem('sidebar_collapsed', isCollapsed);
+          // Change arrow direction
+          if (toggleBtn) {
+            toggleBtn.textContent = isCollapsed ? '▶' : '◀';
+          }
         }
 
         async fetchSessions() {
