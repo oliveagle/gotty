@@ -4,11 +4,19 @@ VERSION = 2.0.0-alpha.3
 BUILD_TIME = $(shell date +"%Y-%m-%d_%H:%M")
 BUILD_OPTIONS = -ldflags "-X main.Version=$(VERSION) -X main.CommitID=$(GIT_COMMIT) -X main.BuildTime='$(BUILD_TIME)'"
 
-.PHONY: all gotty clean test build deps help
+.PHONY: all gotty clean test build deps help bindata frontend
 
 all: gotty
 
-gotty: main.go
+frontend:
+	@echo "Building frontend JS..."
+	cd js && npm run build
+
+bindata:
+	@echo "Generating bindata..."
+	@go-bindata -o server/asset.go -pkg server resources/...
+
+gotty: frontend bindata main.go
 	@echo "Building gotty..."
 	go build ${BUILD_OPTIONS} -o gotty
 	@echo "Build complete: ./gotty"

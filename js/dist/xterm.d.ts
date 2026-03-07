@@ -12,13 +12,7 @@ export declare class Xterm {
     message: HTMLElement;
     messageTimeout: number;
     messageTimer: ReturnType<typeof setTimeout> | null;
-    imeInput: HTMLInputElement | null;
-    isComposing: boolean;
-    inputDataCallback: ((data: string) => void) | null;
     constructor(elem: HTMLElement);
-    private createImeInput;
-    private updateImeInputPosition;
-    private sendToTerminal;
     info(): {
         columns: number;
         rows: number;

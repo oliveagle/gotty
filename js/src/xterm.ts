@@ -15,11 +15,6 @@ export class Xterm {
     messageTimeout: number;
     messageTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // IME input overlay
-    imeInput: HTMLInputElement | null = null;
-    isComposing: boolean = false;
-    inputDataCallback: ((data: string) => void) | null = null;
-
     constructor(elem: HTMLElement) {
         this.elem = elem;
         this.term = new Terminal({
@@ -44,7 +39,6 @@ export class Xterm {
             this.fitAddon.fit();
             this.term.scrollToBottom();
             this.showMessage(`${this.term.cols}x${this.term.rows}`, this.messageTimeout);
-            this.updateImeInputPosition();
         };
 
         // Open terminal FIRST (xterm v6 requirement)
@@ -69,101 +63,6 @@ export class Xterm {
         // Fit after everything is loaded
         this.fitAddon.fit();
         window.addEventListener("resize", this.resizeListener);
-
-        // Create IME input overlay
-        this.createImeInput();
-    }
-
-    // Create transparent input overlay for IME
-    private createImeInput(): void {
-        this.imeInput = document.createElement('input');
-        this.imeInput.type = 'text';
-        this.imeInput.className = 'xterm-ime-input';
-        this.imeInput.style.cssText = `
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0;
-            z-index: 10;
-            font-family: inherit;
-            font-size: inherit;
-            background: transparent;
-            border: none;
-            outline: none;
-            color: transparent;
-            caret-color: transparent;
-            pointer-events: auto;
-        `;
-
-        // Track composition state
-        this.imeInput.addEventListener('compositionstart', () => {
-            this.isComposing = true;
-        });
-
-        this.imeInput.addEventListener('compositionend', () => {
-            this.isComposing = false;
-            // Send composed text to terminal
-            if (this.imeInput && this.imeInput.value) {
-                this.sendToTerminal(this.imeInput.value);
-                this.imeInput.value = '';
-            }
-        });
-
-        // Handle non-IME input (direct typing)
-        this.imeInput.addEventListener('input', () => {
-            if (!this.isComposing && this.imeInput) {
-                const data = this.imeInput.value;
-                if (data) {
-                    this.sendToTerminal(data);
-                    this.imeInput.value = '';
-                }
-            }
-        });
-
-        // Handle special keys
-        this.imeInput.addEventListener('keydown', (e) => {
-            if (this.isComposing) return; // Let IME handle it
-
-            // Handle special keys that should go directly to terminal
-            if (e.key === 'Enter') {
-                if (this.imeInput && this.imeInput.value) {
-                    this.sendToTerminal(this.imeInput.value);
-                    this.imeInput.value = '';
-                }
-            } else if (e.key === 'Backspace' || e.key === 'Delete' ||
-                       e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
-                       e.key === 'ArrowLeft' || e.key === 'ArrowRight' ||
-                       e.key === 'Tab' || e.key === 'Escape') {
-                // Let xterm handle these via its own handler
-                e.preventDefault();
-                e.stopPropagation();
-            }
-        });
-
-        // Keep input focused
-        this.elem.addEventListener('click', () => {
-            if (this.imeInput) {
-                this.imeInput.focus();
-            }
-        });
-
-        this.elem.appendChild(this.imeInput);
-        this.imeInput.focus();
-    }
-
-    // Update IME input position to match cursor
-    private updateImeInputPosition(): void {
-        // The input covers the whole terminal area
-        // IME candidate window will appear near cursor
-    }
-
-    // Send text to terminal
-    private sendToTerminal(text: string): void {
-        if (this.inputDataCallback) {
-            this.inputDataCallback(text);
-        }
     }
 
     info(): { columns: number; rows: number } {
@@ -236,8 +135,6 @@ export class Xterm {
     }
 
     onInput(callback: (input: string) => void): void {
-        this.inputDataCallback = callback;
-        // Still register with xterm for special keys
         this.term.onData(callback);
     }
 
@@ -256,9 +153,6 @@ export class Xterm {
 
     close(): void {
         window.removeEventListener("resize", this.resizeListener);
-        if (this.imeInput && this.imeInput.parentNode) {
-            this.imeInput.parentNode.removeChild(this.imeInput);
-        }
         this.webglAddon?.dispose();
         this.term.dispose();
     }
