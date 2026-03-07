@@ -52,9 +52,7 @@ func main() {
 	app.Action = func(c *cli.Context) error {
 		args := c.Args().Slice()
 		if len(args) == 0 {
-			msg := "Error: No command given."
-			cli.ShowAppHelp(c)
-			exit(fmt.Errorf(msg), 1)
+			args = []string{"bash"}
 		}
 
 		configFile := c.String("config")

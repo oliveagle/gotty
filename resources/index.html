@@ -178,17 +178,17 @@
           // Use xterm by default
           let term;
           if (termType === 'hterm') {
-            term = new Hterm(elem);
+            term = new window.Hterm(elem);
           } else {
-            term = new Xterm(elem);
+            term = new window.Xterm(elem);
           }
 
           const httpsEnabled = window.location.protocol === 'https:';
           const baseUrl = (httpsEnabled ? 'wss://' : 'ws://') + window.location.host + window.location.pathname;
           const wsUrl = baseUrl + 'ws?session_id=' + sessionId;
           const args = window.location.search;
-          const factory = new ConnectionFactory(wsUrl, ['webtty']);
-          const wt = new WebTTY(term, factory, args, authToken);
+          const factory = new window.ConnectionFactory(wsUrl, ['webtty']);
+          const wt = new window.WebTTY(term, factory, args, authToken);
 
           this.term = term;
           this.wt = wt;

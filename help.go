@@ -26,6 +26,8 @@ var helpTemplate = `NAME:
 USAGE:
    {{.Name}} [options] <command> [<arguments...>]
 
+   (default: "bash" if no command is given)
+
 VERSION:
    {{.Version}}
 

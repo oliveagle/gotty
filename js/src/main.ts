@@ -4,6 +4,16 @@ import { Terminal, WebTTY, protocols } from "./webtty";
 import { ConnectionFactory } from "./websocket";
 import { initCrypto, deriveKeyFromPassword, isBitwardenExtensionAvailable } from "./bitwarden";
 
+// Export classes to global scope for use in inline scripts
+// Use eval('window') to prevent UglifyJS from optimizing this away
+// and ensure we get the actual global window object
+const globalWindow = eval('window') as any;
+globalWindow.Hterm = Hterm;
+globalWindow.Xterm = Xterm;
+globalWindow.WebTTY = WebTTY;
+globalWindow.ConnectionFactory = ConnectionFactory;
+globalWindow.protocols = protocols;
+
 // @TODO remove these
 declare var gotty_auth_token: string;
 declare var gotty_auth_type: string;

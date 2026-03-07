@@ -42,7 +42,8 @@ module.exports = {
         ]
     },
     plugins: [
-        new UglifyJSPlugin(),
+        // UglifyJS disabled - it was removing global window assignments
+        // new UglifyJSPlugin(),
         new CopyWasmPlugin()
     ]
 };
