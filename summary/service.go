@@ -32,11 +32,12 @@ func DefaultConfig() Config {
 		Enabled:     true,
 		Interval:    30 * time.Second, // 每30秒更新
 		BufferSize:  16384,            // 16KB 足够
-		LLMProvider: "ollama",
-		LLMModel:    "qwen2.5:3b",
-		LLMEndpoint: "http://localhost:11434",
+		LLMProvider: "openai",         // llama.cpp uses OpenAI-compatible API
+		LLMModel:    "qwen3-0.6b",
+		LLMEndpoint: "http://localhost:8888",
 		MaxTokens:   50, // 限制输出字数
-		SystemPrompt: `你是一个终端会话标题生成器。根据终端输出，生成一个简短的会话标题（不超过20个中文字或30个英文字符）。
+		SystemPrompt: `/no_think
+你是一个终端会话标题生成器。根据终端输出，生成一个简短的会话标题（不超过20个中文字或30个英文字符）。
 
 规则：
 1. 突出当前正在执行的主要任务

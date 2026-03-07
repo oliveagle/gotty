@@ -36,8 +36,8 @@ type Options struct {
 	// Summary options
 	EnableSummary   bool   `hcl:"enable_summary" flagName:"summary" flagDescribe:"Enable session summarization using LLM" default:"false"`
 	SummaryInterval int    `hcl:"summary_interval" flagName:"summary-interval" flagDescribe:"Summary generation interval in seconds" default:"30"`
-	SummaryModel    string `hcl:"summary_model" flagName:"summary-model" flagDescribe:"LLM model for summarization" default:"qwen2.5:3b"`
-	SummaryEndpoint string `hcl:"summary_endpoint" flagName:"summary-endpoint" flagDescribe:"LLM API endpoint (Ollama or OpenAI compatible)" default:"http://localhost:11434"`
+	SummaryModel    string `hcl:"summary_model" flagName:"summary-model" flagDescribe:"LLM model for summarization" default:"qwen3-0.6b"`
+	SummaryEndpoint string `hcl:"summary_endpoint" flagName:"summary-endpoint" flagDescribe:"LLM API endpoint (Ollama or OpenAI compatible)" default:"http://localhost:8888"`
 
 	TitleVariables map[string]interface{}
 }

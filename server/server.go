@@ -84,7 +84,7 @@ func New(factory Factory, options *Options) (*Server, error) {
 			Enabled:     true,
 			Interval:    time.Duration(options.SummaryInterval) * time.Second,
 			BufferSize:  16384,
-			LLMProvider: "ollama",
+			LLMProvider: "openai", // llama.cpp uses OpenAI-compatible API
 			LLMModel:    options.SummaryModel,
 			LLMEndpoint: options.SummaryEndpoint,
 			MaxTokens:   50,
@@ -103,7 +103,7 @@ func New(factory Factory, options *Options) (*Server, error) {
 - "htop 系统监控"`,
 		}
 		summarySvc = summary.NewService(summaryConfig)
-		log.Printf("Session summarization enabled with model: %s", options.SummaryModel)
+		log.Printf("Session summarization enabled with model: %s at %s", options.SummaryModel, options.SummaryEndpoint)
 	}
 
 	return &Server{
