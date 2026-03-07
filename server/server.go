@@ -105,18 +105,24 @@ func (server *Server) newSummaryService(sessionID string) *summary.Service {
 		LLMEndpoint: server.options.SummaryEndpoint,
 		MaxTokens:   30,
 		SystemPrompt: `/no_think
-根据终端输出，用 2-5 个字描述当前正在运行的程序或命令。
+根据终端输出，简短描述用户正在做什么活动（不超过15字）。
+
+关注：
+1. 正在操作的文件或目录
+2. 正在监控或查看的内容
+3. 正在执行的任务
 
 规则：
-1. 只输出程序名，如：htop、vim、bash
-2. 如果有错误，加 [错]
-3. 不要其他解释
+1. 突出具体操作对象，不只说程序名
+2. 有错误标注 [错]
+3. 只输出一句话
 
-输出示例：
-htop
-vim test.py
-git [错]
-bash`,
+示例：
+编辑 nginx.conf
+查看系统监控
+编译 Go 项目
+git 提交代码
+查看日志文件`,
 	}
 
 	svc := summary.NewService(config)
