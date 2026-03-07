@@ -215,6 +215,15 @@ func (s *Service) generateSummary() {
 	summary = strings.TrimSpace(summary)
 	summary = strings.Trim(summary, `"'`)
 
+	// Limit length to prevent UI overflow (max 20 chars for subtitle)
+	if len(summary) > 30 {
+		// Try to cut at a reasonable point
+		runes := []rune(summary)
+		if len(runes) > 20 {
+			summary = string(runes[:20]) + "..."
+		}
+	}
+
 	// Stability check: only update if summary changed significantly
 	// Skip if new summary is too short (likely incomplete)
 	if len(summary) < 3 {

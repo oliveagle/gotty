@@ -117,10 +117,12 @@ html, body {
     font-size: 10px !important;
     margin-top: 1px;
     font-style: italic;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
     line-height: 1.2;
+    max-width: 100%;
+    display: block;
 }
 
 /* Active session subtitle - 保持蓝色但更亮 */
