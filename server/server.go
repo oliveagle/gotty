@@ -37,6 +37,7 @@ type Server struct {
 	options          *Options
 	sessionManager   *SessionManager
 	workspaceManager *WorkspaceManager
+	clipboardManager *ClipboardManager
 
 	upgrader      *websocket.Upgrader
 	indexTemplate *template.Template
@@ -85,6 +86,9 @@ func New(factory Factory, options *Options) (*Server, error) {
 	// Initialize workspace manager
 	wm := NewWorkspaceManager()
 
+	// Initialize clipboard manager
+	cm := NewClipboardManager()
+
 	// Migrate sessions without workspace to default workspace
 	sm.MigrateToWorkspace(DefaultWorkspaceID)
 
@@ -97,6 +101,7 @@ func New(factory Factory, options *Options) (*Server, error) {
 		options:          options,
 		sessionManager:   sm,
 		workspaceManager: wm,
+		clipboardManager: cm,
 
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -309,6 +314,9 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	// Workspace management API
 	siteMux.HandleFunc(pathPrefix+"api/workspaces", server.handleWorkspaces)
 	siteMux.HandleFunc(pathPrefix+"api/workspaces/", server.handleWorkspace)
+
+	// Clipboard API (sync server clipboard to browser)
+	siteMux.HandleFunc(pathPrefix+"api/clipboard", server.handleClipboard)
 
 	siteHandler := http.Handler(siteMux)
 

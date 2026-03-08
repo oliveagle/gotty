@@ -86,12 +86,12 @@ export class Xterm {
             if (resizeTimeout) {
                 clearTimeout(resizeTimeout);
             }
-            // Wait for resize to completely stop before fitting (500ms debounce)
+            // Wait for CSS transition to complete (200ms) + small buffer
             resizeTimeout = setTimeout(() => {
                 this.fitAddon.fit();
                 this.term.scrollToBottom();
                 resizeTimeout = null;
-            }, 500);
+            }, 250);
         });
         this.resizeObserver.observe(elem);
 
@@ -103,91 +103,28 @@ export class Xterm {
     }
 
     private setupClipboardOnSelection(): void {
-        console.log("[gotty] Setting up clipboard on selection...");
+        console.log("[gotty] Setting up clipboard sync (server -> browser)...");
 
-        // Track last known selection before it gets cleared
-        let lastSelection = '';
-        let isMouseDown = false;
-
-        // Find xterm screen element (where selections happen)
+        // Find xterm screen element
         const xtermScreen = this.elem.querySelector('.xterm-screen') as HTMLElement;
-        const targetElement = xtermScreen || this.elem;
 
-        // Access xterm internal selection service
-        const getSelectionText = (): string => {
-            // Try public API first
-            let text = this.term.getSelection();
-            if (text) return text;
-
-            // Try to access internal _core selection service (undocumented)
-            const termAny = this.term as any;
-            if (termAny._core && termAny._core._selectionService) {
-                text = termAny._core._selectionService.selectionText;
-                if (text) return text;
-            }
-            if (termAny._selectionService) {
-                text = termAny._selectionService.selectionText;
-                if (text) return text;
-            }
-
-            return '';
-        };
-
-        // Capture selection during mousemove (before any clearing happens)
-        targetElement.addEventListener('mousemove', () => {
-            if (!isMouseDown) return;
-            const text = getSelectionText();
-            if (text && text.trim()) {
-                lastSelection = text;
-            }
-        }, true);
-
-        // On mousedown
-        targetElement.addEventListener('mousedown', (e: MouseEvent) => {
-            if (e.button !== 0) return;
-            isMouseDown = true;
-            lastSelection = '';
-        }, true);
-
-        // On mouseup, copy the captured selection
-        targetElement.addEventListener('mouseup', () => {
-            isMouseDown = false;
-
-            const text = getSelectionText();
-            const textToCopy = text || lastSelection;
-
-            console.log("[gotty] mouseup - getSelection:", `"${text?.substring(0, 30)}"`);
-            console.log("[gotty] mouseup - lastSelection:", `"${lastSelection?.substring(0, 30)}"`);
-
-            if (textToCopy && textToCopy.trim()) {
-                console.log("[gotty] Copying:", textToCopy.substring(0, 30));
-                this.copyToClipboardSilent(textToCopy);
-            }
-        }, true);
-
-        // Also try double-click to select word
-        targetElement.addEventListener('dblclick', () => {
+        // On mouseup, wait for zellij to copy to system clipboard, then sync to browser
+        xtermScreen?.addEventListener('mouseup', () => {
+            // Wait for zellij to complete its copy operation
             setTimeout(() => {
-                const text = getSelectionText();
-                console.log("[gotty] dblclick - selection:", `"${text?.substring(0, 30)}"`);
-                if (text && text.trim()) {
-                    lastSelection = text;
-                    this.copyToClipboardSilent(text);
-                }
-            }, 50);
+                this.syncServerClipboardToBrowser();
+            }, 200);
         }, true);
 
-        // Keyboard copy/paste with Ctrl key
+        // Also sync on double-click
+        xtermScreen?.addEventListener('dblclick', () => {
+            setTimeout(() => {
+                this.syncServerClipboardToBrowser();
+            }, 200);
+        }, true);
+
+        // Keyboard: Ctrl+V to paste from browser clipboard
         this.term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-            // Ctrl+C - Copy to browser clipboard (when there's a selection)
-            if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'c') {
-                const text = getSelectionText() || lastSelection;
-                if (text) {
-                    this.copyToClipboard(text);
-                    return false;
-                }
-            }
-            // Ctrl+V - Paste from browser clipboard
             if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'v') {
                 this.pasteFromClipboard();
                 return false;
@@ -196,25 +133,30 @@ export class Xterm {
         });
     }
 
-    private copyToClipboardSilent(text: string): void {
-        if (!text || text.trim() === '') {
-            return;
-        }
+    private async syncServerClipboardToBrowser(): Promise<void> {
+        try {
+            // Fetch clipboard content from server
+            const response = await fetch('/api/clipboard');
+            if (!response.ok) {
+                return;
+            }
 
-        // Always try execCommand first (works in more contexts)
-        const fallbackSuccess = this.copyToClipboardFallback(text);
-        if (fallbackSuccess) {
-            console.log("[gotty] Copied to clipboard via execCommand:", text.substring(0, 30));
-            return;
-        }
+            const data = await response.json();
+            const text = data.content || '';
 
-        // Then try modern Clipboard API
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(() => {
-                console.log("[gotty] Copied to clipboard via Clipboard API:", text.substring(0, 30));
-            }).catch((err) => {
-                console.warn("[gotty] Clipboard copy failed:", err);
-            });
+            if (text && text.trim()) {
+                // Copy to browser clipboard
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    console.log("[gotty] Synced from server:", text.substring(0, 30));
+                    this.showMessage("📋 Copied", 1500);
+                } else {
+                    this.copyToClipboardFallback(text);
+                    this.showMessage("📋 Copied", 1500);
+                }
+            }
+        } catch (error) {
+            // Silently ignore - clipboard API might not be available
         }
     }
 
@@ -229,54 +171,6 @@ export class Xterm {
             });
         } else {
             this.showMessage("Paste not supported in this browser", 2000);
-        }
-    }
-
-    private copyToClipboard(text: string): void {
-        // Don't copy empty text
-        if (!text || text.trim() === '') {
-            return;
-        }
-
-        // Track if we've already shown a message to avoid duplicates
-        let messageShown = false;
-
-        const showSuccess = () => {
-            if (!messageShown) {
-                messageShown = true;
-                const preview = text.length > 20 ? text.substring(0, 20) + '...' : text;
-                this.showMessage(`📋 Copied: ${preview}`, 2000);
-            }
-        };
-
-        const showError = (err: any) => {
-            console.error("Copy failed:", err);
-            if (!messageShown) {
-                messageShown = true;
-                this.showMessage("❌ Copy failed - try Ctrl+Shift+C", 3000);
-            }
-        };
-
-        // Try modern Clipboard API first (requires HTTPS or localhost)
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(() => {
-                showSuccess();
-            }).catch((err) => {
-                console.warn("Clipboard API failed:", err);
-                // Try fallback
-                if (this.copyToClipboardFallback(text)) {
-                    showSuccess();
-                } else {
-                    showError(err);
-                }
-            });
-        } else {
-            // Fallback for non-HTTPS or older browsers
-            if (this.copyToClipboardFallback(text)) {
-                showSuccess();
-            } else {
-                showError(new Error("Clipboard API not available"));
-            }
         }
     }
 
