@@ -66,18 +66,32 @@ export class Xterm {
         this.fitAddon.fit();
 
         // Use ResizeObserver to detect container size changes (handles sidebar toggle, etc.)
-        // Debounce to avoid excessive calls during CSS transitions (200ms matches sidebar transition)
+        // Debounce aggressively - only fit once after resize has completely stopped
         let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
-        this.resizeObserver = new ResizeObserver(() => {
+        let lastWidth = 0;
+        let lastHeight = 0;
+        this.resizeObserver = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (!entry) return;
+
+            const newWidth = Math.round(entry.contentRect.width);
+            const newHeight = Math.round(entry.contentRect.height);
+
+            // Skip if size hasn't actually changed
+            if (newWidth === lastWidth && newHeight === lastHeight) return;
+
+            lastWidth = newWidth;
+            lastHeight = newHeight;
+
             if (resizeTimeout) {
                 clearTimeout(resizeTimeout);
             }
-            // Wait for CSS transition to complete before fitting
+            // Wait for resize to completely stop before fitting (500ms debounce)
             resizeTimeout = setTimeout(() => {
                 this.fitAddon.fit();
                 this.term.scrollToBottom();
                 resizeTimeout = null;
-            }, 250);
+            }, 500);
         });
         this.resizeObserver.observe(elem);
 
@@ -93,83 +107,88 @@ export class Xterm {
 
         // Track last known selection before it gets cleared
         let lastSelection = '';
-        let pollInterval: ReturnType<typeof setInterval> | null = null;
+        let isMouseDown = false;
 
         // Find xterm screen element (where selections happen)
         const xtermScreen = this.elem.querySelector('.xterm-screen') as HTMLElement;
         const targetElement = xtermScreen || this.elem;
 
-        console.log("[gotty] Using element:", targetElement.className);
+        // Access xterm internal selection service
+        const getSelectionText = (): string => {
+            // Try public API first
+            let text = this.term.getSelection();
+            if (text) return text;
 
-        // On mousedown, start polling for selection
-        targetElement.addEventListener('mousedown', (e: MouseEvent) => {
-            // Only start on left click
-            if (e.button !== 0) return;
-            console.log("[gotty] mousedown on", (e.target as HTMLElement).className);
-            lastSelection = '';
-
-            // Poll for selection changes while mouse is down
-            pollInterval = setInterval(() => {
-                // Try xterm's selection API
-                const xtermSelection = this.term.getSelection();
-                const xtermHasSelection = this.term.hasSelection();
-
-                // Try browser's native selection API
-                const browserSelection = window.getSelection();
-                const browserText = browserSelection ? browserSelection.toString() : '';
-
-                console.log("[gotty] Poll - xterm:", xtermHasSelection, `"${xtermSelection?.substring(0, 20)}"`,
-                           "| browser:", `"${browserText.substring(0, 20)}"`);
-
-                // Use whichever has content
-                const text = xtermSelection || browserText;
-                if (text && text.trim()) {
-                    lastSelection = text;
-                }
-            }, 100);
-        }, true); // Use capture phase
-
-        // On mouseup, stop polling and copy
-        targetElement.addEventListener('mouseup', (e: MouseEvent) => {
-            console.log("[gotty] mouseup on", (e.target as HTMLElement).className);
-            if (pollInterval) {
-                clearInterval(pollInterval);
-                pollInterval = null;
+            // Try to access internal _core selection service (undocumented)
+            const termAny = this.term as any;
+            if (termAny._core && termAny._core._selectionService) {
+                text = termAny._core._selectionService.selectionText;
+                if (text) return text;
+            }
+            if (termAny._selectionService) {
+                text = termAny._selectionService.selectionText;
+                if (text) return text;
             }
 
-            // Final check with both APIs
-            const xtermSelection = this.term.getSelection();
-            const browserSelection = window.getSelection();
-            const browserText = browserSelection ? browserSelection.toString() : '';
+            return '';
+        };
 
-            console.log("[gotty] Final - xterm:", this.term.hasSelection(), `"${xtermSelection?.substring(0, 20)}"`);
-            console.log("[gotty] Final - browser:", `"${browserText.substring(0, 20)}"`);
-            console.log("[gotty] lastSelection:", lastSelection ? `"${lastSelection.substring(0, 30)}..."` : "empty");
+        // Capture selection during mousemove (before any clearing happens)
+        targetElement.addEventListener('mousemove', () => {
+            if (!isMouseDown) return;
+            const text = getSelectionText();
+            if (text && text.trim()) {
+                lastSelection = text;
+            }
+        }, true);
 
-            const textToCopy = xtermSelection || browserText || lastSelection;
+        // On mousedown
+        targetElement.addEventListener('mousedown', (e: MouseEvent) => {
+            if (e.button !== 0) return;
+            isMouseDown = true;
+            lastSelection = '';
+        }, true);
+
+        // On mouseup, copy the captured selection
+        targetElement.addEventListener('mouseup', () => {
+            isMouseDown = false;
+
+            const text = getSelectionText();
+            const textToCopy = text || lastSelection;
+
+            console.log("[gotty] mouseup - getSelection:", `"${text?.substring(0, 30)}"`);
+            console.log("[gotty] mouseup - lastSelection:", `"${lastSelection?.substring(0, 30)}"`);
+
             if (textToCopy && textToCopy.trim()) {
-                console.log("[gotty] Copying to clipboard:", textToCopy.substring(0, 30));
+                console.log("[gotty] Copying:", textToCopy.substring(0, 30));
                 this.copyToClipboardSilent(textToCopy);
             }
-        }, true); // Use capture phase
+        }, true);
+
+        // Also try double-click to select word
+        targetElement.addEventListener('dblclick', () => {
+            setTimeout(() => {
+                const text = getSelectionText();
+                console.log("[gotty] dblclick - selection:", `"${text?.substring(0, 30)}"`);
+                if (text && text.trim()) {
+                    lastSelection = text;
+                    this.copyToClipboardSilent(text);
+                }
+            }, 50);
+        }, true);
 
         // Keyboard copy/paste with Ctrl key
         this.term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
             // Ctrl+C - Copy to browser clipboard (when there's a selection)
             if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'c') {
-                console.log("[gotty] Ctrl+C detected");
-                const xtermSelection = this.term.getSelection();
-                const browserSelection = window.getSelection();
-                const browserText = browserSelection ? browserSelection.toString() : '';
-                const selection = xtermSelection || browserText || lastSelection;
-                if (selection) {
-                    this.copyToClipboard(selection);
+                const text = getSelectionText() || lastSelection;
+                if (text) {
+                    this.copyToClipboard(text);
                     return false;
                 }
             }
             // Ctrl+V - Paste from browser clipboard
             if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'v') {
-                console.log("[gotty] Ctrl+V detected");
                 this.pasteFromClipboard();
                 return false;
             }
