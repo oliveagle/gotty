@@ -733,8 +733,18 @@
             this.sessions = data.sessions || [];
             this.renderSessionList();
 
-            // Auto-select first non-folder session if none selected
+            // Auto-select session if none selected
             if (!this.activeSessionId && this.sessions.length > 0) {
+              // Try to restore last active session
+              const lastSessionId = localStorage.getItem('last_active_session');
+              if (lastSessionId) {
+                const lastSession = this.sessions.find(s => s.id === lastSessionId && !s.is_folder);
+                if (lastSession) {
+                  this.setActiveSession(lastSessionId);
+                  return;
+                }
+              }
+              // Fallback to first session
               const firstSession = this.findFirstSession();
               if (firstSession) {
                 this.setActiveSession(firstSession.id);
@@ -1233,6 +1243,9 @@
             this.disconnectTerminal();
             this.activeSessionId = id;
             this.connectTerminal(id);
+
+            // Save last active session to localStorage
+            localStorage.setItem('last_active_session', id);
           }
 
           document.querySelectorAll('.session-item').forEach(item => {

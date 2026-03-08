@@ -28,6 +28,8 @@ export class Xterm {
             },
             // Enable selection features
             allowProposedApi: true,
+            // Explicitly enable selection
+            screenReaderMode: false,
         });
 
         this.fitAddon = new FitAddon();
@@ -44,6 +46,8 @@ export class Xterm {
         this.term.loadAddon(this.fitAddon);
 
         // Try WebGL renderer for better performance
+        // Note: WebGL can interfere with selection, so we disable it for now
+        /*
         try {
             this.webglAddon = new WebglAddon();
             this.webglAddon.onContextLoss(() => {
@@ -55,6 +59,8 @@ export class Xterm {
             console.log("WebGL not available, using canvas:", e);
             this.webglAddon = null;
         }
+        */
+        this.webglAddon = null;
 
         // Fit after everything is loaded
         this.fitAddon.fit();
@@ -89,11 +95,17 @@ export class Xterm {
         let lastSelection = '';
         let pollInterval: ReturnType<typeof setInterval> | null = null;
 
+        // Find xterm screen element (where selections happen)
+        const xtermScreen = this.elem.querySelector('.xterm-screen') as HTMLElement;
+        const targetElement = xtermScreen || this.elem;
+
+        console.log("[gotty] Using element:", targetElement.className);
+
         // On mousedown, start polling for selection
-        this.elem.addEventListener('mousedown', (e: MouseEvent) => {
+        targetElement.addEventListener('mousedown', (e: MouseEvent) => {
             // Only start on left click
             if (e.button !== 0) return;
-            console.log("[gotty] mousedown detected, starting poll...");
+            console.log("[gotty] mousedown on", (e.target as HTMLElement).className);
             lastSelection = '';
 
             // Poll for selection changes while mouse is down
@@ -115,11 +127,11 @@ export class Xterm {
                     lastSelection = text;
                 }
             }, 100);
-        });
+        }, true); // Use capture phase
 
         // On mouseup, stop polling and copy
-        this.elem.addEventListener('mouseup', () => {
-            console.log("[gotty] mouseup detected");
+        targetElement.addEventListener('mouseup', (e: MouseEvent) => {
+            console.log("[gotty] mouseup on", (e.target as HTMLElement).className);
             if (pollInterval) {
                 clearInterval(pollInterval);
                 pollInterval = null;
@@ -139,7 +151,7 @@ export class Xterm {
                 console.log("[gotty] Copying to clipboard:", textToCopy.substring(0, 30));
                 this.copyToClipboardSilent(textToCopy);
             }
-        });
+        }, true); // Use capture phase
 
         // Keyboard copy/paste with Ctrl key
         this.term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
