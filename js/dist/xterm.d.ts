@@ -15,6 +15,7 @@ export declare class Xterm {
     lastWidth: number;
     lastHeight: number;
     fitTimer: ReturnType<typeof setTimeout> | null;
+    fitDebounceTimer: ReturnType<typeof setTimeout> | null;
     constructor(elem: HTMLElement);
     private setupClipboardOnSelection;
     private copySelectionToClipboard;
@@ -43,8 +44,16 @@ export declare class Xterm {
     /**
      * Perform fit if size has changed.
      * Called externally when sidebar transitions complete.
+     * Debounced to prevent multiple rapid calls from transitionend + setTimeout.
      */
     fit(): void;
+    /**
+     * Fit terminal after sidebar toggle.
+     * Fits twice with delay to ensure correct dimensions after CSS transition.
+     *
+     * @param sidebarCollapsed - Whether sidebar is collapsed (hidden)
+     */
+    fitWithSidebarState(sidebarCollapsed: boolean): void;
     private doFit;
     close(): void;
 }

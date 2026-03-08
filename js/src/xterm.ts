@@ -19,6 +19,7 @@ export class Xterm {
     lastWidth: number = 0;
     lastHeight: number = 0;
     fitTimer: ReturnType<typeof setTimeout> | null = null;
+    fitDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(elem: HTMLElement) {
         this.elem = elem;
@@ -46,6 +47,35 @@ export class Xterm {
 
         // Open terminal FIRST (xterm v6 requirement)
         this.term.open(elem);
+
+        // Handle OSC 52 clipboard sequences from zellij/tmux
+        // OSC 52 format: ESC ] 52 ; <target> ; <base64-data> ST
+        this.term.parser.registerOscHandler(52, (data: string) => {
+            // data format: "c;base64data" or just "base64data"
+            const parts = data.split(';');
+            let base64Data = parts.length > 1 ? parts[1] : parts[0];
+            if (base64Data === '?') {
+                // Query - we don't support this
+                return true;
+            }
+            try {
+                // Decode base64 to UTF-8 text
+                const binaryString = atob(base64Data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                const text = new TextDecoder('utf-8').decode(bytes);
+                // Copy to browser clipboard
+                const success = this.copyToClipboardFallback(text);
+                if (success) {
+                    this.showMessage("📋 Copied", 1500);
+                }
+            } catch (e) {
+                // Silently ignore decode errors
+            }
+            return true;
+        });
 
         // Load addons AFTER open
         this.term.loadAddon(this.fitAddon);
@@ -90,24 +120,28 @@ export class Xterm {
     }
 
     private setupClipboardOnSelection(): void {
-        console.log("[gotty] Setting up auto-copy on selection...");
+        // Save selection on mouseup (before right-click can clear it)
+        let savedSelection: string | null = null;
 
-        // Use xterm.js onSelectionChange event - fires when selection changes
-        this.term.onSelectionChange(() => {
-            // Only copy when there IS a selection
-            if (this.term.hasSelection()) {
-                const selection = this.term.getSelection();
-                console.log("[gotty] selection changed, has selection:", !!selection);
-                if (selection && selection.trim()) {
-                    this.copySelectionToClipboard(selection);
-                }
+        this.elem.addEventListener('mouseup', () => {
+            const sel = this.term.getSelection();
+            if (sel && sel.trim()) {
+                savedSelection = sel;
             }
+        });
+
+        // Right-click to copy saved selection
+        this.elem.addEventListener('contextmenu', (e) => {
+            if (savedSelection && savedSelection.trim()) {
+                e.preventDefault();
+                this.copySelectionToClipboard(savedSelection);
+            }
+            // If no selection, let default context menu show
         });
 
         // Keyboard: Ctrl+V to paste from browser clipboard
         this.term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
             if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'v') {
-                console.log("[gotty] Ctrl+V detected, pasting...");
                 this.pasteFromClipboard();
                 return false;
             }
@@ -116,19 +150,12 @@ export class Xterm {
     }
 
     private async copySelectionToClipboard(selection: string): Promise<void> {
-        console.log("[gotty] copySelectionToClipboard, length:", selection.length);
-        try {
-            // Copy to browser clipboard
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(selection);
-                console.log("[gotty] Copied to browser clipboard:", selection.substring(0, 30));
-                this.showMessage("📋 Copied", 1500);
-            } else {
-                this.copyToClipboardFallback(selection);
-                this.showMessage("📋 Copied", 1500);
-            }
-        } catch (error) {
-            console.error("[gotty] copySelectionToClipboard error:", error);
+        // Use fallback method - works on HTTP (navigator.clipboard requires HTTPS)
+        const success = this.copyToClipboardFallback(selection);
+        if (success) {
+            this.showMessage("📋 Copied", 1500);
+        } else {
+            this.showMessage("Copy failed", 1500);
         }
     }
 
@@ -319,12 +346,43 @@ export class Xterm {
     /**
      * Perform fit if size has changed.
      * Called externally when sidebar transitions complete.
+     * Debounced to prevent multiple rapid calls from transitionend + setTimeout.
      */
     fit(): void {
-        // Force browser reflow to get accurate dimensions
-        // This ensures we get the final size after CSS transitions
-        void this.elem.offsetHeight;
-        this.doFit('external');
+        // Debounce: only fit once within 100ms
+        if (this.fitDebounceTimer) {
+            clearTimeout(this.fitDebounceTimer);
+        }
+        this.fitDebounceTimer = setTimeout(() => {
+            this.fitDebounceTimer = null;
+            this.doFit('external');
+        }, 100);
+    }
+
+    /**
+     * Fit terminal after sidebar toggle.
+     * Fits twice with delay to ensure correct dimensions after CSS transition.
+     *
+     * @param sidebarCollapsed - Whether sidebar is collapsed (hidden)
+     */
+    fitWithSidebarState(sidebarCollapsed: boolean): void {
+        console.log(`[resize] fitWithSidebarState: collapsed=${sidebarCollapsed}`);
+
+        // Fit once after short delay
+        setTimeout(() => {
+            void this.elem.offsetHeight;
+            console.log(`[resize] fit 1: terminalWidth=${this.elem.clientWidth}`);
+            this.fitAddon.fit();
+        }, 50);
+
+        // Fit again after transition completes
+        setTimeout(() => {
+            void this.elem.offsetHeight;
+            console.log(`[resize] fit 2: terminalWidth=${this.elem.clientWidth}`);
+            this.fitAddon.fit();
+            this.term.scrollToBottom();
+            console.log(`[resize] fit done: ${this.term.cols}x${this.term.rows}`);
+        }, 250);
     }
 
     private doFit(reason: string): void {

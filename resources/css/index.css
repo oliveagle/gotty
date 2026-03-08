@@ -103,6 +103,7 @@ html, body {
     flex-direction: column;
     transition: width 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     position: relative;
+    flex-shrink: 0;
 }
 
 /* Auto-hide mode for sidebar (Mac Dock style) */
@@ -451,6 +452,7 @@ body.sidebar-auto-hide #sidebar-trigger {
 
 #main {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     background: black;

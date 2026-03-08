@@ -158,12 +158,17 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 			}
 			params := query.Query()
 
+			// Add target_tab if we have a saved active tab
+			if session.ActiveTab != "" {
+				params["_target_tab"] = []string{session.ActiveTab}
+			}
+
 			var attachErr error
 			slave, attachErr = server.factory.NewWithID(sessionID, params)
 			if attachErr != nil {
 				return errors.Wrapf(attachErr, "failed to attach to session")
 			}
-			log.Printf("Client attached to persistent session: %s", sessionID)
+			log.Printf("Client attached to persistent session: %s (tab: %s)", sessionID, session.ActiveTab)
 		} else {
 			slave = session.Slave
 		}
@@ -208,6 +213,14 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 		}
 		isNewSession = true
 		log.Printf("Client created new session: %s", currentSessionID)
+	}
+
+	// Save current zellij tab if available
+	if server.factory.Name() == "zellij" && currentSessionID != "" {
+		activeTab := GetZellijActiveTab()
+		if activeTab != "" {
+			server.sessionManager.UpdateActiveTab(currentSessionID, activeTab)
+		}
 	}
 
 	// Close slave when done
@@ -500,11 +513,15 @@ func (server *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Session not found", 404)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"id":        session.ID,
-			"title":     session.Title,
+		response := map[string]interface{}{
+			"id":         session.ID,
+			"title":      session.Title,
 			"created_at": session.CreatedAt.Format("2006-01-02 15:04:05"),
-		})
+		}
+		if session.ActiveTab != "" {
+			response["active_tab"] = session.ActiveTab
+		}
+		json.NewEncoder(w).Encode(response)
 	case "DELETE":
 		// Check if this is a kill request (permanent deletion)
 		kill := r.URL.Query().Get("kill") == "true"
@@ -526,26 +543,34 @@ func (server *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewEncoder(w).Encode(map[string]string{"status": status})
 	case "PATCH":
-		// Rename session
+		// Update session fields
 		var req struct {
-			Title string `json:"title"`
+			Title     string `json:"title"`
+			ActiveTab string `json:"active_tab"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request body", 400)
 			return
 		}
-		if req.Title == "" {
-			http.Error(w, "Title cannot be empty", 400)
-			return
+		// Update title if provided
+		if req.Title != "" {
+			if !server.sessionManager.Rename(id, req.Title) {
+				http.Error(w, "Session not found", 404)
+				return
+			}
 		}
-		if !server.sessionManager.Rename(id, req.Title) {
-			http.Error(w, "Session not found", 404)
-			return
+		// Update active tab if provided
+		if req.ActiveTab != "" {
+			server.sessionManager.UpdateActiveTab(id, req.ActiveTab)
 		}
-		json.NewEncoder(w).Encode(map[string]string{
-			"id":    id,
-			"title": req.Title,
-		})
+		response := map[string]string{"id": id}
+		if req.Title != "" {
+			response["title"] = req.Title
+		}
+		if req.ActiveTab != "" {
+			response["active_tab"] = req.ActiveTab
+		}
+		json.NewEncoder(w).Encode(response)
 	case "PUT":
 		// Move session to folder or workspace
 		var req struct {

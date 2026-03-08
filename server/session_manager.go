@@ -24,6 +24,7 @@ type Session struct {
 	WorkspaceID  string // Workspace ID, empty for default workspace
 	IsFolder     bool   // True if this is a folder (container) not a real session
 	Order        int    // Sort order within parent
+	ActiveTab    string // Current active zellij tab name
 	CreatedAt    time.Time
 	LastActiveAt time.Time // Last activity time
 	Slave        Slave
@@ -51,6 +52,7 @@ type sessionMetadata struct {
 	IsFolder    bool   `json:"is_folder"`
 	Order       int    `json:"order"`
 	WorkDir     string `json:"workdir,omitempty"`
+	ActiveTab   string `json:"active_tab,omitempty"`
 	CreatedAt   string `json:"created_at"`
 }
 
@@ -104,6 +106,7 @@ func (sm *SessionManager) saveMetadata() {
 			IsFolder:    s.IsFolder,
 			Order:       s.Order,
 			WorkDir:     s.WorkDir,
+			ActiveTab:   s.ActiveTab,
 			CreatedAt:   s.CreatedAt.Format(time.RFC3339),
 		})
 	}
@@ -213,6 +216,7 @@ func (sm *SessionManager) restoreFromZellij() {
 					session.WorkspaceID = m.WorkspaceID
 					session.Order = m.Order
 					session.WorkDir = m.WorkDir
+					session.ActiveTab = m.ActiveTab
 					if t, err := time.Parse(time.RFC3339, m.CreatedAt); err == nil {
 						session.CreatedAt = t
 					}
@@ -774,4 +778,49 @@ func (sm *SessionManager) SetWorkspaceID(sessionID string, workspaceID string) b
 	session.WorkspaceID = workspaceID
 	sm.saveMetadata()
 	return true
+}
+
+// UpdateActiveTab updates the active zellij tab for a session
+func (sm *SessionManager) UpdateActiveTab(sessionID string, tabName string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, ok := sm.sessions[sessionID]
+	if !ok {
+		return false
+	}
+
+	session.ActiveTab = tabName
+	sm.saveMetadata()
+	return true
+}
+
+// GetZellijActiveTab returns the active tab name from zellij dump-layout output
+func GetZellijActiveTab() string {
+	cmd := exec.Command("zellij", "action", "dump-layout")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	// Parse the layout to find the tab with focus=true
+	// Format: tab name="xxx" focus=true
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		// Look for tab line with focus=true
+		if strings.Contains(line, "tab") && strings.Contains(line, "focus=true") {
+			// Extract name="xxx"
+			nameStart := strings.Index(line, `name="`)
+			if nameStart == -1 {
+				continue
+			}
+			nameStart += 6 // len of `name="`
+			nameEnd := strings.Index(line[nameStart:], `"`)
+			if nameEnd == -1 {
+				continue
+			}
+			return line[nameStart : nameStart+nameEnd]
+		}
+	}
+	return ""
 }

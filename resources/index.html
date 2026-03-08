@@ -565,26 +565,11 @@
             floatBtn.style.display = isCollapsed ? 'flex' : 'none';
           }
 
-          // Wait for CSS transition to COMPLETE before fitting
-          // Use transitionend event for precise timing, with fallback
-          let fitDone = false;
-          const doFit = () => {
-            if (fitDone) return;
-            fitDone = true;
-            sidebar.removeEventListener('transitionend', onTransitionEnd);
-            if (this.term && this.term.fit) {
-              console.log('[sidebar] fitting terminal');
-              this.term.fit();
-            }
-          };
-          const onTransitionEnd = (e) => {
-            if (e.propertyName === 'width') {
-              doFit();
-            }
-          };
-          sidebar.addEventListener('transitionend', onTransitionEnd);
-          // Fallback: ensure fit() is called even if transitionend doesn't fire
-          setTimeout(doFit, 300);
+          // Use direct calculation instead of waiting for transitionend
+          // Sidebar width is fixed: 210px + 1px border = 211px
+          if (this.term && this.term.fitWithSidebarState) {
+            this.term.fitWithSidebarState(isCollapsed);
+          }
         }
 
         initHostDisplay() {
