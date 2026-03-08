@@ -11,9 +11,14 @@
     <div id="app">
       <div id="sidebar">
         <div class="sidebar-header">
-          <h3>Sessions</h3>
-          <button id="new-folder-btn" class="btn-folder" title="New Folder">📁</button>
-          <button id="new-session-btn" class="btn-new" title="New Session">+</button>
+          <div class="header-title">
+            <h3>Sessions</h3>
+            <div class="header-host" id="header-host"></div>
+          </div>
+          <div class="header-buttons">
+            <button id="fullscreen-btn" class="btn-fullscreen" title="Toggle Fullscreen (F11)">⛶</button>
+            <button id="new-folder-btn" class="btn-new" title="New Session/Folder">+</button>
+          </div>
         </div>
         <div id="session-list">
           <div class="session-loading">Loading sessions...</div>
@@ -21,6 +26,9 @@
         <div class="sidebar-footer">{{ .commit }} · {{ .buildAt }}</div>
         <button class="sidebar-toggle" title="Toggle Sidebar">◀</button>
       </div>
+
+      <!-- Floating fullscreen button (visible when sidebar collapsed) -->
+      <button id="fullscreen-float" class="btn-fullscreen-float" title="Toggle Fullscreen (F11)">⛶</button>
       <div id="main">
         <div id="terminal"></div>
       </div>
@@ -46,19 +54,14 @@
         }
 
         init() {
-          // Listen for click on new session button
-          const newSessionBtn = document.getElementById('new-session-btn');
-          if (newSessionBtn) {
-            newSessionBtn.addEventListener('click', () => {
-              this.createSession();
-            });
-          }
+          // Display host info
+          this.initHostDisplay();
 
-          // Listen for click on new folder button
-          const newFolderBtn = document.getElementById('new-folder-btn');
-          if (newFolderBtn) {
-            newFolderBtn.addEventListener('click', () => {
-              this.createFolder();
+          // Listen for click on new session/folder button
+          const newBtn = document.getElementById('new-folder-btn');
+          if (newBtn) {
+            newBtn.addEventListener('click', () => {
+              this.createSession();
             });
           }
 
@@ -69,6 +72,35 @@
               this.toggleSidebar();
             });
           }
+
+          // Listen for fullscreen button
+          const fullscreenBtn = document.getElementById('fullscreen-btn');
+          if (fullscreenBtn) {
+            fullscreenBtn.addEventListener('click', () => {
+              this.toggleFullscreen();
+            });
+          }
+
+          // Listen for floating fullscreen button
+          const fullscreenFloatBtn = document.getElementById('fullscreen-float');
+          if (fullscreenFloatBtn) {
+            fullscreenFloatBtn.addEventListener('click', () => {
+              this.toggleFullscreen();
+            });
+          }
+
+          // Listen for fullscreen changes to update button state
+          document.addEventListener('fullscreenchange', () => {
+            this.updateFullscreenButton();
+          });
+
+          // Listen for F11 key
+          document.addEventListener('keydown', (e) => {
+            if (e.key === 'F11') {
+              e.preventDefault();
+              this.toggleFullscreen();
+            }
+          });
 
           // Restore sidebar state
           const collapsed = localStorage.getItem('sidebar_collapsed') === 'true';
@@ -140,6 +172,44 @@
           localStorage.setItem('sidebar_collapsed', isCollapsed);
           if (toggleBtn) {
             toggleBtn.textContent = isCollapsed ? '▶' : '◀';
+          }
+          // Show/hide floating fullscreen button
+          const floatBtn = document.getElementById('fullscreen-float');
+          if (floatBtn) {
+            floatBtn.style.display = isCollapsed ? 'flex' : 'none';
+          }
+        }
+
+        initHostDisplay() {
+          const hostEl = document.getElementById('header-host');
+          if (hostEl) {
+            hostEl.textContent = window.location.host;
+          }
+        }
+
+        toggleFullscreen() {
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else {
+            document.documentElement.requestFullscreen().catch(err => {
+              console.error('Failed to enter fullscreen:', err);
+            });
+          }
+        }
+
+        updateFullscreenButton() {
+          const isFullscreen = !!document.fullscreenElement;
+          const btn = document.getElementById('fullscreen-btn');
+          const floatBtn = document.getElementById('fullscreen-float');
+          const icon = isFullscreen ? '⛶' : '⛶';
+          // Could use different icons for enter/exit if desired
+          if (btn) {
+            btn.title = isFullscreen ? 'Exit Fullscreen (F11)' : 'Toggle Fullscreen (F11)';
+            btn.classList.toggle('active', isFullscreen);
+          }
+          if (floatBtn) {
+            floatBtn.title = isFullscreen ? 'Exit Fullscreen (F11)' : 'Toggle Fullscreen (F11)';
+            floatBtn.classList.toggle('active', isFullscreen);
           }
         }
 
@@ -381,6 +451,16 @@
             childrenMap.get(child.parent_id).push(child);
           });
 
+          // Assign color indices to folders (root level only)
+          let folderColorIndex = 0;
+          const folderColors = new Map();
+          rootItems.forEach(item => {
+            if (item.is_folder) {
+              folderColors.set(item.id, folderColorIndex % 6);
+              folderColorIndex++;
+            }
+          });
+
           // Render recursively
           const renderItems = (items, depth = 0) => {
             let html = '';
@@ -388,8 +468,9 @@
               const children = childrenMap.get(item.id) || [];
               const hasChildren = children.length > 0 || item.has_children;
               const isExpanded = this.expandedSessions.has(item.id);
+              const colorIndex = item.is_folder ? (folderColors.get(item.id) ?? 0) : null;
 
-              html += this.renderItem(item, depth, hasChildren, isExpanded);
+              html += this.renderItem(item, depth, hasChildren, isExpanded, colorIndex);
 
               // Children container - also a drop zone if parent is a folder
               if (isExpanded && (children.length > 0 || item.is_folder)) {
@@ -427,7 +508,7 @@
           });
         }
 
-        renderItem(item, depth, hasChildren, isExpanded) {
+        renderItem(item, depth, hasChildren, isExpanded, colorIndex = null) {
           const isEditing = this.editingId === item.id;
           const isFolder = item.is_folder;
 
@@ -466,6 +547,7 @@
             'session-item',
             item.id === this.activeSessionId ? 'active' : '',
             isFolder ? 'folder' : '',
+            isFolder && colorIndex !== null ? `folder-color-${colorIndex}` : '',
             depth > 0 ? 'child' : ''
           ].filter(Boolean).join(' ');
 
