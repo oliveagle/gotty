@@ -7,12 +7,14 @@ export declare class Xterm {
     term: Terminal;
     fitAddon: FitAddon;
     webglAddon: WebglAddon | null;
-    resizeListener: () => void;
+    resizeObserver: ResizeObserver;
     decoder: lib.UTF8Decoder;
     message: HTMLElement;
     messageTimeout: number;
     messageTimer: ReturnType<typeof setTimeout> | null;
     constructor(elem: HTMLElement);
+    private setupClipboardOnSelection;
+    private copyToClipboard;
     private setupCompositionViewFix;
     info(): {
         columns: number;

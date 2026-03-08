@@ -8,7 +8,7 @@ export class Xterm {
     term: Terminal;
     fitAddon: FitAddon;
     webglAddon: WebglAddon | null = null;
-    resizeListener: () => void;
+    resizeObserver: ResizeObserver;
     decoder: lib.UTF8Decoder;
 
     message: HTMLElement;
@@ -35,12 +35,6 @@ export class Xterm {
         this.message.className = "xterm-overlay";
         this.messageTimeout = 2000;
 
-        this.resizeListener = () => {
-            this.fitAddon.fit();
-            this.term.scrollToBottom();
-            this.showMessage(`${this.term.cols}x${this.term.rows}`, this.messageTimeout);
-        };
-
         // Open terminal FIRST (xterm v6 requirement)
         this.term.open(elem);
 
@@ -62,10 +56,49 @@ export class Xterm {
 
         // Fit after everything is loaded
         this.fitAddon.fit();
-        window.addEventListener("resize", this.resizeListener);
+
+        // Use ResizeObserver to detect container size changes (handles sidebar toggle, etc.)
+        // Debounce to avoid excessive calls during CSS transitions
+        let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+        this.resizeObserver = new ResizeObserver(() => {
+            if (resizeTimeout) {
+                clearTimeout(resizeTimeout);
+            }
+            resizeTimeout = setTimeout(() => {
+                this.fitAddon.fit();
+                this.term.scrollToBottom();
+                resizeTimeout = null;
+            }, 100);
+        });
+        this.resizeObserver.observe(elem);
 
         // Fix IME composition view position to follow cursor
         this.setupCompositionViewFix();
+
+        // Setup auto-copy to browser clipboard on selection
+        this.setupClipboardOnSelection();
+    }
+
+    private setupClipboardOnSelection(): void {
+        let lastSelection = "";
+
+        this.term.onSelectionChange(() => {
+            const selection = this.term.getSelection();
+            if (selection && selection !== lastSelection) {
+                lastSelection = selection;
+                this.copyToClipboard(selection);
+            }
+        });
+    }
+
+    private copyToClipboard(text: string): void {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                this.showMessage("📋 Copied", 1500);
+            }).catch((err) => {
+                console.error("Failed to copy to clipboard:", err);
+            });
+        }
     }
 
     private setupCompositionViewFix(): void {
@@ -194,7 +227,7 @@ export class Xterm {
     }
 
     close(): void {
-        window.removeEventListener("resize", this.resizeListener);
+        this.resizeObserver.disconnect();
         this.webglAddon?.dispose();
         this.term.dispose();
     }
