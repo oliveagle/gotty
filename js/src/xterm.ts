@@ -88,52 +88,56 @@ export class Xterm {
         // Track last known selection before it gets cleared
         let lastSelection = '';
         let pollInterval: ReturnType<typeof setInterval> | null = null;
-        let isMouseDown = false;
 
         // On mousedown, start polling for selection
         this.elem.addEventListener('mousedown', (e: MouseEvent) => {
             // Only start on left click
             if (e.button !== 0) return;
-            isMouseDown = true;
+            console.log("[gotty] mousedown detected, starting poll...");
             lastSelection = '';
 
             // Poll for selection changes while mouse is down
             pollInterval = setInterval(() => {
-                const selection = this.term.getSelection();
-                if (selection && selection.trim()) {
-                    lastSelection = selection;
-                    console.log("[gotty] Poll captured:", selection.substring(0, 30));
+                // Try xterm's selection API
+                const xtermSelection = this.term.getSelection();
+                const xtermHasSelection = this.term.hasSelection();
+
+                // Try browser's native selection API
+                const browserSelection = window.getSelection();
+                const browserText = browserSelection ? browserSelection.toString() : '';
+
+                console.log("[gotty] Poll - xterm:", xtermHasSelection, `"${xtermSelection?.substring(0, 20)}"`,
+                           "| browser:", `"${browserText.substring(0, 20)}"`);
+
+                // Use whichever has content
+                const text = xtermSelection || browserText;
+                if (text && text.trim()) {
+                    lastSelection = text;
                 }
-            }, 50);
+            }, 100);
         });
 
         // On mouseup, stop polling and copy
         this.elem.addEventListener('mouseup', () => {
-            isMouseDown = false;
+            console.log("[gotty] mouseup detected");
             if (pollInterval) {
                 clearInterval(pollInterval);
                 pollInterval = null;
             }
 
-            console.log("[gotty] mouseup - lastSelection:", lastSelection ? `"${lastSelection.substring(0, 30)}..."` : "empty");
+            // Final check with both APIs
+            const xtermSelection = this.term.getSelection();
+            const browserSelection = window.getSelection();
+            const browserText = browserSelection ? browserSelection.toString() : '';
 
-            // Also try to get current selection (might be cleared by zellij)
-            const currentSelection = this.term.getSelection();
-            console.log("[gotty] mouseup - currentSelection:", currentSelection ? `"${currentSelection.substring(0, 30)}..."` : "null");
+            console.log("[gotty] Final - xterm:", this.term.hasSelection(), `"${xtermSelection?.substring(0, 20)}"`);
+            console.log("[gotty] Final - browser:", `"${browserText.substring(0, 20)}"`);
+            console.log("[gotty] lastSelection:", lastSelection ? `"${lastSelection.substring(0, 30)}..."` : "empty");
 
-            const textToCopy = currentSelection || lastSelection;
+            const textToCopy = xtermSelection || browserText || lastSelection;
             if (textToCopy && textToCopy.trim()) {
+                console.log("[gotty] Copying to clipboard:", textToCopy.substring(0, 30));
                 this.copyToClipboardSilent(textToCopy);
-            }
-        });
-
-        // Also listen for selectionchange on the document (might work better)
-        document.addEventListener('selectionchange', () => {
-            if (!isMouseDown) return;
-            const selection = this.term.getSelection();
-            if (selection && selection.trim()) {
-                lastSelection = selection;
-                console.log("[gotty] document selectionchange:", selection.substring(0, 30));
             }
         });
 
@@ -142,7 +146,10 @@ export class Xterm {
             // Ctrl+C - Copy to browser clipboard (when there's a selection)
             if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'c') {
                 console.log("[gotty] Ctrl+C detected");
-                const selection = this.term.getSelection() || lastSelection;
+                const xtermSelection = this.term.getSelection();
+                const browserSelection = window.getSelection();
+                const browserText = browserSelection ? browserSelection.toString() : '';
+                const selection = xtermSelection || browserText || lastSelection;
                 if (selection) {
                     this.copyToClipboard(selection);
                     return false;

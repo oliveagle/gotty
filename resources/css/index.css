@@ -333,7 +333,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     border: 1px solid transparent;
     position: relative;
     overflow: hidden;
-    transition: background 0.15s ease, transform 0.15s ease;
+    transition: background 0.15s ease;
 }
 
 .session-item::before {
@@ -517,12 +517,16 @@ body.sidebar-auto-hide #sidebar-trigger {
 
 /* Edit buttons */
 .session-actions {
-    display: none;
+    display: flex;
     gap: 2px;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.15s ease;
 }
 
 .session-item:hover .session-actions {
-    display: flex;
+    visibility: visible;
+    opacity: 1;
 }
 
 .btn-edit {
