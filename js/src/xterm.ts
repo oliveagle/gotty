@@ -61,76 +61,43 @@ export class Xterm {
         // Fit after everything is loaded
         this.fitAddon.fit();
 
-        // Use ResizeObserver to detect container size changes (handles sidebar toggle, etc.)
-        // CRITICAL: Only fit ONCE after transition completes, no intermediate calculations
-        let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
-        let isFitting = false;
-        let pendingFit = false;
-        let lastWidth = 0;
-        let lastHeight = 0;
+        // Resize handling: disconnect observer during transition, reconnect after
+        // This prevents multiple intermediate fit() calls during CSS animation
+        let lastWidth = Math.round(elem.clientWidth);
+        let lastHeight = Math.round(elem.clientHeight);
+        let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
-        this.resizeObserver = new ResizeObserver((entries) => {
-            const entry = entries[0];
-            if (!entry) return;
+        const doFit = () => {
+            const currentWidth = Math.round(elem.clientWidth);
+            const currentHeight = Math.round(elem.clientHeight);
 
-            const newWidth = Math.round(entry.contentRect.width);
-            const newHeight = Math.round(entry.contentRect.height);
+            // Only fit if size actually changed
+            if (currentWidth !== lastWidth || currentHeight !== lastHeight) {
+                lastWidth = currentWidth;
+                lastHeight = currentHeight;
+                this.fitAddon.fit();
+                this.term.scrollToBottom();
+            }
+        };
 
-            // Skip if size hasn't actually changed
-            if (newWidth === lastWidth && newHeight === lastHeight) return;
+        this.resizeObserver = new ResizeObserver(() => {
+            // When resize detected, disconnect immediately to prevent cascading events
+            this.resizeObserver.disconnect();
 
-            lastWidth = newWidth;
-            lastHeight = newHeight;
-
-            // Skip if we're currently fitting (prevents recursive fit calls)
-            if (isFitting) {
-                pendingFit = true;
-                return;
+            // Clear any pending timer
+            if (resizeTimer) {
+                clearTimeout(resizeTimer);
             }
 
-            // Clear any pending timeout
-            if (resizeTimeout) {
-                clearTimeout(resizeTimeout);
-            }
-
-            // Wait for CSS transition to complete (200ms) + buffer
-            // During transition, this timeout keeps getting reset
-            // Only when transition STOPS does the timeout finally fire
-            resizeTimeout = setTimeout(() => {
-                // Double-check we're not already fitting
-                if (isFitting) {
-                    pendingFit = true;
-                    resizeTimeout = null;
-                    return;
-                }
-
-                isFitting = true;
-
-                try {
-                    this.fitAddon.fit();
-                    this.term.scrollToBottom();
-                } finally {
-                    isFitting = false;
-                    resizeTimeout = null;
-
-                    // If a fit was requested during our fit, do one more
-                    if (pendingFit) {
-                        pendingFit = false;
-                        // Small delay to let things settle
-                        setTimeout(() => {
-                            if (!isFitting) {
-                                isFitting = true;
-                                try {
-                                    this.fitAddon.fit();
-                                } finally {
-                                    isFitting = false;
-                                }
-                            }
-                        }, 50);
-                    }
-                }
-            }, 250);
+            // Wait for CSS transition (200ms) + buffer, then fit once and reconnect
+            resizeTimer = setTimeout(() => {
+                resizeTimer = null;
+                doFit();
+                // Reconnect observer for future resize events
+                this.resizeObserver.observe(elem);
+            }, 280);
         });
+
         this.resizeObserver.observe(elem);
 
         // Fix IME composition view position to follow cursor
@@ -145,17 +112,21 @@ export class Xterm {
 
         // Find xterm screen element
         const xtermScreen = this.elem.querySelector('.xterm-screen') as HTMLElement;
+        console.log("[gotty] xterm-screen element found:", !!xtermScreen);
 
         // On mouseup, wait for zellij to copy to system clipboard, then sync to browser
-        xtermScreen?.addEventListener('mouseup', () => {
+        xtermScreen?.addEventListener('mouseup', (e) => {
+            console.log("[gotty] mouseup event triggered", e);
             // Wait for zellij to complete its copy operation
             setTimeout(() => {
+                console.log("[gotty] calling syncServerClipboardToBrowser after timeout");
                 this.syncServerClipboardToBrowser();
             }, 200);
         }, true);
 
         // Also sync on double-click
-        xtermScreen?.addEventListener('dblclick', () => {
+        xtermScreen?.addEventListener('dblclick', (e) => {
+            console.log("[gotty] dblclick event triggered", e);
             setTimeout(() => {
                 this.syncServerClipboardToBrowser();
             }, 200);
@@ -164,6 +135,7 @@ export class Xterm {
         // Keyboard: Ctrl+V to paste from browser clipboard
         this.term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
             if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'v') {
+                console.log("[gotty] Ctrl+V detected, pasting...");
                 this.pasteFromClipboard();
                 return false;
             }
@@ -172,29 +144,39 @@ export class Xterm {
     }
 
     private async syncServerClipboardToBrowser(): Promise<void> {
+        console.log("[gotty] syncServerClipboardToBrowser called");
         try {
             // Fetch clipboard content from server
+            console.log("[gotty] fetching /api/clipboard...");
             const response = await fetch('/api/clipboard');
+            console.log("[gotty] response status:", response.status);
             if (!response.ok) {
+                console.log("[gotty] response not ok, skipping");
                 return;
             }
 
             const data = await response.json();
+            console.log("[gotty] clipboard data:", data);
             const text = data.content || '';
 
             if (text && text.trim()) {
+                console.log("[gotty] text found, length:", text.length);
                 // Copy to browser clipboard
                 if (navigator.clipboard && navigator.clipboard.writeText) {
+                    console.log("[gotty] using navigator.clipboard.writeText");
                     await navigator.clipboard.writeText(text);
                     console.log("[gotty] Synced from server:", text.substring(0, 30));
                     this.showMessage("📋 Copied", 1500);
                 } else {
+                    console.log("[gotty] using fallback copy");
                     this.copyToClipboardFallback(text);
                     this.showMessage("📋 Copied", 1500);
                 }
+            } else {
+                console.log("[gotty] no text in clipboard or empty");
             }
         } catch (error) {
-            // Silently ignore - clipboard API might not be available
+            console.error("[gotty] syncServerClipboardToBrowser error:", error);
         }
     }
 
