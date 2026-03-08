@@ -15,6 +15,11 @@ export class Xterm {
     messageTimeout: number;
     messageTimer: ReturnType<typeof setTimeout> | null = null;
 
+    // Resize tracking
+    lastWidth: number = 0;
+    lastHeight: number = 0;
+    fitTimer: ReturnType<typeof setTimeout> | null = null;
+
     constructor(elem: HTMLElement) {
         this.elem = elem;
         this.term = new Terminal({
@@ -61,44 +66,21 @@ export class Xterm {
         // Fit after everything is loaded
         this.fitAddon.fit();
 
-        // Resize handling: disconnect observer during transition, reconnect after
-        // This prevents multiple intermediate fit() calls during CSS animation
-        let lastWidth = Math.round(elem.clientWidth);
-        let lastHeight = Math.round(elem.clientHeight);
-        let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+        // Store last known dimensions
+        this.lastWidth = Math.round(elem.clientWidth);
+        this.lastHeight = Math.round(elem.clientHeight);
 
-        const doFit = () => {
-            const currentWidth = Math.round(elem.clientWidth);
-            const currentHeight = Math.round(elem.clientHeight);
-
-            // Only fit if size actually changed
-            if (currentWidth !== lastWidth || currentHeight !== lastHeight) {
-                lastWidth = currentWidth;
-                lastHeight = currentHeight;
-                this.fitAddon.fit();
-                this.term.scrollToBottom();
-            }
-        };
-
+        // Create ResizeObserver but keep it disconnected
+        // We'll only use it for window resize events
         this.resizeObserver = new ResizeObserver(() => {
-            // When resize detected, disconnect immediately to prevent cascading events
-            this.resizeObserver.disconnect();
-
-            // Clear any pending timer
-            if (resizeTimer) {
-                clearTimeout(resizeTimer);
-            }
-
-            // Wait for CSS transition (200ms) + buffer, then fit once and reconnect
-            resizeTimer = setTimeout(() => {
-                resizeTimer = null;
-                doFit();
-                // Reconnect observer for future resize events
-                this.resizeObserver.observe(elem);
-            }, 280);
+            // Intentionally empty - we don't auto-react to size changes
+            // to avoid infinite loops when fit() changes internal dimensions
         });
 
-        this.resizeObserver.observe(elem);
+        // Listen for window resize instead of element resize
+        window.addEventListener('resize', () => {
+            this.scheduleFit('window-resize');
+        });
 
         // Fix IME composition view position to follow cursor
         this.setupCompositionViewFix();
@@ -335,7 +317,10 @@ export class Xterm {
     }
 
     onResize(callback: (columns: number, rows: number) => void): void {
-        this.term.onResize((data: { cols: number; rows: number }) => callback(data.cols, data.rows));
+        this.term.onResize((data: { cols: number; rows: number }) => {
+            console.log(`[resize] term.onResize fired: ${data.cols}x${data.rows}`);
+            callback(data.cols, data.rows);
+        });
     }
 
     deactivate(): void {
@@ -345,6 +330,42 @@ export class Xterm {
     reset(): void {
         this.removeMessage();
         this.term.clear();
+    }
+
+    /**
+     * Schedule a fit() call after a delay.
+     * Multiple calls within the delay period will be coalesced into one.
+     */
+    scheduleFit(reason: string, delay: number = 250): void {
+        if (this.fitTimer) {
+            clearTimeout(this.fitTimer);
+        }
+        this.fitTimer = setTimeout(() => {
+            this.fitTimer = null;
+            this.doFit(reason);
+        }, delay);
+    }
+
+    /**
+     * Perform fit if size has changed.
+     * Called externally when sidebar transitions complete.
+     */
+    fit(): void {
+        this.doFit('external');
+    }
+
+    private doFit(reason: string): void {
+        const currentWidth = Math.round(this.elem.clientWidth);
+        const currentHeight = Math.round(this.elem.clientHeight);
+
+        if (currentWidth !== this.lastWidth || currentHeight !== this.lastHeight) {
+            console.log(`[resize] fit from ${reason}: ${this.lastWidth}x${this.lastHeight} -> ${currentWidth}x${currentHeight}`);
+            this.lastWidth = currentWidth;
+            this.lastHeight = currentHeight;
+            this.fitAddon.fit();
+            this.term.scrollToBottom();
+            console.log(`[resize] fit done, cols/rows: ${this.term.cols}x${this.term.rows}`);
+        }
     }
 
     close(): void {

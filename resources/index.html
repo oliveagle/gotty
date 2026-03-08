@@ -564,6 +564,14 @@
           if (floatBtn) {
             floatBtn.style.display = isCollapsed ? 'flex' : 'none';
           }
+
+          // Fit terminal after sidebar transition completes (200ms)
+          // This is the ONLY place we trigger fit() for sidebar changes
+          setTimeout(() => {
+            if (this.term && this.term.fit) {
+              this.term.fit();
+            }
+          }, 220);
         }
 
         initHostDisplay() {

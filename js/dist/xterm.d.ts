@@ -12,6 +12,9 @@ export declare class Xterm {
     message: HTMLElement;
     messageTimeout: number;
     messageTimer: ReturnType<typeof setTimeout> | null;
+    lastWidth: number;
+    lastHeight: number;
+    fitTimer: ReturnType<typeof setTimeout> | null;
     constructor(elem: HTMLElement);
     private setupClipboardOnSelection;
     private syncServerClipboardToBrowser;
@@ -32,6 +35,17 @@ export declare class Xterm {
     onResize(callback: (columns: number, rows: number) => void): void;
     deactivate(): void;
     reset(): void;
+    /**
+     * Schedule a fit() call after a delay.
+     * Multiple calls within the delay period will be coalesced into one.
+     */
+    scheduleFit(reason: string, delay?: number): void;
+    /**
+     * Perform fit if size has changed.
+     * Called externally when sidebar transitions complete.
+     */
+    fit(): void;
+    private doFit;
     close(): void;
 }
 //# sourceMappingURL=xterm.d.ts.map
