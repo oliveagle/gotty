@@ -83,25 +83,33 @@ export class Xterm {
     }
 
     private setupClipboardOnSelection(): void {
-        let lastSelection = "";
+        // Track shift key state
+        let shiftPressed = false;
 
-        // Auto-copy on mouse selection
-        this.term.onSelectionChange(() => {
-            const selection = this.term.getSelection();
-            if (selection && selection !== lastSelection) {
-                lastSelection = selection;
-                this.copyToClipboard(selection);
+        // Track shift key
+        document.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.key === 'Shift') shiftPressed = true;
+        });
+        document.addEventListener('keyup', (e: KeyboardEvent) => {
+            if (e.key === 'Shift') shiftPressed = false;
+        });
+
+        // Auto-copy when Shift is released after selection (mouseup)
+        this.elem.addEventListener('mouseup', () => {
+            if (shiftPressed) {
+                const selection = this.term.getSelection();
+                if (selection) {
+                    this.copyToClipboard(selection);
+                }
             }
         });
 
-        // Also handle Ctrl/Cmd+C keyboard shortcut
-        this.elem.addEventListener('keydown', (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-                const selection = this.term.getSelection();
-                if (selection) {
-                    e.preventDefault();
-                    this.copyToClipboard(selection);
-                }
+        // Also auto-copy on selection change when shift is held
+        this.term.onSelectionChange(() => {
+            const selection = this.term.getSelection();
+            // Auto-copy when there's a selection (works with or without shift)
+            if (selection) {
+                this.copyToClipboard(selection);
             }
         });
     }
