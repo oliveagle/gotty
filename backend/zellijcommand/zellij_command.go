@@ -172,7 +172,8 @@ func (zcmd *ZellijCommand) Close() error {
 
 // KillSession kills the zellij session (for cleanup)
 func (zcmd *ZellijCommand) KillSession() error {
-	cmd := exec.Command("zellij", "delete-session", zcmd.sessionName)
+	// Use --force to delete active sessions
+	cmd := exec.Command("zellij", "delete-session", "--force", zcmd.sessionName)
 	return cmd.Run()
 }
 

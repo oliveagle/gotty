@@ -14,6 +14,7 @@ export declare class Xterm {
     messageTimer: ReturnType<typeof setTimeout> | null;
     constructor(elem: HTMLElement);
     private setupClipboardOnSelection;
+    private copyToClipboardSilent;
     private pasteFromClipboard;
     private copyToClipboard;
     private copyToClipboardFallback;

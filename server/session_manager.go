@@ -542,7 +542,8 @@ func (sm *SessionManager) Kill(id string) error {
 
 // killZellijSession kills a zellij session by name
 func killZellijSession(name string) error {
-	cmd := exec.Command("zellij", "delete-session", name)
+	// Use --force to delete active sessions
+	cmd := exec.Command("zellij", "delete-session", "--force", name)
 	return cmd.Run()
 }
 

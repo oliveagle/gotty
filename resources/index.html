@@ -29,7 +29,8 @@
         <div class="sidebar-toolbar">
           <button id="nav-back-btn" class="btn-toolbar btn-nav" title="Previous Session (Alt+Left)">◀</button>
           <button id="nav-forward-btn" class="btn-toolbar btn-nav" title="Next Session (Alt+Right)">▶</button>
-          <button id="new-folder-btn" class="btn-toolbar btn-new" title="New Session/Folder">+</button>
+          <button id="new-folder-btn" class="btn-toolbar btn-folder" title="New Folder">📁</button>
+          <button id="new-session-btn" class="btn-toolbar btn-new" title="New Session">+</button>
           <button id="autohide-btn" class="btn-toolbar btn-autohide" title="Toggle Auto-Hide Sidebar">◐</button>
           <button id="fullscreen-btn" class="btn-toolbar btn-fullscreen" title="Toggle Fullscreen (F11)">⛶</button>
         </div>
@@ -147,10 +148,18 @@
           // Fetch workspaces first, then sessions
           this.fetchWorkspaces();
 
-          // Listen for click on new session/folder button
-          const newBtn = document.getElementById('new-folder-btn');
-          if (newBtn) {
-            newBtn.addEventListener('click', () => {
+          // Listen for click on new folder button
+          const newFolderBtn = document.getElementById('new-folder-btn');
+          if (newFolderBtn) {
+            newFolderBtn.addEventListener('click', () => {
+              this.createFolder();
+            });
+          }
+
+          // Listen for click on new session button
+          const newSessionBtn = document.getElementById('new-session-btn');
+          if (newSessionBtn) {
+            newSessionBtn.addEventListener('click', () => {
               this.createSession();
             });
           }

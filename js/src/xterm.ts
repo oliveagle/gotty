@@ -83,45 +83,101 @@ export class Xterm {
     }
 
     private setupClipboardOnSelection(): void {
-        // Handle Cmd+Option+C (copy) and Cmd+Option+V (paste) - Mac style, no browser conflict
-        this.term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-            // Cmd+Option+C - Copy to browser clipboard (Mac style)
-            if (event.metaKey && event.altKey && event.key.toLowerCase() === 'c') {
+        console.log("[gotty] Setting up clipboard on selection...");
+
+        // Track last known selection before it gets cleared
+        let lastSelection = '';
+        let pollInterval: ReturnType<typeof setInterval> | null = null;
+        let isMouseDown = false;
+
+        // On mousedown, start polling for selection
+        this.elem.addEventListener('mousedown', (e: MouseEvent) => {
+            // Only start on left click
+            if (e.button !== 0) return;
+            isMouseDown = true;
+            lastSelection = '';
+
+            // Poll for selection changes while mouse is down
+            pollInterval = setInterval(() => {
                 const selection = this.term.getSelection();
+                if (selection && selection.trim()) {
+                    lastSelection = selection;
+                    console.log("[gotty] Poll captured:", selection.substring(0, 30));
+                }
+            }, 50);
+        });
+
+        // On mouseup, stop polling and copy
+        this.elem.addEventListener('mouseup', () => {
+            isMouseDown = false;
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+
+            console.log("[gotty] mouseup - lastSelection:", lastSelection ? `"${lastSelection.substring(0, 30)}..."` : "empty");
+
+            // Also try to get current selection (might be cleared by zellij)
+            const currentSelection = this.term.getSelection();
+            console.log("[gotty] mouseup - currentSelection:", currentSelection ? `"${currentSelection.substring(0, 30)}..."` : "null");
+
+            const textToCopy = currentSelection || lastSelection;
+            if (textToCopy && textToCopy.trim()) {
+                this.copyToClipboardSilent(textToCopy);
+            }
+        });
+
+        // Also listen for selectionchange on the document (might work better)
+        document.addEventListener('selectionchange', () => {
+            if (!isMouseDown) return;
+            const selection = this.term.getSelection();
+            if (selection && selection.trim()) {
+                lastSelection = selection;
+                console.log("[gotty] document selectionchange:", selection.substring(0, 30));
+            }
+        });
+
+        // Keyboard copy/paste with Ctrl key
+        this.term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+            // Ctrl+C - Copy to browser clipboard (when there's a selection)
+            if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'c') {
+                console.log("[gotty] Ctrl+C detected");
+                const selection = this.term.getSelection() || lastSelection;
                 if (selection) {
                     this.copyToClipboard(selection);
-                    return false; // Prevent zellij from handling this
+                    return false;
                 }
             }
-            // Cmd+Option+V - Paste from browser clipboard (Mac style)
-            if (event.metaKey && event.altKey && event.key.toLowerCase() === 'v') {
+            // Ctrl+V - Paste from browser clipboard
+            if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'v') {
+                console.log("[gotty] Ctrl+V detected");
                 this.pasteFromClipboard();
-                return false; // Prevent zellij from handling this
+                return false;
             }
             return true;
         });
+    }
 
-        // Auto-copy when mouse is released after selection
-        this.elem.addEventListener('mouseup', () => {
-            // Only copy if we have a selection
-            const selection = this.term.getSelection();
-            if (selection) {
-                // Small delay to ensure selection is complete
-                setTimeout(() => {
-                    this.copyToClipboard(selection);
-                }, 10);
-            }
-        });
+    private copyToClipboardSilent(text: string): void {
+        if (!text || text.trim() === '') {
+            return;
+        }
 
-        // Also handle touch events for mobile
-        this.elem.addEventListener('touchend', () => {
-            const selection = this.term.getSelection();
-            if (selection) {
-                setTimeout(() => {
-                    this.copyToClipboard(selection);
-                }, 10);
-            }
-        });
+        // Always try execCommand first (works in more contexts)
+        const fallbackSuccess = this.copyToClipboardFallback(text);
+        if (fallbackSuccess) {
+            console.log("[gotty] Copied to clipboard via execCommand:", text.substring(0, 30));
+            return;
+        }
+
+        // Then try modern Clipboard API
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                console.log("[gotty] Copied to clipboard via Clipboard API:", text.substring(0, 30));
+            }).catch((err) => {
+                console.warn("[gotty] Clipboard copy failed:", err);
+            });
+        }
     }
 
     private pasteFromClipboard(): void {
