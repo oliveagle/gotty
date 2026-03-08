@@ -83,70 +83,135 @@ export class Xterm {
     }
 
     private setupClipboardOnSelection(): void {
-        // Track shift key state
-        let shiftPressed = false;
-
-        // Track shift key
-        document.addEventListener('keydown', (e: KeyboardEvent) => {
-            if (e.key === 'Shift') shiftPressed = true;
-        });
-        document.addEventListener('keyup', (e: KeyboardEvent) => {
-            if (e.key === 'Shift') shiftPressed = false;
-        });
-
-        // Auto-copy when Shift is released after selection (mouseup)
-        this.elem.addEventListener('mouseup', () => {
-            if (shiftPressed) {
+        // Handle Cmd+Option+C (copy) and Cmd+Option+V (paste) - Mac style, no browser conflict
+        this.term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+            // Cmd+Option+C - Copy to browser clipboard (Mac style)
+            if (event.metaKey && event.altKey && event.key.toLowerCase() === 'c') {
                 const selection = this.term.getSelection();
                 if (selection) {
                     this.copyToClipboard(selection);
+                    return false; // Prevent zellij from handling this
                 }
+            }
+            // Cmd+Option+V - Paste from browser clipboard (Mac style)
+            if (event.metaKey && event.altKey && event.key.toLowerCase() === 'v') {
+                this.pasteFromClipboard();
+                return false; // Prevent zellij from handling this
+            }
+            return true;
+        });
+
+        // Auto-copy when mouse is released after selection
+        this.elem.addEventListener('mouseup', () => {
+            // Only copy if we have a selection
+            const selection = this.term.getSelection();
+            if (selection) {
+                // Small delay to ensure selection is complete
+                setTimeout(() => {
+                    this.copyToClipboard(selection);
+                }, 10);
             }
         });
 
-        // Also auto-copy on selection change when shift is held
-        this.term.onSelectionChange(() => {
+        // Also handle touch events for mobile
+        this.elem.addEventListener('touchend', () => {
             const selection = this.term.getSelection();
-            // Auto-copy when there's a selection (works with or without shift)
             if (selection) {
-                this.copyToClipboard(selection);
+                setTimeout(() => {
+                    this.copyToClipboard(selection);
+                }, 10);
             }
         });
+    }
+
+    private pasteFromClipboard(): void {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+            navigator.clipboard.readText().then((text) => {
+                this.term.paste(text);
+                this.showMessage("📋 Pasted", 1000);
+            }).catch((err) => {
+                console.error("Failed to paste:", err);
+                this.showMessage("Paste failed (check permissions)", 2000);
+            });
+        } else {
+            this.showMessage("Paste not supported in this browser", 2000);
+        }
     }
 
     private copyToClipboard(text: string): void {
-        // Try modern Clipboard API first
+        // Don't copy empty text
+        if (!text || text.trim() === '') {
+            return;
+        }
+
+        // Track if we've already shown a message to avoid duplicates
+        let messageShown = false;
+
+        const showSuccess = () => {
+            if (!messageShown) {
+                messageShown = true;
+                const preview = text.length > 20 ? text.substring(0, 20) + '...' : text;
+                this.showMessage(`📋 Copied: ${preview}`, 2000);
+            }
+        };
+
+        const showError = (err: any) => {
+            console.error("Copy failed:", err);
+            if (!messageShown) {
+                messageShown = true;
+                this.showMessage("❌ Copy failed - try Ctrl+Shift+C", 3000);
+            }
+        };
+
+        // Try modern Clipboard API first (requires HTTPS or localhost)
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(() => {
-                this.showMessage("📋 Copied", 1500);
+                showSuccess();
             }).catch((err) => {
-                console.error("Clipboard API failed, trying fallback:", err);
-                this.copyToClipboardFallback(text);
+                console.warn("Clipboard API failed:", err);
+                // Try fallback
+                if (this.copyToClipboardFallback(text)) {
+                    showSuccess();
+                } else {
+                    showError(err);
+                }
             });
         } else {
-            // Fallback for non-HTTPS
-            this.copyToClipboardFallback(text);
+            // Fallback for non-HTTPS or older browsers
+            if (this.copyToClipboardFallback(text)) {
+                showSuccess();
+            } else {
+                showError(new Error("Clipboard API not available"));
+            }
         }
     }
 
-    private copyToClipboardFallback(text: string): void {
+    private copyToClipboardFallback(text: string): boolean {
         // Create a temporary textarea to copy from
         const textarea = document.createElement('textarea');
         textarea.value = text;
+        // Make it invisible but still functional
         textarea.style.position = 'fixed';
-        textarea.style.left = '-9999px';
-        textarea.style.top = '-9999px';
+        textarea.style.left = '0';
+        textarea.style.top = '0';
+        textarea.style.opacity = '0';
+        textarea.style.pointerEvents = 'none';
+        textarea.style.width = '2em';
+        textarea.style.height = '2em';
         document.body.appendChild(textarea);
-        textarea.select();
-        textarea.setSelectionRange(0, text.length);
+
+        let success = false;
         try {
-            document.execCommand('copy');
-            this.showMessage("📋 Copied", 1500);
+            textarea.focus();
+            textarea.select();
+            textarea.setSelectionRange(0, text.length);
+            success = document.execCommand('copy');
         } catch (err) {
             console.error("Fallback copy failed:", err);
-            this.showMessage("Copy failed", 1500);
+            success = false;
         }
         document.body.removeChild(textarea);
+        return success;
     }
 
     private setupCompositionViewFix(): void {

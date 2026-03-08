@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -28,6 +29,10 @@ type Session struct {
 	Slave        Slave
 	// For persistent backends, store the session ID for re-attachment
 	// Slave will be nil after first disconnect
+
+	// BackendSessionName stores the backend session name (e.g., zellij session name)
+	// This is needed to kill the session even after Slave is nil
+	BackendSessionName string
 
 	// Output buffer for subtitle generation
 	outputBuffer *summary.RingBuffer
@@ -193,11 +198,12 @@ func (sm *SessionManager) restoreFromZellij() {
 			// Check if already exists
 			if _, exists := sm.sessions[id]; !exists {
 				session := &Session{
-					ID:           id,
-					Title:        name,
-					CreatedAt:    time.Now(),
-					Slave:        nil,
-					outputBuffer: summary.NewRingBuffer(16384),
+					ID:                 id,
+					Title:              name,
+					CreatedAt:          time.Now(),
+					Slave:              nil,
+					BackendSessionName: name, // Store the full zellij session name
+					outputBuffer:       summary.NewRingBuffer(16384),
 				}
 
 				// Apply saved metadata if exists
@@ -369,14 +375,22 @@ func (sm *SessionManager) CreateWithID(title string, params map[string][]string)
 		return nil, err
 	}
 
+	// Determine backend session name for persistent backends (e.g., zellij)
+	// For zellij, the session name is "gotty-{id}"
+	backendSessionName := ""
+	if sm.factory.IsPersistent() {
+		backendSessionName = "gotty-" + id
+	}
+
 	session := &Session{
-		ID:           id,
-		Title:        title,
-		Order:        order,
-		CreatedAt:    now,
-		LastActiveAt: now,
-		Slave:        slave,
-		outputBuffer: summary.NewRingBuffer(16384), // 16KB buffer
+		ID:                 id,
+		Title:              title,
+		Order:              order,
+		CreatedAt:          now,
+		LastActiveAt:       now,
+		Slave:              slave,
+		BackendSessionName: backendSessionName,
+		outputBuffer:       summary.NewRingBuffer(16384), // 16KB buffer
 	}
 	sm.sessions[id] = session
 	sm.saveMetadata()
@@ -508,16 +522,28 @@ func (sm *SessionManager) Kill(id string) error {
 	delete(sm.sessions, id)
 	sm.saveMetadata()
 
-	// Try to kill the backend session if supported
+	var err error
+
+	// Try to kill the backend session
 	if session.Slave != nil {
 		if killable, ok := session.Slave.(KillableSlave); ok {
-			return killable.KillSession()
+			err = killable.KillSession()
+		} else {
+			// Fallback to regular close
+			err = session.Slave.Close()
 		}
-		// Fallback to regular close
-		return session.Slave.Close()
+	} else if session.BackendSessionName != "" {
+		// If Slave is nil but we have the backend session name, kill directly
+		err = killZellijSession(session.BackendSessionName)
 	}
 
-	return nil
+	return err
+}
+
+// killZellijSession kills a zellij session by name
+func killZellijSession(name string) error {
+	cmd := exec.Command("zellij", "delete-session", name)
+	return cmd.Run()
 }
 
 // Count returns the number of active sessions

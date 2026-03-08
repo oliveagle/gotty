@@ -13,6 +13,7 @@
       <div id="sidebar-trigger"></div>
       <div id="sidebar">
         <div class="sidebar-header">
+          <div class="header-host" id="header-host"></div>
           <div class="workspace-selector" id="workspace-selector">
             <span class="workspace-icon" id="workspace-icon">📁</span>
             <span class="workspace-name" id="workspace-name">Default</span>
@@ -134,6 +135,12 @@
         }
 
         init() {
+          // Set host display
+          const hostElem = document.getElementById('header-host');
+          if (hostElem) {
+            hostElem.textContent = window.location.host;
+          }
+
           // Initialize workspace selector
           this.initWorkspaceSelector();
 
