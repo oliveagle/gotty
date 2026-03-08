@@ -17,7 +17,7 @@ export declare class Xterm {
     fitTimer: ReturnType<typeof setTimeout> | null;
     constructor(elem: HTMLElement);
     private setupClipboardOnSelection;
-    private syncServerClipboardToBrowser;
+    private copySelectionToClipboard;
     private pasteFromClipboard;
     private copyToClipboardFallback;
     private setupCompositionViewFix;

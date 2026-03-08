@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -20,34 +21,55 @@ func NewClipboardManager() *ClipboardManager {
 }
 
 // GetClipboardContent returns the current system clipboard content
+// Tries both clipboard and primary selection (for X11)
 func (cm *ClipboardManager) GetClipboardContent() string {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
 	// Try xclip first (most common on Linux)
+	// First try clipboard selection
 	content, err := exec.Command("xclip", "-selection", "clipboard", "-o").Output()
-	if err == nil {
+	if err == nil && len(content) > 0 {
+		log.Printf("[clipboard] Got content from xclip clipboard: %d bytes", len(content))
 		return string(content)
 	}
 
-	// Try xsel as fallback
+	// Try primary selection (mouse selection)
+	content, err = exec.Command("xclip", "-selection", "primary", "-o").Output()
+	if err == nil && len(content) > 0 {
+		log.Printf("[clipboard] Got content from xclip primary: %d bytes", len(content))
+		return string(content)
+	}
+
+	// Try xsel as fallback - clipboard
 	content, err = exec.Command("xsel", "--clipboard", "--output").Output()
-	if err == nil {
+	if err == nil && len(content) > 0 {
+		log.Printf("[clipboard] Got content from xsel clipboard: %d bytes", len(content))
+		return string(content)
+	}
+
+	// Try xsel - primary
+	content, err = exec.Command("xsel", "--primary", "--output").Output()
+	if err == nil && len(content) > 0 {
+		log.Printf("[clipboard] Got content from xsel primary: %d bytes", len(content))
 		return string(content)
 	}
 
 	// Try pbpaste on macOS
 	content, err = exec.Command("pbpaste").Output()
 	if err == nil {
+		log.Printf("[clipboard] Got content from pbpaste: %d bytes", len(content))
 		return string(content)
 	}
 
 	// Try wl-paste on Wayland
 	content, err = exec.Command("wl-paste").Output()
 	if err == nil {
+		log.Printf("[clipboard] Got content from wl-paste: %d bytes", len(content))
 		return string(content)
 	}
 
+	log.Printf("[clipboard] No content found from any source")
 	return ""
 }
 

@@ -90,29 +90,19 @@ export class Xterm {
     }
 
     private setupClipboardOnSelection(): void {
-        console.log("[gotty] Setting up clipboard sync (server -> browser)...");
+        console.log("[gotty] Setting up auto-copy on selection...");
 
-        // Find xterm screen element
-        const xtermScreen = this.elem.querySelector('.xterm-screen') as HTMLElement;
-        console.log("[gotty] xterm-screen element found:", !!xtermScreen);
-
-        // On mouseup, wait for zellij to copy to system clipboard, then sync to browser
-        xtermScreen?.addEventListener('mouseup', (e) => {
-            console.log("[gotty] mouseup event triggered", e);
-            // Wait for zellij to complete its copy operation
-            setTimeout(() => {
-                console.log("[gotty] calling syncServerClipboardToBrowser after timeout");
-                this.syncServerClipboardToBrowser();
-            }, 200);
-        }, true);
-
-        // Also sync on double-click
-        xtermScreen?.addEventListener('dblclick', (e) => {
-            console.log("[gotty] dblclick event triggered", e);
-            setTimeout(() => {
-                this.syncServerClipboardToBrowser();
-            }, 200);
-        }, true);
+        // Use xterm.js onSelectionChange event - fires when selection changes
+        this.term.onSelectionChange(() => {
+            // Only copy when there IS a selection
+            if (this.term.hasSelection()) {
+                const selection = this.term.getSelection();
+                console.log("[gotty] selection changed, has selection:", !!selection);
+                if (selection && selection.trim()) {
+                    this.copySelectionToClipboard(selection);
+                }
+            }
+        });
 
         // Keyboard: Ctrl+V to paste from browser clipboard
         this.term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
@@ -125,40 +115,20 @@ export class Xterm {
         });
     }
 
-    private async syncServerClipboardToBrowser(): Promise<void> {
-        console.log("[gotty] syncServerClipboardToBrowser called");
+    private async copySelectionToClipboard(selection: string): Promise<void> {
+        console.log("[gotty] copySelectionToClipboard, length:", selection.length);
         try {
-            // Fetch clipboard content from server
-            console.log("[gotty] fetching /api/clipboard...");
-            const response = await fetch('/api/clipboard');
-            console.log("[gotty] response status:", response.status);
-            if (!response.ok) {
-                console.log("[gotty] response not ok, skipping");
-                return;
-            }
-
-            const data = await response.json();
-            console.log("[gotty] clipboard data:", data);
-            const text = data.content || '';
-
-            if (text && text.trim()) {
-                console.log("[gotty] text found, length:", text.length);
-                // Copy to browser clipboard
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    console.log("[gotty] using navigator.clipboard.writeText");
-                    await navigator.clipboard.writeText(text);
-                    console.log("[gotty] Synced from server:", text.substring(0, 30));
-                    this.showMessage("📋 Copied", 1500);
-                } else {
-                    console.log("[gotty] using fallback copy");
-                    this.copyToClipboardFallback(text);
-                    this.showMessage("📋 Copied", 1500);
-                }
+            // Copy to browser clipboard
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(selection);
+                console.log("[gotty] Copied to browser clipboard:", selection.substring(0, 30));
+                this.showMessage("📋 Copied", 1500);
             } else {
-                console.log("[gotty] no text in clipboard or empty");
+                this.copyToClipboardFallback(selection);
+                this.showMessage("📋 Copied", 1500);
             }
         } catch (error) {
-            console.error("[gotty] syncServerClipboardToBrowser error:", error);
+            console.error("[gotty] copySelectionToClipboard error:", error);
         }
     }
 
@@ -351,12 +321,17 @@ export class Xterm {
      * Called externally when sidebar transitions complete.
      */
     fit(): void {
+        // Force browser reflow to get accurate dimensions
+        // This ensures we get the final size after CSS transitions
+        void this.elem.offsetHeight;
         this.doFit('external');
     }
 
     private doFit(reason: string): void {
-        const currentWidth = Math.round(this.elem.clientWidth);
-        const currentHeight = Math.round(this.elem.clientHeight);
+        // Use getBoundingClientRect for more accurate measurements
+        const rect = this.elem.getBoundingClientRect();
+        const currentWidth = Math.round(rect.width);
+        const currentHeight = Math.round(rect.height);
 
         if (currentWidth !== this.lastWidth || currentHeight !== this.lastHeight) {
             console.log(`[resize] fit from ${reason}: ${this.lastWidth}x${this.lastHeight} -> ${currentWidth}x${currentHeight}`);

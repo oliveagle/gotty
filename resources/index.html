@@ -565,13 +565,26 @@
             floatBtn.style.display = isCollapsed ? 'flex' : 'none';
           }
 
-          // Fit terminal after sidebar transition completes (200ms)
-          // This is the ONLY place we trigger fit() for sidebar changes
-          setTimeout(() => {
+          // Wait for CSS transition to COMPLETE before fitting
+          // Use transitionend event for precise timing, with fallback
+          let fitDone = false;
+          const doFit = () => {
+            if (fitDone) return;
+            fitDone = true;
+            sidebar.removeEventListener('transitionend', onTransitionEnd);
             if (this.term && this.term.fit) {
+              console.log('[sidebar] fitting terminal');
               this.term.fit();
             }
-          }, 220);
+          };
+          const onTransitionEnd = (e) => {
+            if (e.propertyName === 'width') {
+              doFit();
+            }
+          };
+          sidebar.addEventListener('transitionend', onTransitionEnd);
+          // Fallback: ensure fit() is called even if transitionend doesn't fire
+          setTimeout(doFit, 300);
         }
 
         initHostDisplay() {
