@@ -9,6 +9,8 @@
   </head>
   <body>
     <div id="app">
+      <!-- Trigger zone for auto-hide sidebar -->
+      <div id="sidebar-trigger"></div>
       <div id="sidebar">
         <div class="sidebar-header">
           <div class="header-title">
@@ -17,6 +19,7 @@
           </div>
           <div class="header-buttons">
             <button id="fullscreen-btn" class="btn-fullscreen" title="Toggle Fullscreen (F11)">⛶</button>
+            <button id="autohide-btn" class="btn-autohide" title="Toggle Auto-Hide Sidebar">◐</button>
             <button id="new-folder-btn" class="btn-new" title="New Session/Folder">+</button>
           </div>
         </div>
@@ -29,6 +32,21 @@
 
       <!-- Floating fullscreen button (visible when sidebar collapsed) -->
       <button id="fullscreen-float" class="btn-fullscreen-float" title="Toggle Fullscreen (F11)">⛶</button>
+
+      <!-- Context menu for sessions -->
+      <div id="context-menu" class="context-menu">
+        <div class="context-menu-item" data-action="kill">
+          <span class="menu-icon">💀</span> Kill Session (Delete zellij)
+        </div>
+        <div class="context-menu-item" data-action="close">
+          <span class="menu-icon">✕</span> Close Tab Only
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" data-action="rename">
+          <span class="menu-icon">✏️</span> Rename
+        </div>
+      </div>
+
       <div id="main">
         <div id="terminal"></div>
       </div>
@@ -94,13 +112,26 @@
             this.updateFullscreenButton();
           });
 
-          // Listen for F11 key
+          // Listen for F11 key to toggle fullscreen
+          // Note: ESC to exit fullscreen is browser behavior and cannot be changed
+          // But we can add Shift+ESC as an alternative exit method
           document.addEventListener('keydown', (e) => {
             if (e.key === 'F11') {
               e.preventDefault();
               this.toggleFullscreen();
             }
+            // Shift+ESC also exits fullscreen (alternative to ESC)
+            if (e.key === 'Escape' && e.shiftKey && document.fullscreenElement) {
+              e.preventDefault();
+              document.exitFullscreen();
+            }
           });
+
+          // Setup context menu
+          this.setupContextMenu();
+
+          // Setup auto-hide sidebar
+          this.setupAutoHide();
 
           // Restore sidebar state
           const collapsed = localStorage.getItem('sidebar_collapsed') === 'true';
@@ -185,6 +216,119 @@
           if (hostEl) {
             hostEl.textContent = window.location.host;
           }
+        }
+
+        setupContextMenu() {
+          const menu = document.getElementById('context-menu');
+          if (!menu) return;
+
+          // Hide menu on click outside
+          document.addEventListener('click', () => {
+            this.hideContextMenu();
+          });
+
+          // Handle menu item clicks
+          menu.querySelectorAll('.context-menu-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const action = item.dataset.action;
+              const sessionId = menu.dataset.sessionId;
+              this.hideContextMenu();
+
+              if (!sessionId) return;
+
+              switch (action) {
+                case 'kill':
+                  if (confirm('Permanently delete this zellij session?')) {
+                    this.killSession(sessionId);
+                  }
+                  break;
+                case 'close':
+                  this.closeSession(sessionId, { stopPropagation: () => {} });
+                  break;
+                case 'rename':
+                  this.startEdit(sessionId, { stopPropagation: () => {} });
+                  break;
+              }
+            });
+          });
+        }
+
+        setupAutoHide() {
+          const autohideBtn = document.getElementById('autohide-btn');
+          const sidebar = document.getElementById('sidebar');
+          const trigger = document.getElementById('sidebar-trigger');
+          const main = document.getElementById('main');
+
+          if (!autohideBtn || !sidebar) return;
+
+          // Restore auto-hide state
+          const autoHideEnabled = localStorage.getItem('sidebar_auto_hide') === 'true';
+          if (autoHideEnabled) {
+            this.enableAutoHide();
+          }
+
+          // Toggle button
+          autohideBtn.addEventListener('click', () => {
+            const isEnabled = sidebar.classList.contains('auto-hide');
+            if (isEnabled) {
+              this.disableAutoHide();
+            } else {
+              this.enableAutoHide();
+            }
+          });
+
+          // Trigger zone hover
+          if (trigger) {
+            trigger.addEventListener('mouseenter', () => {
+              sidebar.classList.add('visible');
+            });
+          }
+
+          // Sidebar leave
+          sidebar.addEventListener('mouseleave', () => {
+            if (sidebar.classList.contains('auto-hide')) {
+              sidebar.classList.remove('visible');
+            }
+          });
+        }
+
+        enableAutoHide() {
+          const sidebar = document.getElementById('sidebar');
+          const autohideBtn = document.getElementById('autohide-btn');
+          const main = document.getElementById('main');
+
+          if (sidebar) {
+            sidebar.classList.add('auto-hide');
+            document.body.classList.add('sidebar-auto-hide');
+          }
+          if (autohideBtn) {
+            autohideBtn.classList.add('active');
+            autohideBtn.title = 'Disable Auto-Hide Sidebar';
+          }
+          if (main) {
+            main.classList.remove('sidebar-expanded');
+          }
+          localStorage.setItem('sidebar_auto_hide', 'true');
+        }
+
+        disableAutoHide() {
+          const sidebar = document.getElementById('sidebar');
+          const autohideBtn = document.getElementById('autohide-btn');
+          const main = document.getElementById('main');
+
+          if (sidebar) {
+            sidebar.classList.remove('auto-hide', 'visible');
+            document.body.classList.remove('sidebar-auto-hide');
+          }
+          if (autohideBtn) {
+            autohideBtn.classList.remove('active');
+            autohideBtn.title = 'Enable Auto-Hide Sidebar';
+          }
+          if (main) {
+            main.classList.remove('sidebar-expanded');
+          }
+          localStorage.setItem('sidebar_auto_hide', 'false');
         }
 
         toggleFullscreen() {
@@ -326,6 +470,59 @@
             }
           } catch (error) {
             console.error('Failed to close session:', error);
+          }
+        }
+
+        async killSession(id) {
+          try {
+            await fetch('/api/sessions/' + id + '?kill=true', {
+              method: 'DELETE',
+            });
+
+            if (this.activeSessionId === id) {
+              this.disconnectTerminal();
+              this.activeSessionId = null;
+            }
+
+            await this.fetchSessions();
+
+            if (this.sessions.length > 0 && !this.activeSessionId) {
+              const firstSession = this.findFirstSession();
+              if (firstSession) {
+                this.setActiveSession(firstSession.id);
+              }
+            }
+          } catch (error) {
+            console.error('Failed to kill session:', error);
+          }
+        }
+
+        showContextMenu(id, event) {
+          event.preventDefault();
+          event.stopPropagation();
+
+          const menu = document.getElementById('context-menu');
+          const session = this.sessions.find(s => s.id === id);
+
+          if (!menu || !session || session.is_folder) return;
+
+          // Position menu at cursor
+          menu.style.left = event.clientX + 'px';
+          menu.style.top = event.clientY + 'px';
+          menu.classList.add('visible');
+          menu.dataset.sessionId = id;
+
+          // Hide rename option for folders
+          const renameItem = menu.querySelector('[data-action="rename"]');
+          if (renameItem) {
+            renameItem.style.display = session.is_folder ? 'none' : 'flex';
+          }
+        }
+
+        hideContextMenu() {
+          const menu = document.getElementById('context-menu');
+          if (menu) {
+            menu.classList.remove('visible');
           }
         }
 
@@ -559,6 +756,11 @@
             ? `onclick="sessionManager.toggleExpand('${item.id}', event)"`
             : `onclick="sessionManager.setActiveSession('${item.id}')"`;
 
+          // Context menu handler (only for sessions, not folders)
+          const contextHandler = !isFolder
+            ? `oncontextmenu="sessionManager.showContextMenu('${item.id}', event)"`
+            : '';
+
           // Folder data attribute for drop target
           const folderAttr = isFolder ? `data-folder-id="${item.id}"` : '';
 
@@ -567,7 +769,8 @@
                  data-session-id="${item.id}"
                  ${folderAttr}
                  ${draggableAttr}
-                 ${clickHandler}>
+                 ${clickHandler}
+                 ${contextHandler}>
               ${activityDot}
               ${expandBtn}
               <div class="session-info">

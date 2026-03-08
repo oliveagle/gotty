@@ -489,13 +489,25 @@ func (server *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 			"created_at": session.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	case "DELETE":
-		// Close session
-		err := server.sessionManager.Close(id)
+		// Check if this is a kill request (permanent deletion)
+		kill := r.URL.Query().Get("kill") == "true"
+		var err error
+		if kill {
+			// Permanently kill the session (including zellij backend)
+			err = server.sessionManager.Kill(id)
+		} else {
+			// Just close the connection (session persists)
+			err = server.sessionManager.Close(id)
+		}
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"status": "closed"})
+		status := "closed"
+		if kill {
+			status = "killed"
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": status})
 	case "PATCH":
 		// Rename session
 		var req struct {

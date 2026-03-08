@@ -387,7 +387,7 @@ func (sm *SessionManager) Get(id string) (*Session, bool) {
 	return session, ok
 }
 
-// List returns all sessions sorted by order
+// List returns all sessions sorted by order, then by creation time for stable sorting
 func (sm *SessionManager) List() []*Session {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -396,14 +396,17 @@ func (sm *SessionManager) List() []*Session {
 	for _, s := range sm.sessions {
 		sessions = append(sessions, s)
 	}
-	// Sort by order
+	// Sort by order, then by creation time for stable sorting
 	sort.Slice(sessions, func(i, j int) bool {
-		return sessions[i].Order < sessions[j].Order
+		if sessions[i].Order != sessions[j].Order {
+			return sessions[i].Order < sessions[j].Order
+		}
+		return sessions[i].CreatedAt.Before(sessions[j].CreatedAt)
 	})
 	return sessions
 }
 
-// GetRootSessions returns all root sessions (sessions without a parent) sorted by order
+// GetRootSessions returns all root sessions (sessions without a parent) sorted by order, then by creation time
 func (sm *SessionManager) GetRootSessions() []*Session {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -414,14 +417,17 @@ func (sm *SessionManager) GetRootSessions() []*Session {
 			sessions = append(sessions, s)
 		}
 	}
-	// Sort by order
+	// Sort by order, then by creation time for stable sorting
 	sort.Slice(sessions, func(i, j int) bool {
-		return sessions[i].Order < sessions[j].Order
+		if sessions[i].Order != sessions[j].Order {
+			return sessions[i].Order < sessions[j].Order
+		}
+		return sessions[i].CreatedAt.Before(sessions[j].CreatedAt)
 	})
 	return sessions
 }
 
-// GetChildren returns all child sessions of a given parent sorted by order
+// GetChildren returns all child sessions of a given parent sorted by order, then by creation time
 func (sm *SessionManager) GetChildren(parentID string) []*Session {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -432,9 +438,12 @@ func (sm *SessionManager) GetChildren(parentID string) []*Session {
 			sessions = append(sessions, s)
 		}
 	}
-	// Sort by order
+	// Sort by order, then by creation time for stable sorting
 	sort.Slice(sessions, func(i, j int) bool {
-		return sessions[i].Order < sessions[j].Order
+		if sessions[i].Order != sessions[j].Order {
+			return sessions[i].Order < sessions[j].Order
+		}
+		return sessions[i].CreatedAt.Before(sessions[j].CreatedAt)
 	})
 	return sessions
 }
@@ -472,6 +481,38 @@ func (sm *SessionManager) Close(id string) error {
 	delete(sm.sessions, id)
 	sm.saveMetadata()
 	return session.Slave.Close()
+}
+
+// Kill permanently kills a session including the backend (e.g., zellij session)
+func (sm *SessionManager) Kill(id string) error {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, ok := sm.sessions[id]
+	if !ok {
+		return nil // Session not found
+	}
+
+	// Remove children first (cascade delete)
+	for _, child := range sm.sessions {
+		if child.ParentID == id {
+			delete(sm.sessions, child.ID)
+		}
+	}
+
+	delete(sm.sessions, id)
+	sm.saveMetadata()
+
+	// Try to kill the backend session if supported
+	if session.Slave != nil {
+		if killable, ok := session.Slave.(KillableSlave); ok {
+			return killable.KillSession()
+		}
+		// Fallback to regular close
+		return session.Slave.Close()
+	}
+
+	return nil
 }
 
 // Count returns the number of active sessions

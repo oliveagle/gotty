@@ -14,13 +14,50 @@ html, body {
 }
 
 #sidebar {
-    width: 250px;
+    width: 170px;
     background: #2d2d2d;
     border-right: 1px solid #1a1a1a;
     display: flex;
     flex-direction: column;
-    transition: width 0.2s ease;
+    transition: width 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     position: relative;
+}
+
+/* Auto-hide mode for sidebar (Mac Dock style) */
+#sidebar.auto-hide {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100%;
+    z-index: 100;
+    opacity: 0;
+    transform: translateX(-100%);
+}
+
+#sidebar.auto-hide:hover,
+#sidebar.auto-hide.visible {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Show trigger zone for auto-hide mode */
+#sidebar-trigger {
+    display: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 8px;
+    height: 100%;
+    z-index: 99;
+}
+
+body.sidebar-auto-hide #sidebar-trigger {
+    display: block;
+}
+
+/* Adjust main content for auto-hide mode */
+#main.sidebar-expanded {
+    margin-left: 170px;
 }
 
 #sidebar.collapsed {
@@ -615,6 +652,34 @@ html, body {
     background: rgba(74, 222, 128, 0.1);
 }
 
+/* Auto-hide sidebar button */
+.btn-autohide {
+    background: transparent;
+    border: 1px solid #555;
+    color: #888;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.btn-autohide:hover {
+    color: #4a9eff;
+    border-color: #4a9eff;
+}
+
+.btn-autohide.active {
+    color: #4ade80;
+    border-color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
+}
+
 /* Floating fullscreen button (visible when sidebar collapsed) */
 .btn-fullscreen-float {
     position: fixed;
@@ -645,4 +710,46 @@ html, body {
     color: #4ade80;
     border-color: #4ade80;
     background: rgba(74, 222, 128, 0.15);
+}
+
+/* Context menu */
+.context-menu {
+    position: fixed;
+    background: #2d2d2d;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 4px 0;
+    min-width: 180px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    z-index: 2000;
+    display: none;
+}
+
+.context-menu.visible {
+    display: block;
+}
+
+.context-menu-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    color: #e0e0e0;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.context-menu-item:hover {
+    background: #3a3a3a;
+}
+
+.context-menu-item .menu-icon {
+    margin-right: 8px;
+    font-size: 14px;
+}
+
+.context-menu-divider {
+    height: 1px;
+    background: #444;
+    margin: 4px 0;
 }

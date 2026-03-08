@@ -11,6 +11,12 @@ type Slave interface {
 	Close() error
 }
 
+// KillableSlave is a Slave that can be permanently killed (e.g., zellij session)
+type KillableSlave interface {
+	Slave
+	KillSession() error
+}
+
 type Factory interface {
 	Name() string
 	New(params map[string][]string) (Slave, error)

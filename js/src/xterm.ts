@@ -58,17 +58,18 @@ export class Xterm {
         this.fitAddon.fit();
 
         // Use ResizeObserver to detect container size changes (handles sidebar toggle, etc.)
-        // Debounce to avoid excessive calls during CSS transitions
+        // Debounce to avoid excessive calls during CSS transitions (200ms matches sidebar transition)
         let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
         this.resizeObserver = new ResizeObserver(() => {
             if (resizeTimeout) {
                 clearTimeout(resizeTimeout);
             }
+            // Wait for CSS transition to complete before fitting
             resizeTimeout = setTimeout(() => {
                 this.fitAddon.fit();
                 this.term.scrollToBottom();
                 resizeTimeout = null;
-            }, 100);
+            }, 250);
         });
         this.resizeObserver.observe(elem);
 
