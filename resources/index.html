@@ -17,14 +17,16 @@
             <h3>Sessions</h3>
             <div class="header-host" id="header-host"></div>
           </div>
-          <div class="header-buttons">
-            <button id="fullscreen-btn" class="btn-fullscreen" title="Toggle Fullscreen (F11)">⛶</button>
-            <button id="autohide-btn" class="btn-autohide" title="Toggle Auto-Hide Sidebar">◐</button>
-            <button id="new-folder-btn" class="btn-new" title="New Session/Folder">+</button>
-          </div>
         </div>
         <div id="session-list">
           <div class="session-loading">Loading sessions...</div>
+        </div>
+        <div class="sidebar-toolbar">
+          <button id="nav-back-btn" class="btn-toolbar btn-nav" title="Previous Session (Alt+Left)">◀</button>
+          <button id="nav-forward-btn" class="btn-toolbar btn-nav" title="Next Session (Alt+Right)">▶</button>
+          <button id="new-folder-btn" class="btn-toolbar btn-new" title="New Session/Folder">+</button>
+          <button id="autohide-btn" class="btn-toolbar btn-autohide" title="Toggle Auto-Hide Sidebar">◐</button>
+          <button id="fullscreen-btn" class="btn-toolbar btn-fullscreen" title="Toggle Fullscreen (F11)">⛶</button>
         </div>
         <div class="sidebar-footer">{{ .commit }} · {{ .buildAt }}</div>
         <button class="sidebar-toggle" title="Toggle Sidebar">◀</button>
@@ -44,6 +46,17 @@
         <div class="context-menu-divider"></div>
         <div class="context-menu-item" data-action="rename">
           <span class="menu-icon">✏️</span> Rename
+        </div>
+      </div>
+
+      <!-- Custom confirm dialog (doesn't exit fullscreen) -->
+      <div id="confirm-dialog" class="confirm-dialog">
+        <div class="confirm-dialog-content">
+          <div class="confirm-dialog-message" id="confirm-message"></div>
+          <div class="confirm-dialog-buttons">
+            <button id="confirm-cancel" class="btn-confirm btn-cancel">Cancel</button>
+            <button id="confirm-ok" class="btn-confirm btn-ok">OK</button>
+          </div>
         </div>
       </div>
 
@@ -69,6 +82,9 @@
           this.expandedSessions = new Set();
           this.draggedId = null;
           this.refreshInterval = null;
+          // Visit history for navigation
+          this.visitHistory = [];
+          this.historyIndex = -1;
         }
 
         init() {
@@ -125,7 +141,31 @@
               e.preventDefault();
               document.exitFullscreen();
             }
+            // Alt+Left/Right for navigation
+            if (e.altKey && e.key === 'ArrowLeft') {
+              e.preventDefault();
+              this.navigateBack();
+            }
+            if (e.altKey && e.key === 'ArrowRight') {
+              e.preventDefault();
+              this.navigateForward();
+            }
           });
+
+          // Listen for navigation buttons
+          const navBackBtn = document.getElementById('nav-back-btn');
+          if (navBackBtn) {
+            navBackBtn.addEventListener('click', () => {
+              this.navigateBack();
+            });
+          }
+
+          const navForwardBtn = document.getElementById('nav-forward-btn');
+          if (navForwardBtn) {
+            navForwardBtn.addEventListener('click', () => {
+              this.navigateForward();
+            });
+          }
 
           // Setup context menu
           this.setupContextMenu();
@@ -239,9 +279,9 @@
 
               switch (action) {
                 case 'kill':
-                  if (confirm('Permanently delete this zellij session?')) {
+                  this.showConfirm('Permanently delete this zellij session?', () => {
                     this.killSession(sessionId);
-                  }
+                  });
                   break;
                 case 'close':
                   this.closeSession(sessionId, { stopPropagation: () => {} });
@@ -526,6 +566,43 @@
           }
         }
 
+        showConfirm(message, onConfirm) {
+          const dialog = document.getElementById('confirm-dialog');
+          const messageEl = document.getElementById('confirm-message');
+          const cancelBtn = document.getElementById('confirm-cancel');
+          const okBtn = document.getElementById('confirm-ok');
+
+          if (!dialog || !messageEl || !cancelBtn || !okBtn) return;
+
+          messageEl.textContent = message;
+          dialog.classList.add('visible');
+
+          // Remove old listeners
+          const newCancelBtn = cancelBtn.cloneNode(true);
+          const newOkBtn = okBtn.cloneNode(true);
+          cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+          okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+
+          // Add new listeners
+          newCancelBtn.addEventListener('click', () => {
+            dialog.classList.remove('visible');
+          });
+
+          newOkBtn.addEventListener('click', () => {
+            dialog.classList.remove('visible');
+            if (onConfirm) onConfirm();
+          });
+
+          // Close on escape
+          const escHandler = (e) => {
+            if (e.key === 'Escape') {
+              dialog.classList.remove('visible');
+              document.removeEventListener('keydown', escHandler);
+            }
+          };
+          document.addEventListener('keydown', escHandler);
+        }
+
         async renameSession(id, newTitle) {
           try {
             const response = await fetch('/api/sessions/' + id, {
@@ -787,7 +864,54 @@
           `;
         }
 
-        setActiveSession(id) {
+        setActiveSession(id, skipHistory = false) {
+          const session = this.sessions.find(s => s.id === id);
+          if (!session || session.is_folder) return;
+
+          if (this.activeSessionId !== id) {
+            // Record visit history (only when user actively clicks)
+            if (!skipHistory && this.activeSessionId) {
+              // Remove any forward history
+              this.visitHistory = this.visitHistory.slice(0, this.historyIndex + 1);
+              // Add current to history
+              this.visitHistory.push(this.activeSessionId);
+              this.historyIndex = this.visitHistory.length - 1;
+            }
+
+            this.disconnectTerminal();
+            this.activeSessionId = id;
+            this.connectTerminal(id);
+          }
+
+          document.querySelectorAll('.session-item').forEach(item => {
+            item.classList.remove('active');
+            if (item.dataset.sessionId === id) {
+              item.classList.add('active');
+            }
+          });
+
+          this.updateNavButtons();
+        }
+
+        navigateBack() {
+          if (this.historyIndex >= 0) {
+            const prevId = this.visitHistory[this.historyIndex];
+            this.historyIndex--;
+            // Navigate without adding to history
+            this.navigateToSession(prevId);
+          }
+        }
+
+        navigateForward() {
+          if (this.historyIndex < this.visitHistory.length - 1) {
+            this.historyIndex++;
+            const nextId = this.visitHistory[this.historyIndex];
+            // Navigate without adding to history
+            this.navigateToSession(nextId);
+          }
+        }
+
+        navigateToSession(id) {
           const session = this.sessions.find(s => s.id === id);
           if (!session || session.is_folder) return;
 
@@ -803,6 +927,22 @@
               item.classList.add('active');
             }
           });
+
+          this.updateNavButtons();
+        }
+
+        updateNavButtons() {
+          const backBtn = document.getElementById('nav-back-btn');
+          const forwardBtn = document.getElementById('nav-forward-btn');
+
+          if (backBtn) {
+            backBtn.disabled = this.historyIndex < 0;
+            backBtn.style.opacity = this.historyIndex < 0 ? '0.4' : '1';
+          }
+          if (forwardBtn) {
+            forwardBtn.disabled = this.historyIndex >= this.visitHistory.length - 1;
+            forwardBtn.style.opacity = this.historyIndex >= this.visitHistory.length - 1 ? '0.4' : '1';
+          }
         }
 
         disconnectTerminal() {

@@ -14,7 +14,7 @@ html, body {
 }
 
 #sidebar {
-    width: 170px;
+    width: 210px;
     background: #2d2d2d;
     border-right: 1px solid #1a1a1a;
     display: flex;
@@ -57,7 +57,7 @@ body.sidebar-auto-hide #sidebar-trigger {
 
 /* Adjust main content for auto-hide mode */
 #main.sidebar-expanded {
-    margin-left: 170px;
+    margin-left: 210px;
 }
 
 #sidebar.collapsed {
@@ -117,6 +117,42 @@ body.sidebar-auto-hide #sidebar-trigger {
     font-size: 10px;
     text-align: center;
     font-family: monospace;
+}
+
+.sidebar-toolbar {
+    display: flex;
+    justify-content: space-around;
+    padding: 8px;
+    border-top: 1px solid #1a1a1a;
+    background: #252525;
+}
+
+.btn-toolbar {
+    background: transparent;
+    border: 1px solid #555;
+    color: #888;
+    width: 36px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.btn-toolbar:hover {
+    color: #4a9eff;
+    border-color: #4a9eff;
+    background: rgba(74, 158, 255, 0.1);
+}
+
+.btn-toolbar.active {
+    color: #4ade80;
+    border-color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
 }
 
 .sidebar-header {
@@ -624,62 +660,6 @@ body.sidebar-auto-hide #sidebar-trigger {
     box-shadow: none;
 }
 
-/* Fullscreen button in header */
-.btn-fullscreen {
-    background: transparent;
-    border: 1px solid #555;
-    color: #888;
-    width: 28px;
-    height: 28px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-}
-
-.btn-fullscreen:hover {
-    color: #4a9eff;
-    border-color: #4a9eff;
-}
-
-.btn-fullscreen.active {
-    color: #4ade80;
-    border-color: #4ade80;
-    background: rgba(74, 222, 128, 0.1);
-}
-
-/* Auto-hide sidebar button */
-.btn-autohide {
-    background: transparent;
-    border: 1px solid #555;
-    color: #888;
-    width: 28px;
-    height: 28px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-}
-
-.btn-autohide:hover {
-    color: #4a9eff;
-    border-color: #4a9eff;
-}
-
-.btn-autohide.active {
-    color: #4ade80;
-    border-color: #4ade80;
-    background: rgba(74, 222, 128, 0.1);
-}
-
 /* Floating fullscreen button (visible when sidebar collapsed) */
 .btn-fullscreen-float {
     position: fixed;
@@ -752,4 +732,75 @@ body.sidebar-auto-hide #sidebar-trigger {
     height: 1px;
     background: #444;
     margin: 4px 0;
+}
+
+/* Custom confirm dialog */
+.confirm-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 3000;
+}
+
+.confirm-dialog.visible {
+    display: flex;
+}
+
+.confirm-dialog-content {
+    background: #2d2d2d;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 280px;
+    max-width: 400px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.confirm-dialog-message {
+    color: #e0e0e0;
+    font-size: 14px;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.confirm-dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.btn-confirm {
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-cancel {
+    background: transparent;
+    border: 1px solid #555;
+    color: #888;
+}
+
+.btn-cancel:hover {
+    color: #e0e0e0;
+    border-color: #888;
+}
+
+.btn-ok {
+    background: #ef4444;
+    border: 1px solid #ef4444;
+    color: white;
+}
+
+.btn-ok:hover {
+    background: #dc2626;
+    border-color: #dc2626;
 }
