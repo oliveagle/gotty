@@ -33,9 +33,10 @@ var (
 
 // Server provides a webtty HTTP endpoint.
 type Server struct {
-	factory        Factory
-	options        *Options
-	sessionManager *SessionManager
+	factory          Factory
+	options          *Options
+	sessionManager   *SessionManager
+	workspaceManager *WorkspaceManager
 
 	upgrader      *websocket.Upgrader
 	indexTemplate *template.Template
@@ -81,14 +82,21 @@ func New(factory Factory, options *Options) (*Server, error) {
 	sm.SetFactory(factory)
 	sm.RestoreSessions() // Restore sessions from persistent backends like zellij
 
+	// Initialize workspace manager
+	wm := NewWorkspaceManager()
+
+	// Migrate sessions without workspace to default workspace
+	sm.MigrateToWorkspace(DefaultWorkspaceID)
+
 	if options.EnableSummary {
 		log.Printf("Session summarization enabled with model: %s at %s", options.SummaryModel, options.SummaryEndpoint)
 	}
 
 	return &Server{
-		factory:        factory,
-		options:        options,
-		sessionManager: sm,
+		factory:          factory,
+		options:          options,
+		sessionManager:   sm,
+		workspaceManager: wm,
 
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -297,6 +305,10 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	// Session management API
 	siteMux.HandleFunc(pathPrefix+"api/sessions", server.handleSessions)
 	siteMux.HandleFunc(pathPrefix+"api/sessions/", server.handleSession)
+
+	// Workspace management API
+	siteMux.HandleFunc(pathPrefix+"api/workspaces", server.handleWorkspaces)
+	siteMux.HandleFunc(pathPrefix+"api/workspaces/", server.handleWorkspace)
 
 	siteHandler := http.Handler(siteMux)
 

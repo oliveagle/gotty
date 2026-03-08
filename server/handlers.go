@@ -369,14 +369,21 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		// List all sessions
-		sessions := server.sessionManager.List()
+		// Get workspace filter from query parameter
+		workspaceID := r.URL.Query().Get("workspace_id")
+		if workspaceID == "" {
+			workspaceID = server.workspaceManager.GetActive()
+		}
+
+		// List sessions in the specified workspace
+		sessions := server.sessionManager.ListByWorkspace(workspaceID)
 		type sessionInfo struct {
 			ID              string `json:"id"`
 			Title           string `json:"title"`
 			Subtitle        string `json:"subtitle,omitempty"`
 			WorkDir         string `json:"workdir,omitempty"`
 			ParentID        string `json:"parent_id,omitempty"`
+			WorkspaceID     string `json:"workspace_id,omitempty"`
 			IsFolder        bool   `json:"is_folder"`
 			HasChildren     bool   `json:"has_children"`
 			IsActive        bool   `json:"is_active"`
@@ -392,6 +399,7 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 				Subtitle:      s.Subtitle,
 				WorkDir:       s.WorkDir,
 				ParentID:      s.ParentID,
+				WorkspaceID:   s.WorkspaceID,
 				IsFolder:      s.IsFolder,
 				HasChildren:   server.sessionManager.HasChildren(s.ID),
 				IsActive:      isActive,
@@ -400,7 +408,8 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"sessions": result,
+			"sessions":    result,
+			"workspace_id": workspaceID,
 		})
 	case "POST":
 		// Parse request body
@@ -435,10 +444,14 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 				title = "New Folder"
 			}
 			session := server.sessionManager.CreateFolder(title, req.ParentID)
+			// Set workspace for the folder
+			activeWorkspace := server.workspaceManager.GetActive()
+			server.sessionManager.SetWorkspaceID(session.ID, activeWorkspace)
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"id":        session.ID,
-				"title":     session.Title,
-				"is_folder": true,
+				"id":           session.ID,
+				"title":        session.Title,
+				"is_folder":    true,
+				"workspace_id": activeWorkspace,
 			})
 			return
 		}
@@ -457,11 +470,15 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		} else {
 			session = server.sessionManager.Create(server.factory.Name(), slave)
 		}
+		// Set workspace for the session
+		activeWorkspace := server.workspaceManager.GetActive()
+		server.sessionManager.SetWorkspaceID(session.ID, activeWorkspace)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"id":        session.ID,
-			"title":     session.Title,
-			"parent_id": session.ParentID,
-			"is_folder": false,
+			"id":           session.ID,
+			"title":        session.Title,
+			"parent_id":    session.ParentID,
+			"is_folder":    false,
+			"workspace_id": activeWorkspace,
 		})
 	default:
 		http.Error(w, "Method not allowed", 405)
@@ -530,14 +547,28 @@ func (server *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 			"title": req.Title,
 		})
 	case "PUT":
-		// Move session to folder
+		// Move session to folder or workspace
 		var req struct {
-			FolderID string `json:"folder_id"` // Empty string means move to root
+			FolderID    string `json:"folder_id"`     // Empty string means move to root
+			WorkspaceID string `json:"workspace_id"` // Move to different workspace
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request body", 400)
 			return
 		}
+		if req.WorkspaceID != "" {
+			// Move to workspace
+			if !server.sessionManager.MoveToWorkspace(id, req.WorkspaceID) {
+				http.Error(w, "Failed to move session to workspace", 400)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]string{
+				"id":           id,
+				"workspace_id": req.WorkspaceID,
+			})
+			return
+		}
+		// Move to folder
 		if !server.sessionManager.MoveToFolder(id, req.FolderID) {
 			http.Error(w, "Failed to move session", 400)
 			return
@@ -549,4 +580,166 @@ func (server *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method not allowed", 405)
 	}
+}
+
+// handleWorkspaces handles workspace list and creation
+func (server *Server) handleWorkspaces(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case "GET":
+		// List all workspaces
+		workspaces := server.workspaceManager.List()
+		type workspaceInfo struct {
+			ID         string `json:"id"`
+			Name       string `json:"name"`
+			ColorTheme string `json:"color_theme"`
+			Icon       string `json:"icon"`
+			Order      int    `json:"order"`
+			IsActive   bool   `json:"is_active"`
+			CreatedAt  string `json:"created_at"`
+		}
+		activeID := server.workspaceManager.GetActive()
+		result := make([]workspaceInfo, 0, len(workspaces))
+		for _, ws := range workspaces {
+			result = append(result, workspaceInfo{
+				ID:         ws.ID,
+				Name:       ws.Name,
+				ColorTheme: ws.ColorTheme,
+				Icon:       ws.Icon,
+				Order:      ws.Order,
+				IsActive:   ws.ID == activeID,
+				CreatedAt:  ws.CreatedAt.Format("2006-01-02 15:04:05"),
+			})
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"workspaces": result,
+			"active_id":  activeID,
+		})
+	case "POST":
+		// Create new workspace
+		var req struct {
+			Name       string `json:"name"`
+			ColorTheme string `json:"color_theme"`
+			Icon       string `json:"icon"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", 400)
+			return
+		}
+		if req.Name == "" {
+			http.Error(w, "Name is required", 400)
+			return
+		}
+		workspace := server.workspaceManager.Create(req.Name, req.ColorTheme, req.Icon)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":          workspace.ID,
+			"name":        workspace.Name,
+			"color_theme": workspace.ColorTheme,
+			"icon":        workspace.Icon,
+		})
+	default:
+		http.Error(w, "Method not allowed", 405)
+	}
+}
+
+// handleWorkspace handles individual workspace operations
+func (server *Server) handleWorkspace(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Check if this is an activate request
+	if strings.HasSuffix(r.URL.Path, "/activate") {
+		server.handleWorkspaceActivate(w, r)
+		return
+	}
+
+	// Extract workspace ID from URL path
+	id := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
+
+	switch r.Method {
+	case "GET":
+		// Get workspace info
+		workspace, ok := server.workspaceManager.Get(id)
+		if !ok {
+			http.Error(w, "Workspace not found", 404)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":          workspace.ID,
+			"name":        workspace.Name,
+			"color_theme": workspace.ColorTheme,
+			"icon":        workspace.Icon,
+			"order":       workspace.Order,
+			"created_at":  workspace.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	case "PATCH":
+		// Update workspace
+		var req struct {
+			Name       string `json:"name"`
+			ColorTheme string `json:"color_theme"`
+			Icon       string `json:"icon"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", 400)
+			return
+		}
+		if !server.workspaceManager.Update(id, req.Name, req.ColorTheme, req.Icon) {
+			http.Error(w, "Workspace not found", 404)
+			return
+		}
+		workspace, _ := server.workspaceManager.Get(id)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":          id,
+			"name":        workspace.Name,
+			"color_theme": workspace.ColorTheme,
+			"icon":        workspace.Icon,
+		})
+	case "DELETE":
+		// Delete workspace (sessions will be moved to default)
+		deletedID, ok := server.workspaceManager.Delete(id)
+		if !ok {
+			http.Error(w, "Cannot delete workspace", 400)
+			return
+		}
+		// Move all sessions from deleted workspace to default
+		sessions := server.sessionManager.ListByWorkspace(deletedID)
+		for _, s := range sessions {
+			server.sessionManager.MoveToWorkspace(s.ID, DefaultWorkspaceID)
+		}
+		json.NewEncoder(w).Encode(map[string]string{
+			"id":      deletedID,
+			"status":  "deleted",
+			"message": "Sessions moved to default workspace",
+		})
+	default:
+		http.Error(w, "Method not allowed", 405)
+	}
+}
+
+// handleWorkspaceActivate handles activating a workspace
+func (server *Server) handleWorkspaceActivate(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != "PUT" {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+
+	// Extract workspace ID from URL path
+	pathParts := strings.Split(r.URL.Path, "/")
+	id := pathParts[len(pathParts)-2] // Second to last element is the ID
+
+	if !server.workspaceManager.SetActive(id) {
+		http.Error(w, "Workspace not found", 404)
+		return
+	}
+
+	workspace, _ := server.workspaceManager.Get(id)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":          id,
+		"name":        workspace.Name,
+		"color_theme": workspace.ColorTheme,
+		"icon":        workspace.Icon,
+		"active":      true,
+	})
 }

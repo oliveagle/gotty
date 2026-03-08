@@ -25,7 +25,9 @@ export class Xterm {
             lineHeight: 1.2,
             theme: {
                 background: '#000000',
-            }
+            },
+            // Enable selection features
+            allowProposedApi: true,
         });
 
         this.fitAddon = new FitAddon();
@@ -83,6 +85,7 @@ export class Xterm {
     private setupClipboardOnSelection(): void {
         let lastSelection = "";
 
+        // Auto-copy on mouse selection
         this.term.onSelectionChange(() => {
             const selection = this.term.getSelection();
             if (selection && selection !== lastSelection) {
@@ -90,16 +93,52 @@ export class Xterm {
                 this.copyToClipboard(selection);
             }
         });
+
+        // Also handle Ctrl/Cmd+C keyboard shortcut
+        this.elem.addEventListener('keydown', (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+                const selection = this.term.getSelection();
+                if (selection) {
+                    e.preventDefault();
+                    this.copyToClipboard(selection);
+                }
+            }
+        });
     }
 
     private copyToClipboard(text: string): void {
+        // Try modern Clipboard API first
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(() => {
                 this.showMessage("📋 Copied", 1500);
             }).catch((err) => {
-                console.error("Failed to copy to clipboard:", err);
+                console.error("Clipboard API failed, trying fallback:", err);
+                this.copyToClipboardFallback(text);
             });
+        } else {
+            // Fallback for non-HTTPS
+            this.copyToClipboardFallback(text);
         }
+    }
+
+    private copyToClipboardFallback(text: string): void {
+        // Create a temporary textarea to copy from
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        textarea.setSelectionRange(0, text.length);
+        try {
+            document.execCommand('copy');
+            this.showMessage("📋 Copied", 1500);
+        } catch (err) {
+            console.error("Fallback copy failed:", err);
+            this.showMessage("Copy failed", 1500);
+        }
+        document.body.removeChild(textarea);
     }
 
     private setupCompositionViewFix(): void {

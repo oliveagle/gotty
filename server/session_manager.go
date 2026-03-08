@@ -20,6 +20,7 @@ type Session struct {
 	Subtitle     string // AI-generated short summary
 	WorkDir      string // Working directory
 	ParentID     string // Parent session ID, empty for root sessions
+	WorkspaceID  string // Workspace ID, empty for default workspace
 	IsFolder     bool   // True if this is a folder (container) not a real session
 	Order        int    // Sort order within parent
 	CreatedAt    time.Time
@@ -38,13 +39,14 @@ type Session struct {
 
 // sessionMetadata is used for JSON serialization of session data
 type sessionMetadata struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	ParentID  string `json:"parent_id,omitempty"`
-	IsFolder  bool   `json:"is_folder"`
-	Order     int    `json:"order"`
-	WorkDir   string `json:"workdir,omitempty"`
-	CreatedAt string `json:"created_at"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	ParentID    string `json:"parent_id,omitempty"`
+	WorkspaceID string `json:"workspace_id,omitempty"`
+	IsFolder    bool   `json:"is_folder"`
+	Order       int    `json:"order"`
+	WorkDir     string `json:"workdir,omitempty"`
+	CreatedAt   string `json:"created_at"`
 }
 
 // SessionManager manages terminal sessions
@@ -90,13 +92,14 @@ func (sm *SessionManager) saveMetadata() {
 	metadata := make([]sessionMetadata, 0, len(sm.sessions))
 	for _, s := range sm.sessions {
 		metadata = append(metadata, sessionMetadata{
-			ID:        s.ID,
-			Title:     s.Title,
-			ParentID:  s.ParentID,
-			IsFolder:  s.IsFolder,
-			Order:     s.Order,
-			WorkDir:   s.WorkDir,
-			CreatedAt: s.CreatedAt.Format(time.RFC3339),
+			ID:          s.ID,
+			Title:       s.Title,
+			ParentID:    s.ParentID,
+			WorkspaceID: s.WorkspaceID,
+			IsFolder:    s.IsFolder,
+			Order:       s.Order,
+			WorkDir:     s.WorkDir,
+			CreatedAt:   s.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
@@ -163,6 +166,7 @@ func (sm *SessionManager) restoreFromZellij() {
 					ID:           id,
 					Title:        m.Title,
 					ParentID:     m.ParentID,
+					WorkspaceID:  m.WorkspaceID,
 					IsFolder:     true,
 					Order:        m.Order,
 					CreatedAt:    time.Now(),
@@ -200,6 +204,7 @@ func (sm *SessionManager) restoreFromZellij() {
 				if m, ok := metadata[id]; ok {
 					session.Title = m.Title
 					session.ParentID = m.ParentID
+					session.WorkspaceID = m.WorkspaceID
 					session.Order = m.Order
 					session.WorkDir = m.WorkDir
 					if t, err := time.Parse(time.RFC3339, m.CreatedAt); err == nil {
@@ -663,5 +668,83 @@ func (sm *SessionManager) HasOutputChanged(id string) bool {
 	}
 
 	session.lastOutputHash = newHash
+	return true
+}
+
+// ListByWorkspace returns all sessions in a specific workspace sorted by order
+func (sm *SessionManager) ListByWorkspace(workspaceID string) []*Session {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	sessions := make([]*Session, 0)
+	for _, s := range sm.sessions {
+		// Include sessions with matching workspaceID or empty workspaceID (legacy) for default workspace
+		if s.WorkspaceID == workspaceID || (workspaceID == DefaultWorkspaceID && s.WorkspaceID == "") {
+			sessions = append(sessions, s)
+		}
+	}
+	// Sort by order, then by creation time for stable sorting
+	sort.Slice(sessions, func(i, j int) bool {
+		if sessions[i].Order != sessions[j].Order {
+			return sessions[i].Order < sessions[j].Order
+		}
+		return sessions[i].CreatedAt.Before(sessions[j].CreatedAt)
+	})
+	return sessions
+}
+
+// MoveToWorkspace moves a session to a different workspace
+func (sm *SessionManager) MoveToWorkspace(sessionID string, workspaceID string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, ok := sm.sessions[sessionID]
+	if !ok {
+		return false
+	}
+
+	// Validate workspaceID (empty string means default workspace)
+	if workspaceID == "" {
+		workspaceID = DefaultWorkspaceID
+	}
+
+	session.WorkspaceID = workspaceID
+	sm.saveMetadata()
+	return true
+}
+
+// MigrateToWorkspace migrates all sessions without workspace to the specified workspace
+func (sm *SessionManager) MigrateToWorkspace(workspaceID string) int {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	count := 0
+	for _, s := range sm.sessions {
+		if s.WorkspaceID == "" {
+			s.WorkspaceID = workspaceID
+			count++
+		}
+	}
+	if count > 0 {
+		sm.saveMetadata()
+	}
+	return count
+}
+
+// SetWorkspaceID sets the workspace ID for a new session
+func (sm *SessionManager) SetWorkspaceID(sessionID string, workspaceID string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, ok := sm.sessions[sessionID]
+	if !ok {
+		return false
+	}
+
+	if workspaceID == "" {
+		workspaceID = DefaultWorkspaceID
+	}
+	session.WorkspaceID = workspaceID
+	sm.saveMetadata()
 	return true
 }

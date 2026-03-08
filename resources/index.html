@@ -13,9 +13,13 @@
       <div id="sidebar-trigger"></div>
       <div id="sidebar">
         <div class="sidebar-header">
-          <div class="header-title">
-            <h3>Sessions</h3>
-            <div class="header-host" id="header-host"></div>
+          <div class="workspace-selector" id="workspace-selector">
+            <span class="workspace-icon" id="workspace-icon">📁</span>
+            <span class="workspace-name" id="workspace-name">Default</span>
+            <span class="workspace-arrow">▼</span>
+            <div class="workspace-dropdown" id="workspace-dropdown">
+              <!-- Workspace items will be populated by JavaScript -->
+            </div>
           </div>
         </div>
         <div id="session-list">
@@ -47,6 +51,12 @@
         <div class="context-menu-item" data-action="rename">
           <span class="menu-icon">✏️</span> Rename
         </div>
+        <div class="context-menu-item context-submenu" data-action="move-workspace">
+          <span class="menu-icon">📁</span> Move to Workspace
+          <div class="context-submenu-content" id="workspace-submenu">
+            <!-- Workspace items will be populated by JavaScript -->
+          </div>
+        </div>
       </div>
 
       <!-- Custom confirm dialog (doesn't exit fullscreen) -->
@@ -56,6 +66,37 @@
           <div class="confirm-dialog-buttons">
             <button id="confirm-cancel" class="btn-confirm btn-cancel">Cancel</button>
             <button id="confirm-ok" class="btn-confirm btn-ok">OK</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Workspace management modal -->
+      <div id="workspace-modal" class="workspace-modal">
+        <div class="workspace-modal-content">
+          <div class="workspace-modal-header">
+            <div class="workspace-modal-title" id="workspace-modal-title">New Workspace</div>
+            <button class="workspace-modal-close" onclick="sessionManager.hideWorkspaceModal()">×</button>
+          </div>
+          <div class="workspace-form-group">
+            <label class="workspace-form-label">Name</label>
+            <input type="text" class="workspace-form-input" id="workspace-name-input" placeholder="Workspace name">
+          </div>
+          <div class="workspace-form-group">
+            <label class="workspace-form-label">Color</label>
+            <div class="workspace-color-picker" id="workspace-color-picker">
+              <div class="workspace-color-option" data-color="blue" style="background: #4a9eff;"></div>
+              <div class="workspace-color-option" data-color="green" style="background: #4ade80;"></div>
+              <div class="workspace-color-option" data-color="purple" style="background: #a855f7;"></div>
+              <div class="workspace-color-option" data-color="orange" style="background: #f59e0b;"></div>
+              <div class="workspace-color-option" data-color="red" style="background: #ef4444;"></div>
+              <div class="workspace-color-option" data-color="cyan" style="background: #06b6d4;"></div>
+              <div class="workspace-color-option" data-color="pink" style="background: #ec4899;"></div>
+              <div class="workspace-color-option" data-color="gray" style="background: #6b7280;"></div>
+            </div>
+          </div>
+          <div class="workspace-form-group" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+            <button class="btn-confirm btn-cancel" onclick="sessionManager.hideWorkspaceModal()">Cancel</button>
+            <button class="btn-confirm btn-ok" id="workspace-save-btn" onclick="sessionManager.saveWorkspace()">Save</button>
           </div>
         </div>
       </div>
@@ -85,11 +126,19 @@
           // Visit history for navigation
           this.visitHistory = [];
           this.historyIndex = -1;
+          // Workspace state
+          this.workspaces = [];
+          this.activeWorkspaceId = null;
+          this.editingWorkspaceId = null;
+          this.selectedColor = 'blue';
         }
 
         init() {
-          // Display host info
-          this.initHostDisplay();
+          // Initialize workspace selector
+          this.initWorkspaceSelector();
+
+          // Fetch workspaces first, then sessions
+          this.fetchWorkspaces();
 
           // Listen for click on new session/folder button
           const newBtn = document.getElementById('new-folder-btn');
@@ -202,9 +251,259 @@
           }, 5000);
         }
 
+        // ==================== Workspace Methods ====================
+
+        initWorkspaceSelector() {
+          const selector = document.getElementById('workspace-selector');
+          const dropdown = document.getElementById('workspace-dropdown');
+
+          if (!selector || !dropdown) return;
+
+          // Toggle dropdown on click
+          selector.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selector.classList.toggle('open');
+            dropdown.classList.toggle('visible');
+          });
+
+          // Close dropdown on click outside
+          document.addEventListener('click', () => {
+            selector.classList.remove('open');
+            dropdown.classList.remove('visible');
+          });
+
+          // Color picker
+          document.querySelectorAll('.workspace-color-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+              e.stopPropagation();
+              document.querySelectorAll('.workspace-color-option').forEach(o => o.classList.remove('selected'));
+              option.classList.add('selected');
+              this.selectedColor = option.dataset.color;
+            });
+          });
+        }
+
+        async fetchWorkspaces() {
+          try {
+            const response = await fetch('/api/workspaces');
+            const data = await response.json();
+            this.workspaces = data.workspaces || [];
+            this.activeWorkspaceId = data.active_id;
+
+            this.renderWorkspaceDropdown();
+            this.updateWorkspaceTheme();
+
+            // Now fetch sessions for active workspace
+            this.fetchSessions();
+          } catch (error) {
+            console.error('Failed to fetch workspaces:', error);
+            // Fallback: still try to fetch sessions
+            this.fetchSessions();
+          }
+        }
+
+        renderWorkspaceDropdown() {
+          const dropdown = document.getElementById('workspace-dropdown');
+          const iconEl = document.getElementById('workspace-icon');
+          const nameEl = document.getElementById('workspace-name');
+
+          if (!dropdown) return;
+
+          let html = '';
+          this.workspaces.forEach(ws => {
+            const isActive = ws.id === this.activeWorkspaceId;
+            html += `
+              <div class="workspace-dropdown-item ${isActive ? 'active' : ''}" data-workspace-id="${ws.id}" onclick="sessionManager.switchWorkspace('${ws.id}', event)">
+                <span class="ws-icon">${ws.icon || '📁'}</span>
+                <span class="ws-name">${ws.name}</span>
+                ${isActive ? '<span class="ws-check">✓</span>' : ''}
+              </div>
+            `;
+          });
+
+          html += '<div class="workspace-dropdown-divider"></div>';
+          html += `
+            <div class="workspace-dropdown-item create-workspace" onclick="sessionManager.showWorkspaceModal(null, event)">
+              <span class="ws-icon">➕</span>
+              <span class="ws-name">New Workspace...</span>
+            </div>
+          `;
+
+          dropdown.innerHTML = html;
+
+          // Update header
+          const activeWs = this.workspaces.find(w => w.id === this.activeWorkspaceId);
+          if (activeWs) {
+            if (iconEl) iconEl.textContent = activeWs.icon || '📁';
+            if (nameEl) nameEl.textContent = activeWs.name;
+          }
+        }
+
+        updateWorkspaceTheme() {
+          const activeWs = this.workspaces.find(w => w.id === this.activeWorkspaceId);
+          if (activeWs) {
+            document.documentElement.setAttribute('data-workspace-theme', activeWs.color_theme || 'blue');
+          } else {
+            document.documentElement.setAttribute('data-workspace-theme', 'blue');
+          }
+        }
+
+        async switchWorkspace(id, event) {
+          if (event) event.stopPropagation();
+
+          if (id === this.activeWorkspaceId) {
+            // Just close dropdown
+            document.getElementById('workspace-selector')?.classList.remove('open');
+            document.getElementById('workspace-dropdown')?.classList.remove('visible');
+            return;
+          }
+
+          try {
+            const response = await fetch('/api/workspaces/' + id + '/activate', {
+              method: 'PUT'
+            });
+            if (response.ok) {
+              this.activeWorkspaceId = id;
+              this.renderWorkspaceDropdown();
+              this.updateWorkspaceTheme();
+              this.fetchSessions();
+
+              // Clear active session when switching workspace
+              this.disconnectTerminal();
+              this.activeSessionId = null;
+            }
+          } catch (error) {
+            console.error('Failed to switch workspace:', error);
+          }
+
+          // Close dropdown
+          document.getElementById('workspace-selector')?.classList.remove('open');
+          document.getElementById('workspace-dropdown')?.classList.remove('visible');
+        }
+
+        showWorkspaceModal(workspaceId, event) {
+          if (event) event.stopPropagation();
+
+          const modal = document.getElementById('workspace-modal');
+          const titleEl = document.getElementById('workspace-modal-title');
+          const nameInput = document.getElementById('workspace-name-input');
+
+          if (!modal || !titleEl || !nameInput) return;
+
+          this.editingWorkspaceId = workspaceId;
+
+          if (workspaceId) {
+            // Edit existing workspace
+            const ws = this.workspaces.find(w => w.id === workspaceId);
+            titleEl.textContent = 'Edit Workspace';
+            nameInput.value = ws?.name || '';
+            this.selectedColor = ws?.color_theme || 'blue';
+          } else {
+            // Create new workspace
+            titleEl.textContent = 'New Workspace';
+            nameInput.value = '';
+            this.selectedColor = 'blue';
+          }
+
+          // Update color picker selection
+          document.querySelectorAll('.workspace-color-option').forEach(o => {
+            o.classList.toggle('selected', o.dataset.color === this.selectedColor);
+          });
+
+          modal.classList.add('visible');
+          nameInput.focus();
+        }
+
+        hideWorkspaceModal() {
+          const modal = document.getElementById('workspace-modal');
+          if (modal) {
+            modal.classList.remove('visible');
+          }
+          this.editingWorkspaceId = null;
+        }
+
+        async saveWorkspace() {
+          const nameInput = document.getElementById('workspace-name-input');
+          const name = nameInput?.value?.trim();
+
+          if (!name) {
+            alert('Please enter a workspace name');
+            return;
+          }
+
+          try {
+            if (this.editingWorkspaceId) {
+              // Update existing
+              await fetch('/api/workspaces/' + this.editingWorkspaceId, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  name: name,
+                  color_theme: this.selectedColor
+                })
+              });
+            } else {
+              // Create new
+              await fetch('/api/workspaces', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  name: name,
+                  color_theme: this.selectedColor
+                })
+              });
+            }
+
+            this.hideWorkspaceModal();
+            await this.fetchWorkspaces();
+          } catch (error) {
+            console.error('Failed to save workspace:', error);
+          }
+        }
+
+        async deleteWorkspace(workspaceId) {
+          const ws = this.workspaces.find(w => w.id === workspaceId);
+          if (!ws) return;
+
+          // Cannot delete default workspace
+          if (workspaceId === 'default') {
+            alert('Cannot delete the default workspace');
+            return;
+          }
+
+          this.showConfirm(`Delete workspace "${ws.name}"? Sessions will be moved to Default.`, async () => {
+            try {
+              await fetch('/api/workspaces/' + workspaceId, {
+                method: 'DELETE'
+              });
+              await this.fetchWorkspaces();
+            } catch (error) {
+              console.error('Failed to delete workspace:', error);
+            }
+          });
+        }
+
+        async moveSessionToWorkspace(sessionId, workspaceId) {
+          try {
+            await fetch('/api/sessions/' + sessionId, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ workspace_id: workspaceId })
+            });
+            await this.fetchSessions();
+          } catch (error) {
+            console.error('Failed to move session to workspace:', error);
+          }
+        }
+
+        // ==================== End Workspace Methods ====================
+
         async refreshActivity() {
           try {
-            const response = await fetch('/api/sessions');
+            const url = this.activeWorkspaceId
+              ? '/api/sessions?workspace_id=' + this.activeWorkspaceId
+              : '/api/sessions';
+            const response = await fetch(url);
             const data = await response.json();
             const newSessions = data.sessions || [];
 
@@ -410,7 +709,10 @@
 
         async fetchSessions() {
           try {
-            const response = await fetch('/api/sessions');
+            const url = this.activeWorkspaceId
+              ? '/api/sessions?workspace_id=' + this.activeWorkspaceId
+              : '/api/sessions';
+            const response = await fetch(url);
             const data = await response.json();
             this.sessions = data.sessions || [];
             this.renderSessionList();
@@ -557,6 +859,40 @@
           if (renameItem) {
             renameItem.style.display = session.is_folder ? 'none' : 'flex';
           }
+
+          // Populate workspace submenu
+          const submenu = document.getElementById('workspace-submenu');
+          if (submenu) {
+            let html = '';
+            this.workspaces.forEach(ws => {
+              if (ws.id !== session.workspace_id) {
+                html += `
+                  <div class="context-submenu-item" onclick="sessionManager.moveSessionToWorkspace('${id}', '${ws.id}')">
+                    <span class="ws-color-dot" style="background: ${this.getColorHex(ws.color_theme)}"></span>
+                    ${ws.icon} ${ws.name}
+                  </div>
+                `;
+              }
+            });
+            if (html === '') {
+              html = '<div class="context-submenu-item" style="color: #888;">No other workspaces</div>';
+            }
+            submenu.innerHTML = html;
+          }
+        }
+
+        getColorHex(theme) {
+          const colors = {
+            blue: '#4a9eff',
+            green: '#4ade80',
+            purple: '#a855f7',
+            orange: '#f59e0b',
+            red: '#ef4444',
+            cyan: '#06b6d4',
+            pink: '#ec4899',
+            gray: '#6b7280'
+          };
+          return colors[theme] || colors.blue;
         }
 
         hideContextMenu() {

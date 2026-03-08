@@ -15,6 +15,7 @@ export declare class Xterm {
     constructor(elem: HTMLElement);
     private setupClipboardOnSelection;
     private copyToClipboard;
+    private copyToClipboardFallback;
     private setupCompositionViewFix;
     info(): {
         columns: number;
