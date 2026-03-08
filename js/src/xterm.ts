@@ -46,8 +46,6 @@ export class Xterm {
         this.term.loadAddon(this.fitAddon);
 
         // Try WebGL renderer for better performance
-        // Note: WebGL can interfere with selection, so we disable it for now
-        /*
         try {
             this.webglAddon = new WebglAddon();
             this.webglAddon.onContextLoss(() => {
@@ -59,17 +57,18 @@ export class Xterm {
             console.log("WebGL not available, using canvas:", e);
             this.webglAddon = null;
         }
-        */
-        this.webglAddon = null;
 
         // Fit after everything is loaded
         this.fitAddon.fit();
 
         // Use ResizeObserver to detect container size changes (handles sidebar toggle, etc.)
-        // Debounce aggressively - only fit once after resize has completely stopped
+        // CRITICAL: Only fit ONCE after transition completes, no intermediate calculations
         let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+        let isFitting = false;
+        let pendingFit = false;
         let lastWidth = 0;
         let lastHeight = 0;
+
         this.resizeObserver = new ResizeObserver((entries) => {
             const entry = entries[0];
             if (!entry) return;
@@ -83,14 +82,53 @@ export class Xterm {
             lastWidth = newWidth;
             lastHeight = newHeight;
 
+            // Skip if we're currently fitting (prevents recursive fit calls)
+            if (isFitting) {
+                pendingFit = true;
+                return;
+            }
+
+            // Clear any pending timeout
             if (resizeTimeout) {
                 clearTimeout(resizeTimeout);
             }
-            // Wait for CSS transition to complete (200ms) + small buffer
+
+            // Wait for CSS transition to complete (200ms) + buffer
+            // During transition, this timeout keeps getting reset
+            // Only when transition STOPS does the timeout finally fire
             resizeTimeout = setTimeout(() => {
-                this.fitAddon.fit();
-                this.term.scrollToBottom();
-                resizeTimeout = null;
+                // Double-check we're not already fitting
+                if (isFitting) {
+                    pendingFit = true;
+                    resizeTimeout = null;
+                    return;
+                }
+
+                isFitting = true;
+
+                try {
+                    this.fitAddon.fit();
+                    this.term.scrollToBottom();
+                } finally {
+                    isFitting = false;
+                    resizeTimeout = null;
+
+                    // If a fit was requested during our fit, do one more
+                    if (pendingFit) {
+                        pendingFit = false;
+                        // Small delay to let things settle
+                        setTimeout(() => {
+                            if (!isFitting) {
+                                isFitting = true;
+                                try {
+                                    this.fitAddon.fit();
+                                } finally {
+                                    isFitting = false;
+                                }
+                            }
+                        }, 50);
+                    }
+                }
             }, 250);
         });
         this.resizeObserver.observe(elem);
