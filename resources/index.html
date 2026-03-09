@@ -8,53 +8,53 @@
     <link rel="stylesheet" href="./css/xterm_customize.css" />
   </head>
   <body>
-    <div id="app">
-      <!-- Password Manager Authentication Overlay -->
-      <div id="pwmanager-auth" class="pwmanager-auth">
-        <div class="pwmanager-dialog">
-          <div class="pwmanager-icon">🔐</div>
-          <h2 class="pwmanager-title">Authentication Required</h2>
-          <p class="pwmanager-subtitle">Use your password manager to fill credentials</p>
+    <!-- Password Manager Authentication Overlay (must be outside #app for full coverage) -->
+    <div id="pwmanager-auth" class="pwmanager-auth">
+      <div class="pwmanager-dialog">
+        <div class="pwmanager-icon">🔐</div>
+        <h2 class="pwmanager-title">Authentication Required</h2>
+        <p class="pwmanager-subtitle">Use your password manager to fill credentials</p>
 
-          <!-- Standard login form for password manager detection -->
-          <form id="pwmanager-form" class="pwmanager-form" autocomplete="on">
-            <input type="text"
-                   name="username"
-                   id="pwmanager-username"
-                   class="pwmanager-input"
-                   autocomplete="username"
-                   placeholder="Username"
-                   value="gotty">
+        <!-- Standard login form for password manager detection -->
+        <form id="pwmanager-form" class="pwmanager-form" autocomplete="on">
+          <input type="text"
+                 name="username"
+                 id="pwmanager-username"
+                 class="pwmanager-input"
+                 autocomplete="username"
+                 placeholder="Username"
+                 value="gotty">
 
-            <input type="password"
-                   name="password"
-                   id="pwmanager-password"
-                   class="pwmanager-input pwmanager-password"
-                   autocomplete="current-password"
-                   placeholder="Password"
-                   autofocus>
+          <input type="password"
+                 name="password"
+                 id="pwmanager-password"
+                 class="pwmanager-input pwmanager-password"
+                 autocomplete="current-password"
+                 placeholder="Password"
+                 autofocus>
 
-            <button type="submit" class="pwmanager-btn" id="pwmanager-submit">
-              Connect
-            </button>
-          </form>
+          <button type="submit" class="pwmanager-btn" id="pwmanager-submit">
+            Connect
+          </button>
+        </form>
 
-          <div class="pwmanager-hints">
-            <details>
-              <summary>💡 How to use with password managers</summary>
-              <div class="pwmanager-hint-content">
-                <p><strong>KeePassXC:</strong> Click password field → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></p>
-                <p><strong>Bitwarden:</strong> Click password field → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></p>
-                <p><strong>1Password:</strong> Click password field → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd></p>
-                <p><strong>LastPass:</strong> Click the LastPass icon in the field</p>
-              </div>
-            </details>
-          </div>
-
-          <div class="pwmanager-error" id="pwmanager-error"></div>
+        <div class="pwmanager-hints">
+          <details>
+            <summary>💡 How to use with password managers</summary>
+            <div class="pwmanager-hint-content">
+              <p><strong>KeePassXC:</strong> Click password field → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></p>
+              <p><strong>Bitwarden:</strong> Click password field → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></p>
+              <p><strong>1Password:</strong> Click password field → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd></p>
+              <p><strong>LastPass:</strong> Click the LastPass icon in the field</p>
+            </div>
+          </details>
         </div>
-      </div>
 
+        <div class="pwmanager-error" id="pwmanager-error"></div>
+      </div>
+    </div>
+
+    <div id="app">
       <!-- Trigger zone for auto-hide sidebar -->
       <div id="sidebar-trigger"></div>
       <div id="sidebar">
