@@ -1,0 +1,67 @@
+{
+	// GoTTY Configuration File (JSONC format)
+	// This file supports comments with // and /* */
+	// Copy this file to ~/.config/gotty/config.jsonc or specify with --config
+
+	// Network settings
+	"address": "127.0.0.1",
+	"port": "13782",
+
+	// Authentication
+	// Enable WebAuthn/Passkey authentication for secure access
+	"enable_auth": true,
+
+	// WebAuthn settings
+	"webauthn_display_name": "GoTTY",
+	"webauthn_data_dir": "~/.config/gotty/webauthn",
+	// Session TTL in hours (168 = 7 days)
+	"webauthn_session_ttl": 168,
+	// Token required for new passkey registration after first credential
+	// "webauthn_register_token": "your-secret-token-here",
+
+	// Security settings
+	// Add random string to URL for additional security
+	"enable_random_url": false,
+	"random_url_length": 16,
+
+	// TLS/SSL settings (for HTTPS)
+	"enable_tls": false,
+	"tls_crt_file": "~/.gotty.crt",
+	"tls_key_file": "~/.gotty.key",
+
+	// Terminal settings
+	"term": "xterm",
+	"permit_write": true,
+	"permit_arguments": false,
+
+	// Title format (Go template)
+	"title_format": "{{ .command }}@{{ .hostname }}",
+
+	// Host display name (shown in sidebar and browser tab)
+	// Leave empty to use URL host
+	"host_name": "",
+
+	// Connection settings
+	"max_connection": 0,  // 0 = unlimited
+	"timeout": 0,         // 0 = no timeout
+	"enable_reconnect": false,
+	"reconnect_time": 10,
+
+	// IRC chatroom settings
+	"enable_irc": true,
+	"irc_default_channel": "#general",
+	"irc_network_name": "GoTTY Network",
+
+	// Session summarization (requires LLM)
+	"enable_summary": false,
+	"summary_interval": 30,
+	"summary_model": "Qwen3.5-4B-UD-Q4_K_XL",
+	"summary_endpoint": "http://localhost:43669"
+
+	// Terminal preferences (hterm only)
+	// "preferences": {
+	// 	"font_family": "monospace",
+	// 	"font_size": 14,
+	// 	"cursor_blink": true
+	// }
+}

@@ -44,8 +44,8 @@ func main() {
 		cliFlags,
 		&cli.StringFlag{
 			Name:    "config",
-			Value:   "~/.gotty",
-			Usage:   "Config file path",
+			Value:   "~/.config/gotty/config.jsonc",
+			Usage:   "Config file path (.jsonc, .json, or HCL format)",
 			EnvVars: []string{"GOTTY_CONFIG"},
 		},
 		&cli.StringFlag{
@@ -63,8 +63,23 @@ func main() {
 		}
 
 		configFile := c.String("config")
-		_, err := os.Stat(homedir.Expand(configFile))
-		if configFile != "~/.gotty" || !os.IsNotExist(err) {
+		// Check if config file exists, try alternative paths if default doesn't exist
+		configPaths := []string{
+			configFile,
+			"~/.config/gotty/config.jsonc",
+			"~/.config/gotty/config.json",
+			"~/.gotty", // Legacy HCL format
+		}
+
+		for _, path := range configPaths {
+			expandedPath := homedir.Expand(path)
+			if _, err := os.Stat(expandedPath); err == nil {
+				configFile = path
+				break
+			}
+		}
+
+		if _, err := os.Stat(homedir.Expand(configFile)); err == nil {
 			if err := utils.ApplyConfigFile(configFile, appOptions, backendOptions); err != nil {
 				exit(err, 2)
 			}

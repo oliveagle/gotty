@@ -1,13 +1,15 @@
 package utils
 
 import (
+	"encoding/json"
 	"log"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 
-	"github.com/urfave/cli/v2"
 	"github.com/fatih/structs"
+	"github.com/urfave/cli/v2"
 	"github.com/yudai/hcl"
 
 	"github.com/oliveagle/gotty/pkg/homedir"
@@ -122,9 +124,30 @@ func ApplyConfigFile(filePath string, options ...interface{}) error {
 		return err
 	}
 
-	for _, object := range options {
-		if err := hcl.Decode(object, string(fileString)); err != nil {
-			return err
+	// Check file extension to determine format
+	ext := strings.ToLower(filepath.Ext(filePath))
+	switch ext {
+	case ".jsonc":
+		// JSONC: strip comments and parse as JSON
+		cleanJSON := StripJSONCComments(fileString)
+		for _, object := range options {
+			if err := json.Unmarshal(cleanJSON, object); err != nil {
+				return err
+			}
+		}
+	case ".json":
+		// Standard JSON
+		for _, object := range options {
+			if err := json.Unmarshal(fileString, object); err != nil {
+				return err
+			}
+		}
+	default:
+		// HCL format (default for backward compatibility)
+		for _, object := range options {
+			if err := hcl.Decode(object, string(fileString)); err != nil {
+				return err
+			}
 		}
 	}
 
