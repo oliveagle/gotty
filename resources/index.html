@@ -9,6 +9,52 @@
   </head>
   <body>
     <div id="app">
+      <!-- Password Manager Authentication Overlay -->
+      <div id="pwmanager-auth" class="pwmanager-auth">
+        <div class="pwmanager-dialog">
+          <div class="pwmanager-icon">🔐</div>
+          <h2 class="pwmanager-title">Authentication Required</h2>
+          <p class="pwmanager-subtitle">Use your password manager to fill credentials</p>
+
+          <!-- Standard login form for password manager detection -->
+          <form id="pwmanager-form" class="pwmanager-form" autocomplete="on">
+            <input type="text"
+                   name="username"
+                   id="pwmanager-username"
+                   class="pwmanager-input"
+                   autocomplete="username"
+                   placeholder="Username"
+                   value="gotty">
+
+            <input type="password"
+                   name="password"
+                   id="pwmanager-password"
+                   class="pwmanager-input pwmanager-password"
+                   autocomplete="current-password"
+                   placeholder="Password"
+                   autofocus>
+
+            <button type="submit" class="pwmanager-btn" id="pwmanager-submit">
+              Connect
+            </button>
+          </form>
+
+          <div class="pwmanager-hints">
+            <details>
+              <summary>💡 How to use with password managers</summary>
+              <div class="pwmanager-hint-content">
+                <p><strong>KeePassXC:</strong> Click password field → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></p>
+                <p><strong>Bitwarden:</strong> Click password field → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></p>
+                <p><strong>1Password:</strong> Click password field → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd></p>
+                <p><strong>LastPass:</strong> Click the LastPass icon in the field</p>
+              </div>
+            </details>
+          </div>
+
+          <div class="pwmanager-error" id="pwmanager-error"></div>
+        </div>
+      </div>
+
       <!-- Trigger zone for auto-hide sidebar -->
       <div id="sidebar-trigger"></div>
       <div id="sidebar">
@@ -159,6 +205,20 @@
               <div class="settings-info" style="margin-top: 8px; font-size: 11px; color: #666;">
                 Background changes based on time of day and weather conditions
               </div>
+            </div>
+            <div class="settings-item">
+              <label class="settings-label">Banner Position</label>
+              <div style="display: flex; gap: 12px; margin-top: 6px;">
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="radio" name="banner-position" value="top" id="banner-position-top" style="cursor: pointer;">
+                  <span style="font-size: 12px; color: #ccc;">Top</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="radio" name="banner-position" value="bottom" id="banner-position-bottom" style="cursor: pointer;">
+                  <span style="font-size: 12px; color: #ccc;">Bottom</span>
+                </label>
+              </div>
+              <div class="settings-hint">Toggle banner display position</div>
             </div>
           </div>
           <div class="settings-section">
@@ -2840,9 +2900,31 @@
       // Initialize session manager after all scripts loaded
       let sessionManager;
       window.addEventListener('load', function() {
-        sessionManager = new SessionManager();
-        sessionManager.init();
-        window.sessionManager = sessionManager;
+        // Check if password manager auth is required
+        const authType = (typeof gotty_auth_type !== 'undefined') ? gotty_auth_type : 'none';
+
+        if (authType === 'bitwarden' || authType === 'pwmanager') {
+          // Password manager auth required - wait for authentication
+          // The main.ts will handle the auth UI and set gotty_auth_token
+          const checkAuthAndInit = () => {
+            if (typeof gotty_auth_token !== 'undefined' && gotty_auth_token) {
+              // Auth completed, initialize session manager
+              sessionManager = new SessionManager();
+              sessionManager.init();
+              window.sessionManager = sessionManager;
+            } else {
+              // Wait for auth to complete
+              setTimeout(checkAuthAndInit, 100);
+            }
+          };
+          // Start checking after a short delay to allow auth UI to appear
+          setTimeout(checkAuthAndInit, 100);
+        } else {
+          // No auth required, initialize immediately
+          sessionManager = new SessionManager();
+          sessionManager.init();
+          window.sessionManager = sessionManager;
+        }
       });
     </script>
   </body>

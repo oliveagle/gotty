@@ -2,6 +2,7 @@ import { Hterm } from "./hterm";
 import { Xterm } from "./xterm";
 import { Terminal, WebTTY, protocols } from "./webtty";
 import { ConnectionFactory } from "./websocket";
+import { PWManagerAuth, isPWManagerAuthRequired, initPWManagerAuth } from "./pwmanager-auth";
 
 // Export classes to global scope for use in inline scripts
 (window as any).Hterm = Hterm;
@@ -9,6 +10,8 @@ import { ConnectionFactory } from "./websocket";
 (window as any).WebTTY = WebTTY;
 (window as any).ConnectionFactory = ConnectionFactory;
 (window as any).protocols = protocols;
+(window as any).PWManagerAuth = PWManagerAuth;
+(window as any).isPWManagerAuthRequired = isPWManagerAuthRequired;
 
 // Global variables from server
 declare var gotty_auth_token: string;
@@ -119,21 +122,56 @@ const sessionMode = sessionListElem !== null;
 if (elem !== null) {
     if (sessionMode) {
         // Session management mode - SessionManager in index.html handles everything
+        // But we still need to handle password manager auth if required
+        const authType = (typeof gotty_auth_type !== "undefined") ? gotty_auth_type : "none";
+
+        if (authType === "bitwarden" || authType === "pwmanager") {
+            // Initialize password manager auth for session mode
+            initPWManagerAuth((password: string) => {
+                // Store the password for session manager to use
+                (window as any).gotty_auth_token = password;
+                console.log("Password manager authentication completed");
+            });
+        } else {
+            // Hide auth UI if not needed
+            const authContainer = document.getElementById("pwmanager-auth");
+            if (authContainer) {
+                authContainer.style.display = "none";
+            }
+        }
         console.log("Session management mode enabled");
     } else {
         // Legacy mode - auto-start terminal
         const authType = (typeof gotty_auth_type !== "undefined") ? gotty_auth_type : "none";
         const authToken = (typeof gotty_auth_token !== "undefined") ? gotty_auth_token : "";
 
-        if (authType === "basic" && !authToken) {
+        if (authType === "bitwarden" || authType === "pwmanager") {
+            // Password manager authentication
+            initPWManagerAuth((password: string) => {
+                startTerminal(password);
+            });
+        } else if (authType === "basic" && !authToken) {
             const authUI = createBasicAuthUI((token) => {
                 const ui = document.getElementById("basic-auth");
                 if (ui) ui.remove();
                 startTerminal(token);
             });
             document.body.appendChild(authUI);
+
+            // Hide password manager auth UI
+            const pwAuthContainer = document.getElementById("pwmanager-auth");
+            if (pwAuthContainer) {
+                pwAuthContainer.style.display = "none";
+            }
         } else {
+            // No auth or token already provided
             startTerminal(authToken);
+
+            // Hide password manager auth UI
+            const pwAuthContainer = document.getElementById("pwmanager-auth");
+            if (pwAuthContainer) {
+                pwAuthContainer.style.display = "none";
+            }
         }
     }
 }
