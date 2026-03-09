@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -80,13 +79,30 @@ func (sc *SecurityChecker) checkAuthentication() {
 // checkTLS verifies TLS configuration
 func (sc *SecurityChecker) checkTLS() {
 	if !sc.options.EnableTLS {
+		// Check if binding to localhost only (development scenario)
+		isLocalhost := sc.options.Address == "127.0.0.1" ||
+			sc.options.Address == "localhost" ||
+			sc.options.Address == "::1" ||
+			sc.options.Address == ""
+
 		if sc.options.EnableAuth {
-			sc.results = append(sc.results, SecurityCheckResult{
-				Name:     "TLS/Encryption",
-				Status:   "FAIL",
-				Message:  "TLS is disabled with authentication enabled. Credentials transmitted in plaintext!",
-				Critical: true,
-			})
+			if isLocalhost {
+				// Localhost development: downgrade to WARN
+				sc.results = append(sc.results, SecurityCheckResult{
+					Name:     "TLS/Encryption",
+					Status:   "WARN",
+					Message:  "TLS disabled (localhost only). Consider enabling TLS for production.",
+					Critical: false,
+				})
+			} else {
+				// Public binding: this is critical
+				sc.results = append(sc.results, SecurityCheckResult{
+					Name:     "TLS/Encryption",
+					Status:   "FAIL",
+					Message:  "TLS is disabled with authentication enabled. Credentials transmitted in plaintext!",
+					Critical: true,
+				})
+			}
 		} else {
 			sc.results = append(sc.results, SecurityCheckResult{
 				Name:     "TLS/Encryption",
@@ -294,40 +310,46 @@ func (sc *SecurityChecker) checkSecureDirectory(path string) error {
 	return nil
 }
 
-// PrintReport prints the security check report
+// PrintReport prints the security check report with colors
 func (sc *SecurityChecker) PrintReport() {
-	log.Println("=== Security Configuration Check ===")
+	fmt.Println("\n" + ColorCyan + "=== Security Configuration Check ===" + ColorReset)
 
 	hasFailures := false
 	hasWarnings := false
 
 	for _, result := range sc.results {
-		statusIcon := "✓"
-		if result.Status == "WARN" {
-			statusIcon = "⚠"
+		var statusIcon, statusText string
+		if result.Status == "PASS" {
+			statusIcon = ColorGreen + "✓" + ColorReset
+			statusText = ColorGreen + "PASS" + ColorReset
+		} else if result.Status == "WARN" {
+			statusIcon = ColorYellow + "⚠" + ColorReset
+			statusText = ColorYellow + "WARN" + ColorReset
 			hasWarnings = true
 		} else if result.Status == "FAIL" {
-			statusIcon = "✗"
+			statusIcon = ColorRed + "✗" + ColorReset
+			statusText = ColorRed + "FAIL" + ColorReset
 			hasFailures = true
 		}
 
 		criticalFlag := ""
 		if result.Critical {
-			criticalFlag = " [CRITICAL]"
+			criticalFlag = ColorRed + " [CRITICAL]" + ColorReset
 		}
 
-		log.Printf("  %s [%s]%s %s: %s", statusIcon, result.Status, criticalFlag, result.Name, result.Message)
+		fmt.Printf("  %s [%s]%s %s: %s\n", statusIcon, statusText, criticalFlag, result.Name, result.Message)
 	}
 
-	log.Println("====================================")
+	fmt.Println(ColorCyan + "====================================" + ColorReset)
 
 	if hasFailures {
-		log.Println("[SECURITY] CRITICAL: Security check FAILED. Please review configuration.")
+		fmt.Println(ColorRed + "[SECURITY] CRITICAL: Security check FAILED. Please review configuration." + ColorReset)
 	} else if hasWarnings {
-		log.Println("[SECURITY] WARNING: Security check completed with warnings.")
+		fmt.Println(ColorYellow + "[SECURITY] WARNING: Security check completed with warnings." + ColorReset)
 	} else {
-		log.Println("[SECURITY] All security checks passed.")
+		fmt.Println(ColorGreen + "[SECURITY] All security checks passed." + ColorReset)
 	}
+	fmt.Println()
 }
 
 // expandHome expands ~ to home directory

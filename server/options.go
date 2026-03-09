@@ -47,6 +47,9 @@ type Options struct {
 	WebAuthnAllowRegister bool   `hcl:"webauthn_allow_register" json:"webauthn_allow_register" flagName:"webauthn-allow-register" flagDescribe:"Allow new passkey registration (only works if no credentials exist or register-token is set)" default:"false"`
 	WebAuthnSessionTTL    int    `hcl:"webauthn_session_ttl" json:"webauthn_session_ttl" flagName:"webauthn-session-ttl" flagDescribe:"Session TTL in hours for WebAuthn authentication (0 = require auth every time)" default:"168"`
 
+	// Backend options
+	Backend string `hcl:"backend" json:"backend" flagName:"backend" flagDescribe:"Backend type: 'local' for direct command, 'zellij' for persistent sessions" default:"zellij"`
+
 	TitleVariables map[string]interface{}
 
 	// Internal flags for tracking explicit settings

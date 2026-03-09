@@ -48,12 +48,6 @@ func main() {
 			Usage:   "Config file path (.jsonc, .json, or HCL format)",
 			EnvVars: []string{"GOTTY_CONFIG"},
 		},
-		&cli.StringFlag{
-			Name:    "backend",
-			Value:   "zellij",
-			Usage:   "Backend type: 'local' for direct command, 'zellij' for persistent sessions",
-			EnvVars: []string{"GOTTY_BACKEND"},
-		},
 	)
 
 	app.Action = func(c *cli.Context) error {
@@ -94,6 +88,12 @@ func main() {
 			appOptions.SetPermitWriteExplicit()
 		}
 
+		// Allow backend to be overridden by command line
+		backendType := appOptions.Backend
+		if c.IsSet("backend") {
+			backendType = c.String("backend")
+		}
+
 		err = appOptions.Validate()
 		if err != nil {
 			exit(err, 6)
@@ -101,7 +101,6 @@ func main() {
 
 		// Create factory based on backend type
 		var factory server.Factory
-		backendType := c.String("backend")
 		switch backendType {
 		case "zellij":
 			zellijOptions := &zellijcommand.Options{}

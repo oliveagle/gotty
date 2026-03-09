@@ -78,6 +78,9 @@ func NewSessionManager() *SessionManager {
 		// Use 0600 for secure file permissions (owner read/write only)
 		if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
 			os.WriteFile(metadataFile, []byte("[]"), 0600)
+		} else {
+			// Fix permissions on existing file
+			os.Chmod(metadataFile, 0600)
 		}
 	}
 
