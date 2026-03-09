@@ -1939,6 +1939,13 @@ body.sidebar-auto-hide #sidebar-trigger {
     margin-bottom: 12px;
 }
 
+/* Two-column grid layout for settings */
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
 .settings-label {
     display: block;
     font-size: 13px;

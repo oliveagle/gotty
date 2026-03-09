@@ -378,11 +378,11 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	// Clipboard API (protected)
 	siteMux.HandleFunc(pathPrefix+"api/clipboard", authMiddleware.Wrap(server.handleClipboard))
 
-	// Weather API proxy (to avoid CORS issues) - public for now
-	siteMux.HandleFunc(pathPrefix+"api/weather", server.handleWeather)
+	// Weather API proxy (protected)
+	siteMux.HandleFunc(pathPrefix+"api/weather", authMiddleware.Wrap(server.handleWeather))
 
-	// Weather preview debug page
-	siteMux.HandleFunc(pathPrefix+"weather-preview.html", server.handleWeatherPreview)
+	// Weather preview debug page (protected)
+	siteMux.HandleFunc(pathPrefix+"weather-preview.html", authMiddleware.Wrap(server.handleWeatherPreview))
 
 	// WebAuthn/Passkeys API (public - used for authentication flow)
 	siteMux.HandleFunc(pathPrefix+"api/webauthn/status", server.handleWebAuthnStatus)
@@ -401,7 +401,8 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 			DefaultChannel: server.options.IRCDefaultChannel,
 			NetworkName:    server.options.IRCNetworkName,
 		}
-		siteMux.HandleFunc("/irc/", server.handleIRCIndex(ircData))
+		// IRC index page (protected)
+		siteMux.HandleFunc("/irc/", authMiddleware.Wrap(server.handleIRCIndex(ircData)))
 		// IRC WebSocket is protected with token in query parameter
 		siteMux.HandleFunc("/irc/ws", authMiddleware.WrapWS(server.ircHandler.HandleWS))
 	}

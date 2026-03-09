@@ -166,56 +166,54 @@
           </div>
           <div class="settings-section">
             <div class="settings-section-title">Display</div>
-            <div class="settings-item">
-              <label class="settings-label">Host Name</label>
-              <input type="text" class="settings-input" id="settings-host-name" placeholder="Custom display name">
-            </div>
-            <div class="settings-item">
-              <label class="settings-label">
-                <input type="checkbox" id="settings-autohide" class="settings-checkbox">
-                Auto-hide Sidebar
-              </label>
-            </div>
-            <div class="settings-item" id="settings-irc-item" style="display: none;">
-              <label class="settings-label">
-                <input type="checkbox" id="settings-show-irc" class="settings-checkbox">
-                Show IRC Chat
-              </label>
-            </div>
-            <div class="settings-item" id="settings-irc-nick-item" style="display: none;">
-              <label class="settings-label">IRC Nickname</label>
-              <input type="text" class="settings-input" id="settings-irc-nick" placeholder="Your nickname">
-              <div class="settings-hint">Default: user (admin)</div>
-            </div>
-            <div class="settings-item">
-              <label class="settings-label">City Code</label>
-              <input type="text" class="settings-input" id="settings-city-code" placeholder="Auto-detect from IP">
-              <button class="btn-settings-detect" id="settings-detect-city" title="Auto-detect city from IP">🌍 Detect from IP</button>
-              <div class="settings-hint">Used for weather and sunrise/sunset times</div>
-            </div>
-            <div class="settings-item">
-              <label class="settings-label">
-                <input type="checkbox" id="settings-weather-bg" class="settings-checkbox">
-                Dynamic Background (Weather & Sunrise/Sunset)
-              </label>
-              <div class="settings-info" style="margin-top: 8px; font-size: 11px; color: #666;">
-                Background changes based on time of day and weather conditions
+            <div class="settings-grid">
+              <div class="settings-item">
+                <label class="settings-label">Host Name</label>
+                <input type="text" class="settings-input" id="settings-host-name" placeholder="Custom display name">
               </div>
-            </div>
-            <div class="settings-item">
-              <label class="settings-label">Banner Position</label>
-              <div style="display: flex; gap: 12px; margin-top: 6px;">
-                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                  <input type="radio" name="banner-position" value="top" id="banner-position-top" style="cursor: pointer;">
-                  <span style="font-size: 12px; color: #ccc;">Top</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                  <input type="radio" name="banner-position" value="bottom" id="banner-position-bottom" style="cursor: pointer;">
-                  <span style="font-size: 12px; color: #ccc;">Bottom</span>
+              <div class="settings-item">
+                <label class="settings-label">City Code</label>
+                <input type="text" class="settings-input" id="settings-city-code" placeholder="Auto-detect from IP">
+              </div>
+              <div class="settings-item">
+                <label class="settings-label">
+                  <input type="checkbox" id="settings-autohide" class="settings-checkbox">
+                  Auto-hide Sidebar
                 </label>
               </div>
-              <div class="settings-hint">Toggle banner display position</div>
+              <div class="settings-item">
+                <label class="settings-label">Banner Position</label>
+                <div style="display: flex; gap: 12px; margin-top: 6px;">
+                  <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="radio" name="banner-position" value="top" id="banner-position-top" style="cursor: pointer;">
+                    <span style="font-size: 12px; color: #ccc;">Top</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="radio" name="banner-position" value="bottom" id="banner-position-bottom" style="cursor: pointer;">
+                    <span style="font-size: 12px; color: #ccc;">Bottom</span>
+                  </label>
+                </div>
+              </div>
+              <div class="settings-item" id="settings-irc-item" style="display: none;">
+                <label class="settings-label">
+                  <input type="checkbox" id="settings-show-irc" class="settings-checkbox">
+                  Show IRC Chat
+                </label>
+              </div>
+              <div class="settings-item">
+                <label class="settings-label">
+                  <input type="checkbox" id="settings-weather-bg" class="settings-checkbox">
+                  Dynamic Background
+                </label>
+                <div class="settings-hint">Weather & sunrise/sunset</div>
+              </div>
+              <div class="settings-item" id="settings-irc-nick-item" style="display: none;">
+                <label class="settings-label">IRC Nickname</label>
+                <input type="text" class="settings-input" id="settings-irc-nick" placeholder="Your nickname">
+                <div class="settings-hint">Default: user (admin)</div>
+              </div>
             </div>
+            <button class="btn-settings-detect" id="settings-detect-city" style="margin-top: 10px; width: 100%;" title="Auto-detect city from IP">🌍 Auto-detect City from IP</button>
           </div>
           <div class="settings-section">
             <div class="settings-section-title">Weather & Time</div>
@@ -237,12 +235,11 @@
                 <span id="weather-sun">-</span>
               </div>
             </div>
-            <button class="btn-confirm btn-cancel" onclick="sessionManager.refreshWeather()" style="margin-top: 10px;">🔄 Refresh Weather</button>
-            <div style="margin-top: 12px;">
-              <a href="/weather-preview.html" target="_blank" class="btn-confirm btn-ok" style="display: inline-flex; align-items: center; gap: 6px; text-decoration: none;">
-                🔍 Open Weather Debug Page
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+              <button class="btn-confirm btn-cancel" onclick="sessionManager.refreshWeather()" style="flex: 1;">🔄 Refresh</button>
+              <a href="/weather-preview.html" target="_blank" class="btn-confirm btn-ok" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none;">
+                🔍 Debug
               </a>
-              <div class="settings-hint" style="margin-top: 6px;">View and adjust weather effects in detail</div>
             </div>
           </div>
           <div class="settings-section">
