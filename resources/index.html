@@ -663,32 +663,273 @@
         }
 
         initIRCEntry() {
-          const ircEntryElem = document.getElementById('irc-entry');
-          const ircEnterBtn = document.getElementById('irc-enter-btn');
-
-          if (!ircEntryElem || !ircEnterBtn) return;
+          // IRC 聊天室初始化
+          const ircSectionElem = document.getElementById('irc-channels-section');
+          if (!ircSectionElem) return;
 
           // Check if IRC is enabled (passed from server)
-          // Use template variable if available, otherwise check URL param
-          const ircEnabled = typeof window.enableIRC !== 'undefined' ? window.enableIRC : (new URLSearchParams(window.location.search).get('irc') === '1');
-          const ircChannel = typeof window.ircChannel !== 'undefined' ? window.ircChannel : '#general';
-          const ircNetworkName = typeof window.ircNetworkName !== 'undefined' ? window.ircNetworkName : 'GoTTY Network';
+          const ircEnabled = typeof window.enableIRC !== 'undefined' ? window.enableIRC : false;
+          const defaultChannel = typeof window.ircChannel !== 'undefined' ? window.ircChannel : '#general';
+          const networkName = typeof window.ircNetworkName !== 'undefined' ? window.ircNetworkName : 'GoTTY Network';
 
           if (ircEnabled) {
-            ircEntryElem.style.display = 'block';
-            // Update label with network name
-            const labelElem = ircEntryElem.querySelector('.irc-entry-label');
-            if (labelElem) {
-              labelElem.textContent = `💬 ${ircNetworkName}`;
+            ircSectionElem.style.display = 'block';
+            // Initialize IRC client
+            this.initIRCClient(defaultChannel, networkName);
+          }
+        }
+
+        initIRCClient(defaultChannel, networkName) {
+          // IRC client state
+          this.irc = {
+            ws: null,
+            nick: 'guest',
+            channel: defaultChannel,
+            channels: new Set([defaultChannel]),
+            connected: false,
+            messages: []
+          };
+
+          // Setup WebSocket connection
+          const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const wsUrl = wsProtocol + '//' + window.location.host + '/irc/ws';
+          this.irc.ws = new WebSocket(wsUrl);
+
+          const self = this;
+
+          this.irc.ws.onopen = function() {
+            self.irc.connected = true;
+            self.addSystemMessage('已连接到 ' + networkName);
+            // Auto join default channel
+            self.sendIRC({ type: 'join', channel: defaultChannel, timestamp: Date.now() });
+          };
+
+          this.irc.ws.onclose = function() {
+            self.irc.connected = false;
+            self.addSystemMessage('已断开连接，3 秒后重连...');
+            setTimeout(() => self.initIRCClient(defaultChannel, networkName), 3000);
+          };
+
+          this.irc.ws.onerror = function(error) {
+            console.error('IRC WebSocket error:', error);
+          };
+
+          this.irc.ws.onmessage = function(event) {
+            try {
+              const msg = JSON.parse(event.data);
+              self.handleIRCMessage(msg);
+            } catch (e) {
+              console.error('Error parsing IRC message:', e);
             }
+          };
+
+          // Setup UI event handlers
+          this.setupIRCUI();
+        }
+
+        setupIRCUI() {
+          const self = this;
+
+          // Toggle channels list
+          const toggleBtn = document.getElementById('irc-toggle-btn');
+          const channelsList = document.getElementById('irc-channels-list');
+          if (toggleBtn && channelsList) {
+            toggleBtn.addEventListener('click', function() {
+              const isExpanded = channelsList.style.display !== 'none';
+              channelsList.style.display = isExpanded ? 'none' : 'block';
+              toggleBtn.textContent = isExpanded ? '▶' : '▼';
+            });
           }
 
-          // Handle enter button click
-          ircEnterBtn.addEventListener('click', () => {
-            // Open IRC chatroom in new window/tab
-            const ircUrl = window.location.protocol + '//' + window.location.host + '/irc/';
-            window.open(ircUrl, '_blank');
-          });
+          // Join channel button
+          const joinInput = document.getElementById('irc-join-channel');
+          const joinBtn = document.getElementById('irc-join-btn');
+          if (joinBtn && joinInput) {
+            joinBtn.addEventListener('click', function() {
+              const channel = joinInput.value.trim();
+              if (channel) {
+                self.sendIRC({ type: 'join', channel: channel, timestamp: Date.now() });
+                joinInput.value = '';
+              }
+            });
+            joinInput.addEventListener('keypress', function(e) {
+              if (e.key === 'Enter') {
+                joinBtn.click();
+              }
+            });
+          }
+
+          // Close chat button
+          const closeBtn = document.getElementById('irc-close-btn');
+          if (closeBtn) {
+            closeBtn.addEventListener('click', function() {
+              self.hideIRCChat();
+            });
+          }
+
+          // Send message button
+          const sendBtn = document.getElementById('irc-send-btn');
+          const chatInput = document.getElementById('irc-chat-input');
+          if (sendBtn && chatInput) {
+            sendBtn.addEventListener('click', function() {
+              self.sendIRCMessage();
+            });
+            chatInput.addEventListener('keypress', function(e) {
+              if (e.key === 'Enter') {
+                self.sendIRCMessage();
+              }
+            });
+          }
+        }
+
+        sendIRC(msg) {
+          if (this.irc.ws && this.irc.ws.readyState === WebSocket.OPEN) {
+            this.irc.ws.send(JSON.stringify(msg));
+          }
+        }
+
+        handleIRCMessage(msg) {
+          const self = this;
+          switch (msg.type) {
+            case 'sys':
+              this.addSystemMessage(msg.data);
+              // Parse user list
+              if (msg.data && msg.data.startsWith('Users in')) {
+                const match = msg.data.match(/Users in ([\w#+]+): (.+)/);
+                if (match) {
+                  const channel = match[1];
+                  const users = match[2].split(', ');
+                  this.updateChannelUserCount(channel, users.length);
+                }
+              }
+              break;
+            case 'irc_out':
+              const prefix = msg.tags?.prefix || '';
+              const command = msg.command || '';
+              switch (command) {
+                case 'PRIVMSG':
+                  this.addMessage(prefix, msg.data);
+                  break;
+                case 'JOIN':
+                  this.addSystemMessage(prefix + ' 加入了频道');
+                  break;
+                case 'PART':
+                  this.addSystemMessage(prefix + ' 离开了频道');
+                  break;
+                case 'NICK':
+                  this.addSystemMessage(prefix + ' 改名为 ' + (msg.params?.[0] || ''));
+                  break;
+                case 'TOPIC':
+                  this.addSystemMessage('主题：' + msg.data);
+                  break;
+              }
+              break;
+            case 'nick':
+              if (msg.nick) {
+                this.irc.nick = msg.nick;
+                document.getElementById('irc-nick-display').textContent = msg.nick;
+              }
+              break;
+          }
+        }
+
+        addMessage(nick, text) {
+          const messagesElem = document.getElementById('irc-messages');
+          if (!messagesElem) return;
+
+          const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+          const div = document.createElement('div');
+          div.className = 'irc-message privmsg';
+          div.innerHTML = '<span class="time">[' + time + ']</span><span class="nick">&lt;' + nick + '&gt;</span> ' + this.escapeHtml(text);
+          messagesElem.appendChild(div);
+          messagesElem.scrollTop = messagesElem.scrollHeight;
+        }
+
+        addSystemMessage(text) {
+          const messagesElem = document.getElementById('irc-messages');
+          if (!messagesElem) return;
+
+          const div = document.createElement('div');
+          div.className = 'irc-message system';
+          div.textContent = '*** ' + text;
+          messagesElem.appendChild(div);
+          messagesElem.scrollTop = messagesElem.scrollHeight;
+        }
+
+        escapeHtml(text) {
+          const div = document.createElement('div');
+          div.textContent = text;
+          return div.innerHTML;
+        }
+
+        sendIRCMessage() {
+          const chatInput = document.getElementById('irc-chat-input');
+          if (!chatInput) return;
+
+          const text = chatInput.value.trim();
+          if (!text) return;
+
+          if (text.startsWith('/')) {
+            // Handle commands
+            const parts = text.slice(1).split(' ');
+            const cmd = parts[0].toUpperCase();
+            const args = parts.slice(1);
+            switch (cmd) {
+              case 'NICK':
+                this.sendIRC({ type: 'nick', nick: args[0] || 'guest', timestamp: Date.now() });
+                break;
+              case 'JOIN':
+                this.sendIRC({ type: 'join', channel: args[0] || this.irc.channel, timestamp: Date.now() });
+                break;
+              case 'PART':
+                this.sendIRC({ type: 'part', channel: args[0] || this.irc.channel, timestamp: Date.now() });
+                break;
+              case 'MSG':
+                this.sendIRC({ type: 'msg', channel: args[0], data: args.slice(1).join(' '), timestamp: Date.now() });
+                break;
+              case 'HELP':
+                this.addSystemMessage('命令：/nick, /join, /part, /msg, /topic, /list, /whois, /quit, /help');
+                break;
+              default:
+                this.sendIRC({ type: 'irc_in', data: text.toUpperCase(), timestamp: Date.now() });
+            }
+          } else {
+            // Send message to current channel
+            this.sendIRC({ type: 'msg', channel: this.irc.channel, data: text, timestamp: Date.now() });
+          }
+
+          chatInput.value = '';
+        }
+
+        showIRCChat(channel) {
+          const chatContainer = document.getElementById('irc-chat-container');
+          const channelElem = document.getElementById('irc-chat-channel');
+          if (chatContainer && channelElem) {
+            this.irc.channel = channel || this.irc.channel;
+            channelElem.textContent = this.irc.channel;
+            chatContainer.style.display = 'flex';
+          }
+        }
+
+        hideIRCChat() {
+          const chatContainer = document.getElementById('irc-chat-container');
+          if (chatContainer) {
+            chatContainer.style.display = 'none';
+          }
+        }
+
+        updateChannelUserCount(channel, count) {
+          // Update channel item with user count
+          const channelItem = document.querySelector('.irc-channel-item[data-channel="' + channel + '"]');
+          if (channelItem) {
+            let countElem = channelItem.querySelector('.irc-channel-count');
+            if (!countElem) {
+              countElem = document.createElement('span');
+              countElem.className = 'irc-channel-count';
+              channelItem.appendChild(countElem);
+            }
+            countElem.textContent = '(' + count + ')';
+          }
         }
 
         setupAutoHide() {
@@ -1235,15 +1476,18 @@
           const targetEl = event.currentTarget;
           if (!targetEl.classList.contains('session-item')) return;
 
+          // Get current position of dragged item to check if drop position is unchanged
+          const currentParentId = dragged ? (dragged.parent_id || '') : '';
+          const currentSiblings = this.sessions
+            .filter(s => s.parent_id === currentParentId)
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
+          const currentIndex = currentSiblings.findIndex(s => s.id === this.draggedId);
+          const currentAfterId = currentIndex > 0 ? currentSiblings[currentIndex - 1].id : '';
+
           // Determine drop position based on mouse Y position within the element
           const rect = targetEl.getBoundingClientRect();
           const y = event.clientY;
           const midpoint = rect.top + rect.height / 2;
-
-          // Clear all previous indicators
-          document.querySelectorAll('.drag-insert-before, .drag-insert-after, .drag-over').forEach(el => {
-            el.classList.remove('drag-insert-before', 'drag-insert-after', 'drag-over');
-          });
 
           // Check if target is a folder and mouse is in the center zone (for folder drop)
           const target = this.sessions.find(s => s.id === targetId);
@@ -1251,6 +1495,11 @@
             const folderZoneTop = rect.top + rect.height * 0.3;
             const folderZoneBottom = rect.top + rect.height * 0.7;
             if (y >= folderZoneTop && y <= folderZoneBottom) {
+              // Check if dropping into the same folder (no change)
+              if (targetId === currentParentId) {
+                this.dropTarget = null;
+                return;
+              }
               // Drop into folder
               targetEl.classList.add('drag-over');
               this.dropTarget = { type: 'folder', id: targetId };
@@ -1259,10 +1508,41 @@
           }
 
           // Insert before or after
+          let parentId = target ? (target.parent_id || '') : '';
+          let afterId = '';
+
           if (y < midpoint) {
+            // Insert before target
+            const siblings = this.sessions
+              .filter(s => s.parent_id === parentId)
+              .sort((a, b) => (a.order || 0) - (b.order || 0));
+            const targetIndex = siblings.findIndex(s => s.id === targetId);
+            if (targetIndex > 0) {
+              afterId = siblings[targetIndex - 1].id;
+            }
+            // Check if this is the same position
+            if (parentId === currentParentId && afterId === currentAfterId) {
+              this.dropTarget = null;
+              return;
+            }
+            // Clear previous indicators before adding new one
+            document.querySelectorAll('.drag-insert-before, .drag-insert-after, .drag-over').forEach(el => {
+              el.classList.remove('drag-insert-before', 'drag-insert-after', 'drag-over');
+            });
             targetEl.classList.add('drag-insert-before');
             this.dropTarget = { type: 'insert', targetId: targetId, position: 'before' };
           } else {
+            // Insert after target
+            afterId = targetId;
+            // Check if this is the same position
+            if (parentId === currentParentId && afterId === currentAfterId) {
+              this.dropTarget = null;
+              return;
+            }
+            // Clear previous indicators before adding new one
+            document.querySelectorAll('.drag-insert-before, .drag-insert-after, .drag-over').forEach(el => {
+              el.classList.remove('drag-insert-before', 'drag-insert-after', 'drag-over');
+            });
             targetEl.classList.add('drag-insert-after');
             this.dropTarget = { type: 'insert', targetId: targetId, position: 'after' };
           }
@@ -1287,8 +1567,34 @@
           const dragged = this.sessions.find(s => s.id === this.draggedId);
           if (!dragged) return;
 
+          // Get current position of dragged item
+          const currentParentId = dragged.parent_id || '';
+          const currentSiblings = this.sessions
+            .filter(s => s.parent_id === currentParentId)
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
+          const currentIndex = currentSiblings.findIndex(s => s.id === this.draggedId);
+          const currentAfterId = currentIndex > 0 ? currentSiblings[currentIndex - 1].id : '';
+
           if (this.dropTarget.type === 'folder') {
             // Drop into folder
+            // Check if dropping into the same folder (no change)
+            if (this.dropTarget.id === currentParentId) {
+              this.dropTarget = null;
+              return;
+            }
+            // Check if dropping into self (for folder)
+            if (this.dropTarget.id === this.draggedId) {
+              this.dropTarget = null;
+              return;
+            }
+            // Check if dropping folder into its own descendant
+            if (dragged.is_folder) {
+              const descendants = this.getAllDescendants(this.draggedId);
+              if (descendants.includes(this.dropTarget.id)) {
+                this.dropTarget = null;
+                return;
+              }
+            }
             await this.reorderSession(this.draggedId, this.dropTarget.id, '');
           } else if (this.dropTarget.type === 'insert') {
             // Insert before/after target
@@ -1311,6 +1617,27 @@
                 afterId = siblings[targetIndex - 1].id;
               }
               // If targetIndex is 0, afterId stays empty (insert at beginning)
+            }
+
+            // Check if no change (same parent and same position)
+            if (parentId === currentParentId && afterId === currentAfterId) {
+              this.dropTarget = null;
+              return;
+            }
+
+            // Check if dropping folder into its own descendant
+            if (dragged.is_folder) {
+              const descendants = this.getAllDescendants(this.draggedId);
+              // If target is a descendant, don't allow
+              if (descendants.includes(this.dropTarget.targetId)) {
+                this.dropTarget = null;
+                return;
+              }
+              // If parent is a descendant, don't allow
+              if (parentId && descendants.includes(parentId)) {
+                this.dropTarget = null;
+                return;
+              }
             }
 
             await this.reorderSession(this.draggedId, parentId, afterId);
