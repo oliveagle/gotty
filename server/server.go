@@ -41,6 +41,8 @@ type Server struct {
 	workspaceManager *WorkspaceManager
 	clipboardManager *ClipboardManager
 	challengeManager *ChallengeManager
+	webAuthnManager  *WebAuthnManager
+	webAuthnSessions *SessionDataManager
 
 	ircHandler *irc.IRCHandler
 
@@ -97,6 +99,24 @@ func New(factory Factory, options *Options) (*Server, error) {
 	// Initialize challenge manager for public key authentication
 	challMngr := NewChallengeManager()
 
+	// Initialize WebAuthn manager if needed
+	var webAuthnMgr *WebAuthnManager
+	var webAuthnSessions *SessionDataManager
+	if options.EnableAuth && (options.AuthType == "webauthn" || options.AuthType == "passkey") {
+		var err error
+		webAuthnMgr, err = NewWebAuthnManager(options.WebAuthnDisplayName, options.HostName, options.WebAuthnDataDir)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to initialize WebAuthn")
+		}
+		webAuthnSessions = NewSessionDataManager()
+		log.Printf("WebAuthn/Passkeys enabled. Display name: %s", options.WebAuthnDisplayName)
+		if webAuthnMgr.HasCredentials() {
+			log.Printf("WebAuthn: Found existing credentials")
+		} else {
+			log.Printf("WebAuthn: No credentials registered yet, registration required")
+		}
+	}
+
 	// Migrate sessions without workspace to default workspace
 	sm.MigrateToWorkspace(DefaultWorkspaceID)
 
@@ -122,6 +142,8 @@ func New(factory Factory, options *Options) (*Server, error) {
 		workspaceManager: wm,
 		clipboardManager: cm,
 		challengeManager: challMngr,
+		webAuthnManager:  webAuthnMgr,
+		webAuthnSessions: webAuthnSessions,
 		ircHandler:       ircHandler,
 
 		upgrader: &websocket.Upgrader{
