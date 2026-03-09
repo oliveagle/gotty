@@ -1,6 +1,8 @@
 package zellijcommand
 
 import (
+	"fmt"
+	"strings"
 	"syscall"
 	"time"
 
@@ -37,11 +39,44 @@ func (factory *Factory) Name() string {
 	return "zellij"
 }
 
+// validateArg validates a single argument for dangerous patterns
+func validateArg(arg string) error {
+	// Block arguments containing shell metacharacters that could be dangerous
+	dangerousChars := []string{
+		";", "|", "&", "$", "`", "(", ")",
+		"<", ">", "\n", "\r",
+	}
+
+	for _, char := range dangerousChars {
+		if strings.Contains(arg, char) {
+			return fmt.Errorf("argument contains forbidden character: %q", char)
+		}
+	}
+	return nil
+}
+
+// sanitizeArgs validates and returns safe arguments
+func sanitizeArgs(args []string) ([]string, error) {
+	safe := make([]string, 0, len(args))
+	for _, arg := range args {
+		if err := validateArg(arg); err != nil {
+			return nil, err
+		}
+		safe = append(safe, arg)
+	}
+	return safe, nil
+}
+
 func (factory *Factory) New(params map[string][]string) (server.Slave, error) {
 	argv := make([]string, len(factory.argv))
 	copy(argv, factory.argv)
 	if params["arg"] != nil && len(params["arg"]) > 0 {
-		argv = append(argv, params["arg"]...)
+		// Validate and sanitize user-provided arguments
+		safeArgs, err := sanitizeArgs(params["arg"])
+		if err != nil {
+			return nil, fmt.Errorf("invalid arguments: %w", err)
+		}
+		argv = append(argv, safeArgs...)
 	}
 
 	// Generate a session name - this will be overridden by session manager
@@ -55,10 +90,16 @@ func (factory *Factory) NewWithID(sessionID string, params map[string][]string) 
 	argv := make([]string, len(factory.argv))
 	copy(argv, factory.argv)
 	if params["arg"] != nil && len(params["arg"]) > 0 {
-		argv = append(argv, params["arg"]...)
+		// Validate and sanitize user-provided arguments
+		safeArgs, err := sanitizeArgs(params["arg"])
+		if err != nil {
+			return nil, fmt.Errorf("invalid arguments: %w", err)
+		}
+		argv = append(argv, safeArgs...)
 	}
 
 	// Use gotty- prefix for zellij session name
+	// sessionID is validated in NewWithTab via validateSessionName
 	sessionName := "gotty-" + sessionID
 
 	// Check if target_tab is specified in params

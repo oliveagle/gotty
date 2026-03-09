@@ -6,6 +6,16 @@ class SettingsApp {
         this.modules = [];
     }
 
+    // Auth-aware fetch wrapper - adds token to all API requests
+    async authFetch(url, options = {}) {
+        const token = localStorage.getItem('gotty_auth_token');
+        if (token) {
+            const separator = url.includes('?') ? '&' : '?';
+            url = url + separator + 'token=' + encodeURIComponent(token);
+        }
+        return fetch(url, options);
+    }
+
     init() {
         this.loadSettings();
         this.bindEvents();
@@ -90,7 +100,7 @@ class SettingsApp {
     async loadWeather() {
         const cityCode = localStorage.getItem('gotty_city_code') || '101020100';
         try {
-            const response = await fetch('/api/weather?cityCode=' + encodeURIComponent(cityCode));
+            const response = await this.authFetch('/api/weather?cityCode=' + encodeURIComponent(cityCode));
             const data = await response.json();
 
             if (data && data.data && data.data.forecast && data.data.forecast[0]) {
@@ -116,7 +126,7 @@ class SettingsApp {
 
     async loadBuildInfo() {
         try {
-            const response = await fetch('/api/build-info');
+            const response = await this.authFetch('/api/build-info');
             if (response.ok) {
                 const data = await response.json();
                 document.getElementById('app-version').textContent = data.version || '-';
@@ -132,7 +142,7 @@ class SettingsApp {
 
     async checkAuthStatus() {
         try {
-            const response = await fetch('/api/webauthn/status');
+            const response = await this.authFetch('/api/webauthn/status');
             if (response.ok) {
                 const data = await response.json();
                 const webAuthnSection = document.getElementById('webauthn-section');

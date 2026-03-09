@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -19,7 +20,49 @@ import (
 const (
 	DefaultCloseSignal  = syscall.SIGINT
 	DefaultCloseTimeout = 10 * time.Second
+
+	// MaxSessionNameLength is the maximum allowed session name length
+	MaxSessionNameLength = 64
 )
+
+// sessionNameRegex validates zellij session names
+// Only allows alphanumeric characters, underscores, hyphens, and dots
+// Must start with a letter or number
+var sessionNameRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
+
+// validateSessionName checks if a session name is safe to use
+// Returns an error if the name contains potentially dangerous characters
+func validateSessionName(name string) error {
+	if name == "" {
+		return fmt.Errorf("session name cannot be empty")
+	}
+	if len(name) > MaxSessionNameLength {
+		return fmt.Errorf("session name too long (max %d characters)", MaxSessionNameLength)
+	}
+	if !sessionNameRegex.MatchString(name) {
+		return fmt.Errorf("invalid session name: must start with alphanumeric and contain only letters, numbers, underscore, hyphen, or dot")
+	}
+	return nil
+}
+
+// validateTabName checks if a tab name is safe to use
+// Similar to session name but allows spaces
+func validateTabName(name string) error {
+	if name == "" {
+		return nil // Empty tab name is OK
+	}
+	if len(name) > MaxSessionNameLength {
+		return fmt.Errorf("tab name too long (max %d characters)", MaxSessionNameLength)
+	}
+	// Check for dangerous characters
+	dangerousChars := []string{";", "|", "&", "$", "`", "(", ")", "<", ">", "\n", "\r"}
+	for _, char := range dangerousChars {
+		if strings.Contains(name, char) {
+			return fmt.Errorf("tab name contains forbidden character: %q", char)
+		}
+	}
+	return nil
+}
 
 type ZellijCommand struct {
 	sessionName string
@@ -84,6 +127,16 @@ func New(sessionName string, command string, argv []string, options ...Option) (
 
 // NewWithTab creates a new ZellijCommand, connecting to existing session and optionally switching to a specific tab
 func NewWithTab(sessionName string, command string, argv []string, targetTab string, options ...Option) (*ZellijCommand, error) {
+	// Security: Validate session name to prevent command injection
+	if err := validateSessionName(sessionName); err != nil {
+		return nil, errors.Wrapf(err, "invalid session name")
+	}
+
+	// Security: Validate tab name to prevent command injection
+	if err := validateTabName(targetTab); err != nil {
+		return nil, errors.Wrapf(err, "invalid tab name")
+	}
+
 	var cmd *exec.Cmd
 	exists := sessionExists(sessionName)
 

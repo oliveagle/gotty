@@ -312,6 +312,41 @@ w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 w.Header().Set("Permissions-Policy", "clipboard-read=(), clipboard-write=(self)")
 ```
 
+### 2026-03-09 安全加固 (第三轮)
+
+| 漏洞 | 严重程度 | 修复方案 | 状态 |
+|------|----------|----------|------|
+| zellij 会话名称注入 | 中高 | 添加 `validateSessionName()` 白名单验证 | ✅ 已修复 |
+| zellij 参数注入 | 中高 | 添加 `sanitizeArgs()` 过滤危险字符 | ✅ 已修复 |
+| zellij tab 名称注入 | 中 | 添加 `validateTabName()` 过滤危险字符 | ✅ 已修复 |
+
+#### 9. zellij 会话名称验证
+
+**文件**: `backend/zellijcommand/zellij_command.go`
+
+```go
+// 白名单正则：只允许字母、数字、下划线、连字符、点
+var sessionNameRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
+
+func validateSessionName(name string) error {
+    if len(name) > MaxSessionNameLength {
+        return fmt.Errorf("session name too long")
+    }
+    if !sessionNameRegex.MatchString(name) {
+        return fmt.Errorf("invalid session name")
+    }
+    return nil
+}
+```
+
+#### 10. zellij 参数验证
+
+**文件**: `backend/zellijcommand/factory.go`
+
+- 添加 `validateArg()` 验证单个参数
+- 添加 `sanitizeArgs()` 批量验证
+- 阻止危险字符 (`;`, `|`, `&`, `$`, `` ` ``, `(`, `)`, `<`, `>`, `\n`, `\r`)
+
 ---
 
 ## 剩余风险
@@ -322,14 +357,11 @@ Token 目前通过 URL query 参数传递，可能被日志记录。建议后续
 - 使用 Authorization header
 - 使用 HttpOnly Cookie
 
-### zellij 会话名称 (低风险)
-
-zellij 会话名称直接传递给 `exec.Command`，虽然 Go 不使用 shell，但仍建议添加字符白名单验证。
-
 ---
 
 ## 更新日志
 
+- 2026-03-09: 第三轮安全加固 - 修复 zellij 会话名称验证、参数验证
 - 2026-03-09: 第二轮安全加固 - 修复 IRC CSWSH、XSS、添加安全头
 - 2026-03-09: 添加漏洞分析章节，记录安全审计发现
 - 2026-03-09: 添加 `/api/weather`, `/weather-preview.html`, `/irc/` 的认证保护
