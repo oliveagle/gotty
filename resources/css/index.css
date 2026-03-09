@@ -703,6 +703,13 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: #555;
 }
 
+/* Children being dragged along with parent folder */
+.session-item.dragging-child {
+    opacity: 0.4;
+    background: rgba(74, 158, 255, 0.2);
+    border-left-color: rgba(74, 158, 255, 0.5);
+}
+
 .session-item.folder.drag-over {
     background: #4a7ab8 !important;
     border: 2px dashed #6ab7ff !important;

@@ -26,10 +26,19 @@
         <div id="session-list">
           <div class="session-loading">Loading sessions...</div>
         </div>
-        <!-- IRC Chatroom Entry -->
-        <div id="irc-entry" class="irc-entry" style="display: none;">
-          <div class="irc-entry-label">💬 IRC Chatroom</div>
-          <button id="irc-enter-btn" class="btn-irc-enter">Enter Chatroom</button>
+        <!-- IRC Chat Channels Section -->
+        <div id="irc-channels-section" class="irc-section" style="display: none;">
+          <div class="irc-section-header">
+            <span class="irc-section-title">💬 Chat Channels</span>
+            <button id="irc-toggle-btn" class="btn-irc-toggle" title="Toggle Channels">▼</button>
+          </div>
+          <div id="irc-channels-list" class="irc-channels-list">
+            <div class="irc-channel-loading">Loading channels...</div>
+          </div>
+          <div class="irc-input-area">
+            <input type="text" id="irc-join-channel" class="irc-input" placeholder="Join #channel...">
+            <button id="irc-join-btn" class="btn-irc-join">Join</button>
+          </div>
         </div>
         <div class="sidebar-toolbar">
           <button id="nav-back-btn" class="btn-toolbar btn-nav" title="Previous Session (Alt+Left)">◀</button>
@@ -110,12 +119,32 @@
 
       <div id="main">
         <div id="terminal"></div>
+        <!-- IRC Chat Container (overlay) -->
+        <div id="irc-chat-container" class="irc-chat-container" style="display: none;">
+          <div class="irc-chat-header">
+            <span id="irc-chat-channel">#general</span>
+            <button id="irc-close-btn" class="btn-irc-close" title="Close Chat">✕</button>
+          </div>
+          <div id="irc-messages" class="irc-messages"></div>
+          <div class="irc-chat-input-area">
+            <span id="irc-nick-display" class="irc-nick-display">guest</span>
+            <input type="text" id="irc-chat-input" class="irc-chat-input" placeholder="Type a message or /help...">
+            <button id="irc-send-btn" class="btn-irc-send">Send</button>
+          </div>
+        </div>
       </div>
     </div>
 
     <script src="./auth_token.js"></script>
     <script src="./config.js"></script>
     <script src="./js/gotty-bundle.js"></script>
+
+    <script>
+      // IRC configuration from server
+      var enableIRC = {{ .enableIRC }};
+      var ircChannel = "{{ .ircChannel }}";
+      var ircNetworkName = "{{ .ircNetworkName }}";
+    </script>
 
     <script>
       // Session Manager for frontend
@@ -641,9 +670,9 @@
 
           // Check if IRC is enabled (passed from server)
           // Use template variable if available, otherwise check URL param
-          const ircEnabled = typeof enableIRC !== 'undefined' ? enableIRC : (new URLSearchParams(window.location.search).get('irc') === '1');
-          const ircChannel = typeof ircChannel !== 'undefined' ? ircChannel : '#general';
-          const ircNetworkName = typeof ircNetworkName !== 'undefined' ? ircNetworkName : 'GoTTY Network';
+          const ircEnabled = typeof window.enableIRC !== 'undefined' ? window.enableIRC : (new URLSearchParams(window.location.search).get('irc') === '1');
+          const ircChannel = typeof window.ircChannel !== 'undefined' ? window.ircChannel : '#general';
+          const ircNetworkName = typeof window.ircNetworkName !== 'undefined' ? window.ircNetworkName : 'GoTTY Network';
 
           if (ircEnabled) {
             ircEntryElem.style.display = 'block';
@@ -1078,16 +1107,113 @@
           this.draggedId = id;
           event.dataTransfer.effectAllowed = 'move';
           event.dataTransfer.setData('text/plain', id);
+
+          const draggedSession = this.sessions.find(s => s.id === id);
+          const isFolder = draggedSession && draggedSession.is_folder;
+
+          // Mark the dragged item
           event.target.classList.add('dragging');
+
+          if (isFolder) {
+            // For folders, create a custom drag image showing the entire group
+            const dragImage = this.createFolderDragImage(id);
+            if (dragImage) {
+              // Set custom drag image (show at cursor position)
+              event.dataTransfer.setDragImage(dragImage, 10, 10);
+            }
+            // Also mark children as being dragged
+            const children = this.getAllDescendants(id);
+            children.forEach(childId => {
+              const childEl = document.querySelector(`.session-item[data-session-id="${childId}"]`);
+              if (childEl) childEl.classList.add('dragging-child');
+            });
+          }
+        }
+
+        // Create a visual representation of the folder with its children for dragging
+        createFolderDragImage(folderId) {
+          const folder = this.sessions.find(s => s.id === folderId);
+          if (!folder) return null;
+
+          // Create container for drag image
+          const container = document.createElement('div');
+          container.style.cssText = 'position: absolute; top: -10000px; left: -10000px; pointer-events: none; z-index: 10000;';
+
+          // Build tree structure for children
+          const childrenMap = new Map();
+          this.sessions.filter(s => s.parent_id).forEach(child => {
+            if (!childrenMap.has(child.parent_id)) {
+              childrenMap.set(child.parent_id, []);
+            }
+            childrenMap.get(child.parent_id).push(child);
+          });
+
+          // Sort children by order
+          childrenMap.forEach((children, parentId) => {
+            children.sort((a, b) => (a.order || 0) - (b.order || 0));
+          });
+
+          // Render the folder and its children
+          const renderItems = (items, depth = 0) => {
+            let html = '';
+            items.forEach(item => {
+              const children = childrenMap.get(item.id) || [];
+              const paddingLeft = depth * 16;
+              const icon = item.is_folder ? '📁' : '📄';
+              html += `<div style="padding: 4px 8px; padding-left: ${paddingLeft + 8}px; background: rgba(40, 40, 50, 0.95); border-left: 2px solid #4a9eff; white-space: nowrap;">
+                <span style="margin-right: 6px;">${icon}</span>
+                <span style="color: #fff; font-size: 12px;">${this.escapeHtml(item.title)}</span>
+              </div>`;
+              if (item.is_folder && children.length > 0) {
+                html += renderItems(children, depth + 1);
+              }
+            });
+            return html;
+          };
+
+          container.innerHTML = renderItems([folder]);
+
+          document.body.appendChild(container);
+          this._dragImage = container;
+
+          return container;
+        }
+
+        // Get all descendant IDs of a folder
+        getAllDescendants(folderId) {
+          const descendants = [];
+          const children = this.sessions.filter(s => s.parent_id === folderId);
+          children.forEach(child => {
+            descendants.push(child.id);
+            if (child.is_folder) {
+              descendants.push(...this.getAllDescendants(child.id));
+            }
+          });
+          return descendants;
+        }
+
+        escapeHtml(text) {
+          const div = document.createElement('div');
+          div.textContent = text;
+          return div.innerHTML;
         }
 
         handleDragEnd(event) {
           event.target.classList.remove('dragging');
+          // Remove dragging-child class from all children
+          document.querySelectorAll('.dragging-child').forEach(el => {
+            el.classList.remove('dragging-child');
+          });
           this.draggedId = null;
           // Clear all drag-related styles
           document.querySelectorAll('.drag-over, .drag-insert-before, .drag-insert-after').forEach(el => {
             el.classList.remove('drag-over', 'drag-insert-before', 'drag-insert-after');
           });
+          // Remove drag image
+          if (this._dragImage) {
+            this._dragImage.remove();
+            this._dragImage = null;
+          }
         }
 
         handleDragOver(event) {
@@ -1098,6 +1224,13 @@
         handleDragEnterForReorder(targetId, event) {
           event.preventDefault();
           if (this.draggedId === targetId) return;
+
+          // Prevent dragging a folder into its own descendants
+          const dragged = this.sessions.find(s => s.id === this.draggedId);
+          if (dragged && dragged.is_folder) {
+            const descendants = this.getAllDescendants(this.draggedId);
+            if (descendants.includes(targetId)) return;
+          }
 
           const targetEl = event.currentTarget;
           if (!targetEl.classList.contains('session-item')) return;
