@@ -878,3 +878,13 @@ func (server *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(data)
 }
+
+// handleBuildInfo returns build information (version, commit, build time)
+func (server *Server) handleBuildInfo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"version": BuildVersion,
+		"commit":  BuildCommit,
+		"buildAt": BuildTime,
+	})
+}

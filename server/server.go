@@ -381,6 +381,9 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	// Weather API proxy (protected)
 	siteMux.HandleFunc(pathPrefix+"api/weather", authMiddleware.Wrap(server.handleWeather))
 
+	// Build info API (protected)
+	siteMux.HandleFunc(pathPrefix+"api/build-info", authMiddleware.Wrap(server.handleBuildInfo))
+
 	// Weather preview debug page (protected)
 	siteMux.HandleFunc(pathPrefix+"weather-preview.html", authMiddleware.Wrap(server.handleWeatherPreview))
 
