@@ -3218,10 +3218,8 @@
         }
 
         connectTerminal(sessionId) {
-          var authToken = '';
-          if (typeof gotty_auth_token !== 'undefined') {
-            authToken = gotty_auth_token;
-          }
+          // Get auth token from global variable or localStorage
+          var authToken = window.gotty_auth_token || localStorage.getItem('gotty_auth_token') || '';
 
           var termType = 'xterm';
           if (typeof gotty_term !== 'undefined') {

@@ -20,12 +20,14 @@ GoTTY 使用 WebAuthn 标准实现 Passkeys 认证，支持以下认证器：
 | 端点 | 认证要求 | 说明 |
 |------|----------|------|
 | `/ws` | ✅ 需要 | 主 WebSocket（终端连接） |
+| `/irc/` | ✅ 需要 | IRC 页面 |
 | `/irc/ws` | ✅ 需要 | IRC WebSocket（聊天） |
 | `/api/sessions` | ✅ 需要 | Session 管理 |
 | `/api/workspaces` | ✅ 需要 | Workspace 管理 |
 | `/api/clipboard` | ✅ 需要 | 剪贴板同步 |
+| `/api/weather` | ✅ 需要 | 天气信息 |
+| `/weather-preview.html` | ✅ 需要 | 调试页面 |
 | `/api/webauthn/*` | ❌ 公开 | 认证流程 |
-| `/api/weather` | ❌ 公开 | 天气信息 |
 | `/`, `/js/*`, `/css/*` | ❌ 公开 | 静态资源 |
 
 ### Token 传递方式
