@@ -379,7 +379,10 @@ export class Xterm {
             this.lastWidth = width;
             this.lastHeight = height;
             this.fitAddon.fit();
-            this.term.scrollToBottom();
+            // Only scroll if terminal is fully initialized
+            if (this.term.rows > 0 && this.term.cols > 0) {
+                this.term.scrollToBottom();
+            }
             console.log(`[resize] fit done: ${this.term.cols}x${this.term.rows}`);
         }, 250);
     }
@@ -395,7 +398,10 @@ export class Xterm {
             this.lastWidth = currentWidth;
             this.lastHeight = currentHeight;
             this.fitAddon.fit();
-            this.term.scrollToBottom();
+            // Only scroll if terminal is fully initialized
+            if (this.term.rows > 0 && this.term.cols > 0) {
+                this.term.scrollToBottom();
+            }
             console.log(`[resize] fit done, cols/rows: ${this.term.cols}x${this.term.rows}`);
         }
     }

@@ -107,7 +107,112 @@
 - **Token 有效期**：默认 7 天，可配置
 - **Session 文件权限**：`0600`，仅所有者可读写
 
+## 漏洞分析
+
+### 高风险
+
+#### 1. 参数注入漏洞
+
+**位置**: `backend/localcommand/factory.go:40-48`
+
+```go
+if params != nil && len(params["arg"]) > 0 {
+    argv = append(argv, params["arg"]...)  // 用户输入直接追加
+}
+```
+
+**问题**: 当 `PermitArguments` 为 true 时，用户可通过 URL 参数注入命令行参数。
+
+**攻击示例**:
+```
+http://localhost:8080/?arg=--help
+http://localhost:8080/?arg=-e&arg=malicious_command
+```
+
+**状态**: 待修复
+
+---
+
+### 中等风险
+
+#### 2. Token 时序攻击
+
+**位置**: `server/webauthn.go:236-241`
+
+```go
+return m.registerToken == token  // 直接字符串比较
+```
+
+**问题**: 使用非常量时间比较，可能通过时序分析推断 Token。
+
+**状态**: 待修复
+
+#### 3. WebSocket 消息无大小限制
+
+**位置**: `webtty/webtty.go`
+
+**问题**: 没有限制单个消息的最大大小，攻击者可发送大量数据导致内存耗尽。
+
+**状态**: 待修复
+
+#### 4. 会话元数据文件权限过宽
+
+**位置**: `server/session_manager.go:79-80`
+
+```go
+os.WriteFile(metadataFile, []byte("[]"), 0644)  // 权限 0644
+```
+
+**问题**: 其他用户可读取会话元数据。
+
+**状态**: 待修复
+
+#### 5. 错误信息泄露内部细节
+
+**位置**: `server/webauthn_handlers.go:138-139`
+
+```go
+jsonError(w, "Failed to parse credential: "+err.Error(), http.StatusBadRequest)
+```
+
+**问题**: 错误详情直接返回给客户端，可能泄露内部实现细节。
+
+**状态**: 待修复
+
+---
+
+### 低风险
+
+#### 6. 会话 ID 熵值
+
+**位置**: `server/session_manager.go:261`
+
+```go
+id := randomstring.Generate(8)  // 8 字符约 48 位熵
+```
+
+**问题**: 对于高安全场景可能不足，但对于终端共享场景可接受。
+
+**状态**: 暂不修复（符合预期使用场景）
+
+---
+
+## 加固记录
+
+### 2026-03-09 安全加固
+
+| 漏洞 | 修复方案 | 状态 |
+|------|----------|------|
+| 参数注入 | 添加参数白名单验证 | 待修复 |
+| Token 时序攻击 | 使用 `crypto/subtle.ConstantTimeCompare` | 待修复 |
+| WebSocket 消息大小 | 添加最大消息大小限制 | 待修复 |
+| 会话元数据权限 | 改为 `0600` | 待修复 |
+| 错误信息泄露 | 返回通用错误消息 | 待修复 |
+
+---
+
 ## 更新日志
 
+- 2026-03-09: 添加漏洞分析章节，记录安全审计发现
 - 2026-03-09: 添加 `/api/weather`, `/weather-preview.html`, `/irc/` 的认证保护
 - 2026-03-09: 修复 `connectTerminal()` 未从 localStorage 获取 token 的问题

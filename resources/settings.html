@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - GoTTY</title>
+  <link rel="stylesheet" href="./css/settings.css">
+</head>
+<body>
+  <div class="settings-container">
+    <!-- Header -->
+    <div class="settings-header">
+      <div class="header-content">
+        <h1 class="header-title">⚙️ Settings</h1>
+        <a href="/" class="btn-back">← Back to Terminal</a>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="settings-content">
+      <!-- Display Module -->
+      <div class="settings-module">
+        <div class="module-header">
+          <span class="module-icon">🖥️</span>
+          <h2 class="module-title">Display</h2>
+        </div>
+        <div class="module-body">
+          <div class="settings-grid">
+            <div class="setting-item">
+              <label class="setting-label">Host Name</label>
+              <input type="text" class="setting-input" id="setting-host-name" placeholder="Custom display name">
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">City Code</label>
+              <input type="text" class="setting-input" id="setting-city-code" placeholder="Auto-detect from IP">
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">
+                <input type="checkbox" id="setting-autohide" class="setting-checkbox">
+                Auto-hide Sidebar
+              </label>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">Banner Position</label>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input type="radio" name="banner-position" value="top" id="banner-position-top">
+                  <span>Top</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="banner-position" value="bottom" id="banner-position-bottom">
+                  <span>Bottom</span>
+                </label>
+              </div>
+            </div>
+            <div class="setting-item" id="setting-irc-item" style="display: none;">
+              <label class="setting-label">
+                <input type="checkbox" id="setting-show-irc" class="setting-checkbox">
+                Show IRC Chat
+              </label>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">
+                <input type="checkbox" id="setting-weather-bg" class="setting-checkbox">
+                Dynamic Background
+              </label>
+              <div class="setting-hint">Weather & sunrise/sunset effects</div>
+            </div>
+            <div class="setting-item" id="setting-irc-nick-item" style="display: none;">
+              <label class="setting-label">IRC Nickname</label>
+              <input type="text" class="setting-input" id="setting-irc-nick" placeholder="Your nickname">
+              <div class="setting-hint">Default: user (admin)</div>
+            </div>
+          </div>
+          <button class="btn-secondary" id="setting-detect-city" style="margin-top: 16px; width: 100%;">
+            🌍 Auto-detect City from IP
+          </button>
+        </div>
+      </div>
+
+      <!-- Weather & Time Module -->
+      <div class="settings-module">
+        <div class="module-header">
+          <span class="module-icon">🌤️</span>
+          <h2 class="module-title">Weather & Time</h2>
+        </div>
+        <div class="module-body">
+          <div class="weather-info">
+            <div class="weather-row">
+              <span class="weather-label">City</span>
+              <span class="weather-value" id="weather-city">-</span>
+            </div>
+            <div class="weather-row">
+              <span class="weather-label">Condition</span>
+              <span class="weather-value" id="weather-condition">-</span>
+            </div>
+            <div class="weather-row">
+              <span class="weather-label">Temperature</span>
+              <span class="weather-value" id="weather-temp">-</span>
+            </div>
+            <div class="weather-row">
+              <span class="weather-label">Sunrise / Sunset</span>
+              <span class="weather-value" id="weather-sun">-</span>
+            </div>
+          </div>
+          <div class="weather-actions">
+            <button class="btn-secondary" id="btn-refresh-weather">🔄 Refresh</button>
+            <a href="/weather-preview.html" target="_blank" class="btn-primary">🔍 Debug</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- IRC Module -->
+      <div class="settings-module" id="module-irc" style="display: none;">
+        <div class="module-header">
+          <span class="module-icon">💬</span>
+          <h2 class="module-title">IRC Chat</h2>
+        </div>
+        <div class="module-body">
+          <div class="setting-item">
+            <label class="setting-label">
+              <input type="checkbox" id="setting-irc-enabled" class="setting-checkbox">
+              Enable IRC Chat
+            </label>
+          </div>
+          <div class="setting-item">
+            <label class="setting-label">IRC Server</label>
+            <input type="text" class="setting-input" id="setting-irc-server" placeholder="irc.libera.chat">
+          </div>
+          <div class="setting-item">
+            <label class="setting-label">Default Channel</label>
+            <input type="text" class="setting-input" id="setting-irc-channel" placeholder="#general">
+          </div>
+        </div>
+      </div>
+
+      <!-- Terminal Module -->
+      <div class="settings-module">
+        <div class="module-header">
+          <span class="module-icon">⌨️</span>
+          <h2 class="module-title">Terminal</h2>
+        </div>
+        <div class="module-body">
+          <div class="setting-item">
+            <label class="setting-label">Font Size</label>
+            <input type="range" class="setting-range" id="setting-font-size" min="10" max="24" value="14">
+            <div class="setting-hint">Current: <span id="font-size-value">14</span>px</div>
+          </div>
+          <div class="setting-item">
+            <label class="setting-label">Theme</label>
+            <select class="setting-select" id="setting-theme">
+              <option value="default">Default (Dark)</option>
+              <option value="light">Light</option>
+              <option value="monokai">Monokai</option>
+              <option value="dracula">Dracula</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label class="setting-label">
+              <input type="checkbox" id="setting-bell" class="setting-checkbox">
+              Enable Bell Sound
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Authentication Module -->
+      <div class="settings-module">
+        <div class="module-header">
+          <span class="module-icon">🔐</span>
+          <h2 class="module-title">Authentication</h2>
+        </div>
+        <div class="module-body">
+          <div class="auth-status">
+            <div class="status-row">
+              <span class="status-label">Status</span>
+              <span class="status-value" id="auth-status">-</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Type</span>
+              <span class="status-value" id="auth-type">-</span>
+            </div>
+          </div>
+          <div id="webauthn-section" style="display: none;">
+            <button class="btn-secondary" id="btn-webauthn-status">🔄 Check Status</button>
+            <button class="btn-primary" id="btn-webauthn-register">🔑 Register Passkey</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- About Module -->
+      <div class="settings-module">
+        <div class="module-header">
+          <span class="module-icon">ℹ️</span>
+          <h2 class="module-title">About</h2>
+        </div>
+        <div class="module-body">
+          <div class="about-info">
+            <div class="info-row">
+              <span class="info-label">Version</span>
+              <span class="info-value" id="app-version">-</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Build</span>
+              <span class="info-value" id="app-build">-</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Commit</span>
+              <span class="info-value" id="app-commit">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer Actions -->
+    <div class="settings-footer">
+      <button class="btn-secondary" id="btn-reset-all">🔄 Reset All</button>
+      <button class="btn-primary" id="btn-save-all">💾 Save All Changes</button>
+    </div>
+  </div>
+
+  <script src="./js/settings.js"></script>
+</body>
+</html>
