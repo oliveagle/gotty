@@ -1476,7 +1476,7 @@
           const item = document.createElement('div');
           item.className = 'irc-channel-item';
           item.dataset.channel = channel;
-          item.innerHTML = '<span class="irc-channel-name">' + channel + '</span><span class="irc-channel-count">(' + userCount + ')</span>';
+          item.innerHTML = '<span class="irc-channel-name">' + this.escapeHtml(channel) + '</span><span class="irc-channel-count">(' + userCount + ')</span>';
 
           // Click to open chat
           item.addEventListener('click', () => {
@@ -1496,7 +1496,7 @@
           const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
           const div = document.createElement('div');
           div.className = 'irc-message privmsg';
-          div.innerHTML = '<span class="time">[' + time + ']</span><span class="nick">&lt;' + nick + '&gt;</span> ' + this.escapeHtml(text);
+          div.innerHTML = '<span class="time">[' + time + ']</span><span class="nick">&lt;' + this.escapeHtml(nick) + '&gt;</span> ' + this.escapeHtml(text);
           messagesElem.appendChild(div);
           messagesElem.scrollTop = messagesElem.scrollHeight;
         }
