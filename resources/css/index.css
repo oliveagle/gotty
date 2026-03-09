@@ -1306,3 +1306,46 @@ body.sidebar-auto-hide #sidebar-trigger {
     height: 10px;
     border-radius: 50%;
 }
+
+/* IRC Chatroom Entry */
+.irc-entry {
+    margin: 10px 15px;
+    padding: 12px;
+    background: linear-gradient(135deg, rgba(106, 106, 106, 0.2) 0%, rgba(80, 80, 80, 0.3) 100%);
+    border: 1px solid rgba(150, 150, 150, 0.2);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.irc-entry-label {
+    color: #c0c0c0;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn-irc-enter {
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    border: 1px solid rgba(200, 200, 200, 0.3);
+    color: #ffffff;
+    padding: 6px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    width: 100%;
+}
+
+.btn-irc-enter:hover {
+    background: linear-gradient(135deg, #7b8290 0%, #5b6573 100%);
+    border-color: rgba(220, 220, 220, 0.5);
+    box-shadow: 0 2px 8px rgba(150, 150, 150, 0.3);
+    transform: translateY(-1px);
+}
+
+.btn-irc-enter:active {
+    transform: translateY(0);
+}

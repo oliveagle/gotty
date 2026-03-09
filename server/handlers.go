@@ -317,6 +317,10 @@ func (server *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"title":    titleBuf.String(),
 		"commit":   BuildCommit,
 		"buildAt":  BuildTime,
+		// IRC chatroom config
+		"enableIRC":      server.options.EnableIRC,
+		"ircChannel":     server.options.IRCDefaultChannel,
+		"ircNetworkName": server.options.IRCNetworkName,
 	}
 
 	indexBuf := new(bytes.Buffer)

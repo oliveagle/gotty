@@ -26,6 +26,11 @@
         <div id="session-list">
           <div class="session-loading">Loading sessions...</div>
         </div>
+        <!-- IRC Chatroom Entry -->
+        <div id="irc-entry" class="irc-entry" style="display: none;">
+          <div class="irc-entry-label">💬 IRC Chatroom</div>
+          <button id="irc-enter-btn" class="btn-irc-enter">Enter Chatroom</button>
+        </div>
         <div class="sidebar-toolbar">
           <button id="nav-back-btn" class="btn-toolbar btn-nav" title="Previous Session (Alt+Left)">◀</button>
           <button id="nav-forward-btn" class="btn-toolbar btn-nav" title="Next Session (Alt+Right)">▶</button>
@@ -137,11 +142,21 @@
         }
 
         init() {
-          // Set host display
+          // Set host display with real-time clock
           const hostElem = document.getElementById('header-host');
           if (hostElem) {
-            hostElem.textContent = window.location.host;
+            const updateClock = () => {
+              const now = new Date();
+              const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false });
+              const dateStr = now.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+              hostElem.textContent = `${window.location.host} | ${dateStr} ${timeStr}`;
+            };
+            updateClock();
+            setInterval(updateClock, 1000);
           }
+
+          // Initialize IRC entry (show if IRC is enabled)
+          this.initIRCEntry();
 
           // Initialize workspace selector
           this.initWorkspaceSelector();
@@ -615,6 +630,35 @@
                   break;
               }
             });
+          });
+        }
+
+        initIRCEntry() {
+          const ircEntryElem = document.getElementById('irc-entry');
+          const ircEnterBtn = document.getElementById('irc-enter-btn');
+
+          if (!ircEntryElem || !ircEnterBtn) return;
+
+          // Check if IRC is enabled (passed from server)
+          // Use template variable if available, otherwise check URL param
+          const ircEnabled = typeof enableIRC !== 'undefined' ? enableIRC : (new URLSearchParams(window.location.search).get('irc') === '1');
+          const ircChannel = typeof ircChannel !== 'undefined' ? ircChannel : '#general';
+          const ircNetworkName = typeof ircNetworkName !== 'undefined' ? ircNetworkName : 'GoTTY Network';
+
+          if (ircEnabled) {
+            ircEntryElem.style.display = 'block';
+            // Update label with network name
+            const labelElem = ircEntryElem.querySelector('.irc-entry-label');
+            if (labelElem) {
+              labelElem.textContent = `💬 ${ircNetworkName}`;
+            }
+          }
+
+          // Handle enter button click
+          ircEnterBtn.addEventListener('click', () => {
+            // Open IRC chatroom in new window/tab
+            const ircUrl = window.location.protocol + '//' + window.location.host + '/irc/';
+            window.open(ircUrl, '_blank');
           });
         }
 
