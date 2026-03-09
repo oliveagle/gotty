@@ -34,19 +34,25 @@ func (server *Server) wrapLogger(handler http.Handler) http.Handler {
 
 		duration := time.Since(start)
 
-		// Log request
-		log.Printf("%s %d %s %s %v", r.RemoteAddr, rw.status, r.Method, r.URL.Path, duration)
+		// SECURITY: Redact sensitive data from URL before logging
+		logPath := RedactURLSensitive(r.URL.Path)
+		if r.URL.RawQuery != "" {
+			logPath = RedactURLSensitive(logPath + "?" + r.URL.RawQuery)
+		}
+
+		// Log request (with sensitive data redacted)
+		log.Printf("%s %d %s %s %v", r.RemoteAddr, rw.status, r.Method, logPath, duration)
 
 		// Security audit logging for suspicious requests
 		if suspicious {
 			log.Printf("[SECURITY AUDIT] Suspicious request detected: ip=%s method=%s path=%s user-agent=%s reason=%s",
-				r.RemoteAddr, r.Method, r.URL.Path, r.UserAgent(), reason)
+				r.RemoteAddr, r.Method, logPath, r.UserAgent(), reason)
 		}
 
 		// Log authentication failures with more detail
 		if rw.status == http.StatusUnauthorized {
 			log.Printf("[SECURITY AUDIT] Auth failure: ip=%s path=%s origin=%s",
-				r.RemoteAddr, r.URL.Path, r.Header.Get("Origin"))
+				r.RemoteAddr, logPath, r.Header.Get("Origin"))
 		}
 	})
 }
@@ -147,8 +153,53 @@ func (server *Server) wrapHeaders(handler http.Handler) http.Handler {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 
+		// SECURITY: CORS headers - strict same-origin policy
+		// Only allow same-origin requests by default
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			host := r.Host
+			// Check if origin matches host (same-origin)
+			if strings.HasPrefix(origin, "http://"+host) || strings.HasPrefix(origin, "https://"+host) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
+			} else if server.isAllowedOrigin(origin) {
+				// Allow configured origins
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				w.Header().Set("Access-Control-Max-Age", "86400")
+			}
+			// For non-allowed origins, don't set CORS headers (browser will block)
+		}
+
+		// Handle preflight requests
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
 		handler.ServeHTTP(w, r)
 	})
+}
+
+// isAllowedOrigin checks if the origin is in the allowed list
+func (server *Server) isAllowedOrigin(origin string) bool {
+	// Allow localhost for development
+	localhostPatterns := []string{
+		"http://localhost",
+		"https://localhost",
+		"http://127.0.0.1",
+		"https://127.0.0.1",
+	}
+	for _, pattern := range localhostPatterns {
+		if strings.HasPrefix(origin, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 func (server *Server) wrapBasicAuth(handler http.Handler, credential string) http.Handler {

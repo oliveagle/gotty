@@ -93,6 +93,15 @@ export class Xterm {
             this.webglAddon = null;
         }
 
+        // Force cursor blink after all addons are loaded
+        // WebGL may override the initial cursorBlink setting
+        this.term.options.cursorBlink = true;
+
+        // Re-enable cursor blink on focus (WebGL may disable it on blur)
+        this.term.on('focus', () => {
+            this.term.options.cursorBlink = true;
+        });
+
         // Fit after DOM layout is complete
         // Delay slightly to ensure CSS and flexbox layout are settled
         setTimeout(() => {
@@ -100,6 +109,8 @@ export class Xterm {
             this.lastHeight = Math.round(this.elem.clientHeight);
             // Resize debug log disabled
             this.fitAddon.fit();
+            // Final check: ensure cursor blink is enabled after fit
+            this.term.options.cursorBlink = true;
         }, 100);
 
         // Create ResizeObserver but keep it disconnected

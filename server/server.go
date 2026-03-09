@@ -43,6 +43,7 @@ type Server struct {
 	webAuthnManager   *WebAuthnManager
 	webAuthnSessions  *SessionDataManager
 	authSessionMgr    *AuthSessionManager
+	loginAttemptMgr   *LoginAttemptManager // SECURITY: Login attempt tracking
 
 	ircHandler *irc.IRCHandler
 
@@ -251,6 +252,11 @@ git 提交代码
 // The cancelation of ctx will shutdown the server immediately with aborting
 // existing connections. Use WithGracefullContext() to support gracefull shutdown.
 func (server *Server) Run(ctx context.Context, options ...RunOption) error {
+	// SECURITY: Run security configuration checks at startup
+	securityChecker := NewSecurityChecker(server.options)
+	securityChecker.RunChecks()
+	securityChecker.PrintReport()
+
 	cctx, cancel := context.WithCancel(ctx)
 	opts := &RunOptions{gracefullCtx: context.Background()}
 	for _, opt := range options {

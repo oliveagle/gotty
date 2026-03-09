@@ -574,6 +574,169 @@ if token != "" {
 2. **Cookie** - 推荐（HttpOnly）
 3. **Query parameter** - 不推荐（会记录在日志中）
 
+### 2026-03-09 安全加固 (第七轮)
+
+| 漏洞 | 严重程度 | 修复方案 | 状态 |
+|------|----------|----------|------|
+| 缺少安全审计日志 | 中 | 添加可疑请求检测和日志记录 | ✅ 已修复 |
+| HTTP 安全头不完整 | 中 | 添加 HSTS、Cache-Control 等 | ✅ 已修复 |
+| WebSocket 输入验证不足 | 中 | 添加输入大小限制和终端尺寸验证 | ✅ 已修复 |
+
+#### 19. 安全审计日志 (中)
+
+**文件**: `server/middleware.go`
+
+新增可疑请求检测功能，自动检测以下攻击模式：
+
+```go
+// 检测的攻击类型
+- path_traversal      // 路径遍历 (../, %2e%2e)
+- sql_injection       // SQL 注入模式
+- xss_pattern         // XSS 攻击模式
+- null_byte_injection // 空字节注入
+- oversized_request   // 超大请求 (DoS)
+- security_scanner    // 安全扫描器 (sqlmap, nmap 等)
+- malicious_user_agent // 恶意 User-Agent
+```
+
+示例日志输出：
+```
+[SECURITY AUDIT] Suspicious request detected: ip=192.168.1.100 method=GET path=/api/../etc/passwd user-agent=sqlmap/1.0 reason=path_traversal
+[SECURITY AUDIT] Auth failure: ip=192.168.1.100 path=/api/sessions origin=http://evil.com
+```
+
+#### 20. HTTP 安全头增强 (中)
+
+**文件**: `server/middleware.go`
+
+新增/增强以下安全头：
+
+```go
+// API 响应禁止缓存
+Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate
+Pragma: no-cache
+Expires: 0
+
+// CSP 增强
+Content-Security-Policy: default-src 'self'; ...; form-action 'self'; base-uri 'self'
+
+// 权限策略增强
+Permissions-Policy: clipboard-read=(), clipboard-write=(self), geolocation=(), microphone=(), camera=()
+
+// HSTS (仅 TLS 启用时)
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+```
+
+#### 21. WebSocket 输入验证增强 (中)
+
+**文件**: `webtty/webtty.go`
+
+新增安全验证：
+
+1. **单次输入大小限制**: 64KB
+   ```go
+   const maxInputSize = 64 * 1024
+   if len(data) > maxInputSize {
+       data = data[:maxInputSize] // 截断防止内存耗尽
+   }
+   ```
+
+2. **终端尺寸验证**: 最大 10000x10000
+   ```go
+   const maxTerminalSize = 10000
+   // Clamp to reasonable bounds
+   if rows > maxTerminalSize { rows = maxTerminalSize }
+   if columns > maxTerminalSize { columns = maxTerminalSize }
+   ```
+
+3. **默认值设置**: 防止无效尺寸
+   ```go
+   if rows < 1 { rows = 24 }    // 默认 24 行
+   if columns < 1 { columns = 80 } // 默认 80 列
+   ```
+
+### 2026-03-09 安全加固 (第八轮)
+
+| 漏洞 | 严重程度 | 修复方案 | 状态 |
+|------|----------|----------|------|
+| 缺少敏感数据脱敏 | 中 | 添加日志敏感数据自动脱敏 | ✅ 已修复 |
+| 缺少安全配置检查 | 高 | 添加启动时安全配置验证 | ✅ 已修复 |
+| CORS 配置不严格 | 中 | 添加严格的同源 CORS 策略 | ✅ 已修复 |
+
+#### 22. 敏感数据脱敏 (中)
+
+**文件**: `server/sensitive_redaction.go` (新建)
+
+新增敏感数据自动脱敏功能，防止敏感信息泄露到日志：
+
+```go
+// 自动检测并脱敏的模式
+- auth_token    // Token 参数
+- bearer_token  // Bearer Token
+- password      // 密码字段
+- api_key       // API 密钥
+- secret        // 秘密字段
+- credential    // 凭证字段
+```
+
+日志脱敏示例：
+```
+原始: /api/sessions?token=abc123def456ghi789
+脱敏: /api/sessions?token=***REDACTED***
+
+原始: Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+脱敏: Authorization: Bearer ***REDACTED***
+```
+
+#### 23. 启动时安全配置检查 (高)
+
+**文件**: `server/security_check.go` (新建)
+
+服务器启动时自动执行安全配置检查：
+
+```
+=== Security Configuration Check ===
+  ✓ [PASS] Authentication: WebAuthn authentication is enabled.
+  ✓ [PASS] TLS/Encryption: TLS is enabled for encrypted communication.
+  ✓ [PASS] Network Binding: Server bound to localhost only.
+  ✓ [PASS] WebAuthn Data Directory: Secure permissions.
+  ✓ [PASS] Write Permission: Write permission enabled with authentication.
+  ⚠ [WARN] Session TTL: Session TTL is 168 hours. Consider shorter sessions.
+====================================
+[SECURITY] All security checks passed.
+```
+
+检查项目：
+- **认证配置**: 是否启用认证
+- **TLS 配置**: 是否启用加密传输
+- **网络绑定**: 是否绑定到公网接口
+- **文件权限**: 敏感文件权限是否正确
+- **随机 URL**: 长度是否足够
+- **写入权限**: 是否在无认证下启用写入
+- **WebAuthn 配置**: Session TTL、注册 Token 等
+
+#### 24. CORS 严格策略 (中)
+
+**文件**: `server/middleware.go`
+
+新增严格的 CORS 策略：
+
+```go
+// CORS 规则
+1. 同源请求: 允许完整访问 (GET, POST, PUT, DELETE, OPTIONS)
+2. localhost: 允许开发访问 (GET, POST, OPTIONS)
+3. 其他来源: 拒绝 CORS 请求 (不设置 CORS 头)
+
+// 安全头设置
+Access-Control-Allow-Credentials: true  // 仅同源
+Access-Control-Max-Age: 86400           // 24 小时缓存
+```
+
+特性：
+- 自动处理 OPTIONS 预检请求
+- 仅对允许的来源返回 CORS 头
+- 支持凭据传递（同源）
+
 ---
 
 ## 剩余风险
@@ -591,6 +754,8 @@ Token 支持多种传递方式：
 
 ## 更新日志
 
+- 2026-03-09: 第八轮安全加固 - 敏感数据脱敏、启动时安全配置检查、CORS 严格策略
+- 2026-03-09: 第七轮安全加固 - 安全审计日志、HTTP安全头增强、WebSocket输入验证
 - 2026-03-09: 第六轮安全加固 - 构建信息脱敏、Session ID 熵值增强、Token URL 安全警告
 - 2026-03-09: 第五轮安全加固 - 修复 WebSocket Origin 验证、随机 URL 熵值、添加速率限制
 - 2026-03-09: 第四轮安全加固 - 修复剪贴板大小限制、加密实现、VerifyToken 时序攻击
