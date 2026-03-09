@@ -344,6 +344,90 @@ func (sm *SessionManager) MoveToFolder(sessionID string, folderID string) bool {
 	return true
 }
 
+// Reorder moves a session to a new position within a parent (folder or root)
+// parentID specifies the target parent (empty string for root)
+// afterID specifies which session to insert after (empty string means insert at beginning)
+func (sm *SessionManager) Reorder(sessionID string, parentID string, afterID string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, ok := sm.sessions[sessionID]
+	if !ok {
+		return false
+	}
+
+	// Validate parentID (must be empty or a valid folder)
+	if parentID != "" {
+		parent, ok := sm.sessions[parentID]
+		if !ok || !parent.IsFolder {
+			return false
+		}
+		// Prevent moving a folder into itself or its descendants
+		if session.IsFolder && sm.isDescendant(parentID, sessionID) {
+			return false
+		}
+	}
+
+	// Validate afterID if provided (must exist and be in the same parent)
+	if afterID != "" {
+		afterSession, ok := sm.sessions[afterID]
+		if !ok {
+			return false
+		}
+		// afterID must be in the same parent (or root)
+		if afterSession.ParentID != parentID {
+			return false
+		}
+	}
+
+	// Get all siblings in the target parent (excluding the session being moved)
+	var siblings []*Session
+	for _, s := range sm.sessions {
+		if s.ParentID == parentID && s.ID != sessionID {
+			siblings = append(siblings, s)
+		}
+	}
+
+	// Sort siblings by order
+	sort.Slice(siblings, func(i, j int) bool {
+		return siblings[i].Order < siblings[j].Order
+	})
+
+	// Find the position to insert
+	insertPos := 0
+	if afterID != "" {
+		for i, s := range siblings {
+			if s.ID == afterID {
+				insertPos = i + 1
+				break
+			}
+		}
+	}
+
+	// Insert the session at the correct position
+	// Create a new slice with the session inserted
+	newOrder := make([]*Session, 0, len(siblings)+1)
+	newOrder = append(newOrder, siblings[:insertPos]...)
+	newOrder = append(newOrder, session)
+	newOrder = append(newOrder, siblings[insertPos:]...)
+
+	// Reassign order values
+	for i, s := range newOrder {
+		s.Order = i + 1
+	}
+
+	// Update the session's parent
+	session.ParentID = parentID
+
+	// Update nextOrder if needed
+	if len(newOrder) >= sm.nextOrder {
+		sm.nextOrder = len(newOrder) + 1
+	}
+
+	sm.saveMetadata()
+	return true
+}
+
 // isDescendant checks if target is a descendant of ancestor
 func (sm *SessionManager) isDescendant(targetID string, ancestorID string) bool {
 	current := sm.sessions[targetID]

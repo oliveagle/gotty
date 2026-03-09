@@ -398,6 +398,7 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			ParentID        string `json:"parent_id,omitempty"`
 			WorkspaceID     string `json:"workspace_id,omitempty"`
 			IsFolder        bool   `json:"is_folder"`
+			Order           int    `json:"order"`
 			HasChildren     bool   `json:"has_children"`
 			IsActive        bool   `json:"is_active"`
 			LastActiveAgo   int64  `json:"last_active_ago"`
@@ -414,6 +415,7 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 				ParentID:      s.ParentID,
 				WorkspaceID:   s.WorkspaceID,
 				IsFolder:      s.IsFolder,
+				Order:         s.Order,
 				HasChildren:   server.sessionManager.HasChildren(s.ID),
 				IsActive:      isActive,
 				LastActiveAgo: lastActiveAgo,
@@ -605,6 +607,43 @@ func (server *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method not allowed", 405)
 	}
+}
+
+// handleReorder handles session reorder requests
+func (server *Server) handleReorder(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+
+	var req struct {
+		SessionID string `json:"session_id"`
+		ParentID  string `json:"parent_id"`  // Target parent (empty for root)
+		AfterID   string `json:"after_id"`   // Insert after this session (empty for beginning)
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", 400)
+		return
+	}
+
+	if req.SessionID == "" {
+		http.Error(w, "session_id is required", 400)
+		return
+	}
+
+	if !server.sessionManager.Reorder(req.SessionID, req.ParentID, req.AfterID) {
+		http.Error(w, "Failed to reorder session", 400)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":   true,
+		"id":        req.SessionID,
+		"parent_id": req.ParentID,
+		"after_id":  req.AfterID,
+	})
 }
 
 // handleWorkspaces handles workspace list and creation
