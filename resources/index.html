@@ -8,52 +8,6 @@
     <link rel="stylesheet" href="./css/xterm_customize.css" />
   </head>
   <body>
-    <!-- Password Manager Authentication Overlay (must be outside #app for full coverage) -->
-    <div id="pwmanager-auth" class="pwmanager-auth">
-      <div class="pwmanager-dialog">
-        <div class="pwmanager-icon">🔐</div>
-        <h2 class="pwmanager-title">Authentication Required</h2>
-        <p class="pwmanager-subtitle">Use your password manager to fill credentials</p>
-
-        <!-- Standard login form for password manager detection -->
-        <form id="pwmanager-form" class="pwmanager-form" autocomplete="on">
-          <input type="text"
-                 name="username"
-                 id="pwmanager-username"
-                 class="pwmanager-input"
-                 autocomplete="username"
-                 placeholder="Username"
-                 value="gotty">
-
-          <input type="password"
-                 name="password"
-                 id="pwmanager-password"
-                 class="pwmanager-input pwmanager-password"
-                 autocomplete="current-password"
-                 placeholder="Password"
-                 autofocus>
-
-          <button type="submit" class="pwmanager-btn" id="pwmanager-submit">
-            Connect
-          </button>
-        </form>
-
-        <div class="pwmanager-hints">
-          <details>
-            <summary>💡 How to use with password managers</summary>
-            <div class="pwmanager-hint-content">
-              <p><strong>KeePassXC:</strong> Click password field → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></p>
-              <p><strong>Bitwarden:</strong> Click password field → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></p>
-              <p><strong>1Password:</strong> Click password field → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd></p>
-              <p><strong>LastPass:</strong> Click the LastPass icon in the field</p>
-            </div>
-          </details>
-        </div>
-
-        <div class="pwmanager-error" id="pwmanager-error"></div>
-      </div>
-    </div>
-
     <!-- WebAuthn/Passkeys Authentication Overlay -->
     <div id="webauthn-auth" class="pwmanager-auth" style="display: none;">
       <div class="pwmanager-dialog">
@@ -75,6 +29,7 @@
             <summary>💡 How to use Passkeys</summary>
             <div class="pwmanager-hint-content">
               <p><strong>KeePassXC:</strong> Store your Passkey in KeePassXC 2.7.7+</p>
+              <p><strong>Bitwarden:</strong> Store your Passkey in Bitwarden</p>
               <p><strong>Browser:</strong> Use built-in Passkey support (Chrome, Firefox, Safari)</p>
               <p><strong>Hardware Key:</strong> YubiKey, Titan Key, or other FIDO2 authenticators</p>
             </div>
@@ -103,9 +58,6 @@
             <span class="workspace-icon" id="workspace-icon">📁</span>
             <span class="workspace-name" id="workspace-name">Default</span>
             <span class="workspace-arrow">▼</span>
-            <div class="workspace-dropdown" id="workspace-dropdown">
-              <!-- Workspace items will be populated by JavaScript -->
-            </div>
           </div>
         </div>
         <div id="session-list">
@@ -133,6 +85,11 @@
         </div>
         <div class="sidebar-footer">{{ .commit }} · {{ .buildAt }}</div>
         <button class="sidebar-toggle" title="Toggle Sidebar">◀</button>
+      </div>
+
+      <!-- Workspace dropdown (outside sidebar for fixed positioning) -->
+      <div class="workspace-dropdown" id="workspace-dropdown">
+        <!-- Workspace items will be populated by JavaScript -->
       </div>
 
       <!-- Floating fullscreen button (visible when sidebar collapsed) -->
@@ -574,8 +531,24 @@
           // Toggle dropdown on click
           selector.addEventListener('click', (e) => {
             e.stopPropagation();
-            selector.classList.toggle('open');
-            dropdown.classList.toggle('visible');
+            const isOpen = selector.classList.contains('open');
+
+            if (isOpen) {
+              // Close
+              selector.classList.remove('open');
+              dropdown.classList.remove('visible');
+            } else {
+              // Open - calculate position
+              const sidebar = document.getElementById('sidebar');
+              const sidebarRect = sidebar.getBoundingClientRect();
+
+              // Position dropdown at bottom of sidebar
+              dropdown.style.left = sidebarRect.left + 'px';
+              dropdown.style.top = sidebarRect.bottom + 'px';
+
+              selector.classList.add('open');
+              dropdown.classList.add('visible');
+            }
           });
 
           // Close dropdown on click outside
@@ -593,6 +566,19 @@
               this.selectedColor = option.dataset.color;
             });
           });
+
+          // Update dropdown position when sidebar collapses/expands
+          const sidebar = document.getElementById('sidebar');
+          if (sidebar) {
+            const observer = new MutationObserver(() => {
+              if (dropdown.classList.contains('visible')) {
+                const sidebarRect = sidebar.getBoundingClientRect();
+                dropdown.style.left = sidebarRect.left + 'px';
+                dropdown.style.top = sidebarRect.bottom + 'px';
+              }
+            });
+            observer.observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+          }
         }
 
         async fetchWorkspaces() {
@@ -2951,6 +2937,10 @@
           if (timePeriod === 'night') {
             moon.classList.add('visible');
             stars.classList.add('visible');
+            // Position moon in the upper right
+            moon.style.right = '15%';
+            moon.style.top = '8px';
+            moon.style.bottom = 'auto';
             this.generateStars(stars);
           } else if (timePeriod === 'morning') {
             sun.classList.add('visible');
@@ -3002,18 +2992,21 @@
         setSunPosition(sun, position) {
           // Position in the sky container (percentage based)
           if (position === 'sunrise') {
-            // Left side, lower position (rising)
-            sun.style.left = '15%';
-            sun.style.bottom = '20%';
+            // Left side, upper position (rising)
+            sun.style.left = '10%';
+            sun.style.top = '8px';
+            sun.style.bottom = 'auto';
           } else if (position === 'noon') {
             // Center, top position
             sun.style.left = '50%';
-            sun.style.top = '15%';
+            sun.style.top = '8px';
             sun.style.bottom = 'auto';
           } else if (position === 'sunset') {
-            // Right side, lower position (setting)
-            sun.style.left = '85%';
-            sun.style.bottom = '20%';
+            // Right side, upper position (setting)
+            sun.style.left = 'auto';
+            sun.style.right = '10%';
+            sun.style.top = '8px';
+            sun.style.bottom = 'auto';
           }
         }
 
@@ -3024,8 +3017,8 @@
           // Clear existing clouds
           container.querySelectorAll('.cloud').forEach(c => c.remove());
 
-          const numClouds = intensity === 'light' ? 3 : 5;
-          const cloudHeights = intensity === 'light' ? [10, 25, 40] : [5, 15, 25, 40, 55];
+          const numClouds = intensity === 'light' ? 2 : 3;
+          const cloudHeights = intensity === 'light' ? [15, 35] : [10, 30, 50];
 
           cloudHeights.forEach((top, index) => {
             if (index >= numClouds) return;
@@ -3206,32 +3199,13 @@
       // Initialize session manager after all scripts loaded
       let sessionManager;
       window.addEventListener('load', function() {
-        // Check if password manager auth is required
         const authType = (typeof gotty_auth_type !== 'undefined') ? gotty_auth_type : 'none';
 
-        if (authType === 'bitwarden' || authType === 'pwmanager' || authType === 'keepassxc') {
-          // Password manager auth required - wait for authentication
-          // The main.ts will handle the auth UI and set gotty_auth_token
-          const checkAuthAndInit = () => {
-            if (typeof gotty_auth_token !== 'undefined' && gotty_auth_token) {
-              // Auth completed, initialize session manager
-              sessionManager = new SessionManager();
-              sessionManager.init();
-              window.sessionManager = sessionManager;
-            } else {
-              // Wait for auth to complete
-              setTimeout(checkAuthAndInit, 100);
-            }
-          };
-          // Start checking after a short delay to allow auth UI to appear
-          setTimeout(checkAuthAndInit, 100);
-        } else if (authType === 'webauthn') {
+        if (authType === 'webauthn') {
           // WebAuthn/Passkeys auth required
           const checkWebAuthnAndInit = () => {
             if (typeof window.WebAuthnAuth !== 'undefined') {
-              // WebAuthn module loaded, initialize
               const webauthnAuth = new window.WebAuthnAuth((authToken) => {
-                // Auth completed, set token and initialize
                 window.gotty_auth_token = authToken;
                 sessionManager = new SessionManager();
                 sessionManager.init();
@@ -3239,7 +3213,6 @@
               });
               webauthnAuth.show();
             } else {
-              // Wait for WebAuthn module to load
               setTimeout(checkWebAuthnAndInit, 100);
             }
           };
