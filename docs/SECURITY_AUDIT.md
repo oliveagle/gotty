@@ -737,6 +737,65 @@ Access-Control-Max-Age: 86400           // 24 小时缓存
 - 仅对允许的来源返回 CORS 头
 - 支持凭据传递（同源）
 
+### 2026-03-09 安全加固 (第九轮)
+
+| 漏洞 | 严重程度 | 修复方案 | 状态 |
+|------|----------|----------|------|
+| 缺少登录失败锁定 | 高 | 添加 IP 级别登录失败锁定机制 | ✅ 已修复 |
+| 缺少 IP 访问控制 | 高 | 添加 IP 白名单/黑名单支持 | ✅ 已修复 |
+
+#### 25. 登录失败锁定机制 (高)
+
+**文件**: `server/login_attempt.go` (新建)
+
+防止暴力破解攻击的登录失败锁定：
+
+```go
+// 配置参数
+- 最大失败次数: 5 次
+- 锁定时间: 15 分钟
+- 自动清理过期记录
+
+// 功能特性
+- 基于IP的失败次数追踪
+- 自动锁定超过阈值的IP
+- 成功登录后清除记录
+- 支持反向代理 (X-Forwarded-For)
+```
+
+日志示例：
+```
+[SECURITY] Failed login attempt #3 from IP: 192.168.1.100
+[SECURITY] IP 192.168.1.100 blocked for 15m0s due to 5 failed login attempts
+[SECURITY] Login attempt from blocked IP: 192.168.1.100 (blocked for 12m30s)
+[SECURITY] Cleared login attempts for IP: 192.168.1.100 after successful login
+```
+
+#### 26. IP 访问控制 (高)
+
+**文件**: `server/ip_filter.go` (新建)
+
+基于 IP 的访问控制：
+
+```go
+// 白名单模式
+ipFilter.AddToWhitelist("192.168.1.0/24")  // CIDR 支持
+ipFilter.AddToWhitelist("10.0.0.1")        // 单个 IP
+
+// 黑名单模式
+ipFilter.AddToBlacklist("192.168.100.0/24")
+ipFilter.AddToBlacklist("10.0.0.50")
+
+// 默认行为
+- allowLocal: true   // 始终允许 localhost
+- allowPrivate: true // 允许私有 IP 范围
+```
+
+访问控制优先级：
+1. 黑名单 - 最高优先级，直接拒绝
+2. 白名单 - 如果配置了白名单，只允许白名单中的 IP
+3. 默认规则 - localhost 和私有 IP
+
 ---
 
 ## 剩余风险
@@ -754,6 +813,7 @@ Token 支持多种传递方式：
 
 ## 更新日志
 
+- 2026-03-09: 第九轮安全加固 - 登录失败锁定机制、IP访问控制
 - 2026-03-09: 第八轮安全加固 - 敏感数据脱敏、启动时安全配置检查、CORS 严格策略
 - 2026-03-09: 第七轮安全加固 - 安全审计日志、HTTP安全头增强、WebSocket输入验证
 - 2026-03-09: 第六轮安全加固 - 构建信息脱敏、Session ID 熵值增强、Token URL 安全警告
