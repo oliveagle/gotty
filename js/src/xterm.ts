@@ -98,7 +98,7 @@ export class Xterm {
         setTimeout(() => {
             this.lastWidth = Math.round(this.elem.clientWidth);
             this.lastHeight = Math.round(this.elem.clientHeight);
-            console.log(`[resize] initial fit: ${this.lastWidth}x${this.lastHeight}`);
+            // Resize debug log disabled
             this.fitAddon.fit();
         }, 100);
 
@@ -317,7 +317,7 @@ export class Xterm {
 
     onResize(callback: (columns: number, rows: number) => void): void {
         this.term.onResize((data: { cols: number; rows: number }) => {
-            console.log(`[resize] term.onResize fired: ${data.cols}x${data.rows}`);
+            // Resize debug log disabled
             callback(data.cols, data.rows);
         });
     }
@@ -368,13 +368,13 @@ export class Xterm {
      * @param sidebarCollapsed - Whether sidebar is collapsed (hidden)
      */
     fitWithSidebarState(sidebarCollapsed: boolean): void {
-        console.log(`[resize] fitWithSidebarState: collapsed=${sidebarCollapsed}`);
+        // Resize debug log disabled
 
         // Wait for CSS transition to complete (200ms transition + buffer)
         setTimeout(() => {
             const width = Math.round(this.elem.clientWidth);
             const height = Math.round(this.elem.clientHeight);
-            console.log(`[resize] fit: terminalSize=${width}x${height}`);
+            // Resize debug log disabled
 
             this.lastWidth = width;
             this.lastHeight = height;
@@ -383,7 +383,7 @@ export class Xterm {
             if (this.term.rows > 0 && this.term.cols > 0) {
                 this.term.scrollToBottom();
             }
-            console.log(`[resize] fit done: ${this.term.cols}x${this.term.rows}`);
+            // Resize debug log disabled
         }, 250);
     }
 
@@ -394,7 +394,7 @@ export class Xterm {
         const currentHeight = Math.round(rect.height);
 
         if (currentWidth !== this.lastWidth || currentHeight !== this.lastHeight) {
-            console.log(`[resize] fit from ${reason}: ${this.lastWidth}x${this.lastHeight} -> ${currentWidth}x${currentHeight}`);
+            // Resize debug log disabled
             this.lastWidth = currentWidth;
             this.lastHeight = currentHeight;
             this.fitAddon.fit();
@@ -402,7 +402,7 @@ export class Xterm {
             if (this.term.rows > 0 && this.term.cols > 0) {
                 this.term.scrollToBottom();
             }
-            console.log(`[resize] fit done, cols/rows: ${this.term.cols}x${this.term.rows}`);
+            // Resize debug log disabled
         }
     }
 

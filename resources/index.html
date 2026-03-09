@@ -628,8 +628,8 @@
             const isActive = ws.id === this.activeWorkspaceId;
             html += `
               <div class="workspace-dropdown-item ${isActive ? 'active' : ''}" data-workspace-id="${ws.id}" onclick="sessionManager.switchWorkspace('${ws.id}', event)">
-                <span class="ws-icon">${ws.icon || '📁'}</span>
-                <span class="ws-name">${ws.name}</span>
+                <span class="ws-icon">${this.escapeHtml(ws.icon || '📁')}</span>
+                <span class="ws-name">${this.escapeHtml(ws.name)}</span>
                 ${isActive ? '<span class="ws-check">✓</span>' : ''}
               </div>
             `;
@@ -1073,7 +1073,7 @@
             html += `
               <span class="marquee-item">
                 <span class="marquee-label">Weather:</span>
-                <span class="marquee-value">${weatherInfo.icon} ${weatherInfo.city} ${weatherInfo.condition} ${weatherInfo.temp}</span>
+                <span class="marquee-value">${this.escapeHtml(weatherInfo.icon)} ${this.escapeHtml(weatherInfo.city)} ${this.escapeHtml(weatherInfo.condition)} ${this.escapeHtml(weatherInfo.temp)}</span>
               </span>
             `;
           }
@@ -1876,7 +1876,7 @@
                 html += `
                   <div class="context-submenu-item" onclick="sessionManager.moveItemToWorkspace('${id}', '${ws.id}')">
                     <span class="ws-color-dot" style="background: ${this.getColorHex(ws.color_theme)}"></span>
-                    ${ws.icon} ${ws.name}
+                    ${this.escapeHtml(ws.icon)} ${this.escapeHtml(ws.name)}
                   </div>
                 `;
               }

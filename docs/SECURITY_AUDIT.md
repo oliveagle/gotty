@@ -199,7 +199,7 @@ id := randomstring.Generate(8)  // 8 字符约 48 位熵
 
 ## 加固记录
 
-### 2026-03-09 安全加固
+### 2026-03-09 安全加固 (第一轮)
 
 | 漏洞 | 修复方案 | 状态 |
 |------|----------|------|
@@ -208,6 +208,14 @@ id := randomstring.Generate(8)  // 8 字符约 48 位熵
 | WebSocket 消息大小 | 添加 `maxMessageSize` 限制 (默认 1MB) | ✅ 已修复 |
 | 会话元数据权限 | 目录权限 `0700`，文件权限 `0600` | ✅ 已修复 |
 | 错误信息泄露 | 返回通用错误消息，详情仅记录日志 | ✅ 已修复 |
+
+### 2026-03-09 安全加固 (第二轮)
+
+| 漏洞 | 严重程度 | 修复方案 | 状态 |
+|------|----------|----------|------|
+| IRC CSWSH | 严重 | 实现 Origin 验证，仅允许同源和 localhost | ✅ 已修复 |
+| XSS (前端) | 高 | 对所有用户输入使用 `escapeHtml()` 转义 | ✅ 已修复 |
+| 缺少安全头 | 中 | 添加 CSP, X-Frame-Options 等安全头 | ✅ 已修复 |
 
 ### 修复详情
 
@@ -250,10 +258,79 @@ return subtle.ConstantTimeCompare([]byte(m.registerToken), []byte(token)) == 1
 - 移除 `err.Error()` 返回给客户端
 - 错误详情仅记录到服务端日志
 
+#### 6. IRC CSWSH 修复 (严重)
+
+**文件**: `irc/handler.go`
+
+原代码允许所有 Origin，存在跨站 WebSocket 劫持风险：
+
+```go
+// 危险代码
+CheckOrigin: func(r *http.Request) bool {
+    return true // 允许所有来源
+},
+```
+
+修复后验证 Origin：
+
+```go
+CheckOrigin: func(r *http.Request) bool {
+    origin := r.Header.Get("Origin")
+    // 允许无 Origin 请求（CLI 工具）
+    if origin == "" { return true }
+    // 允许同源请求
+    host := r.Host
+    if strings.HasPrefix(origin, "http://"+host) { return true }
+    // 允许 localhost 开发
+    if strings.HasPrefix(origin, "http://localhost") { return true }
+    // 拒绝其他来源
+    return false
+},
+```
+
+#### 7. XSS 修复 (高)
+
+**文件**: `resources/index.html`
+
+修复以下 XSS 漏洞：
+
+- IRC 频道名称未转义 → `this.escapeHtml(channel)`
+- IRC 昵称未转义 → `this.escapeHtml(nick)`
+- Workspace 名称/图标未转义 → `this.escapeHtml(ws.name)`, `this.escapeHtml(ws.icon)`
+- 天气数据未转义 → `this.escapeHtml(weatherInfo.city)` 等
+
+#### 8. 安全头添加 (中)
+
+**文件**: `server/middleware.go`
+
+```go
+w.Header().Set("X-Content-Type-Options", "nosniff")
+w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+w.Header().Set("X-XSS-Protection", "1; mode=block")
+w.Header().Set("Content-Security-Policy", "default-src 'self'; ...")
+w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+w.Header().Set("Permissions-Policy", "clipboard-read=(), clipboard-write=(self)")
+```
+
+---
+
+## 剩余风险
+
+### Token 通过 URL 传递 (中风险)
+
+Token 目前通过 URL query 参数传递，可能被日志记录。建议后续改为：
+- 使用 Authorization header
+- 使用 HttpOnly Cookie
+
+### zellij 会话名称 (低风险)
+
+zellij 会话名称直接传递给 `exec.Command`，虽然 Go 不使用 shell，但仍建议添加字符白名单验证。
+
 ---
 
 ## 更新日志
 
+- 2026-03-09: 第二轮安全加固 - 修复 IRC CSWSH、XSS、添加安全头
 - 2026-03-09: 添加漏洞分析章节，记录安全审计发现
 - 2026-03-09: 添加 `/api/weather`, `/weather-preview.html`, `/irc/` 的认证保护
 - 2026-03-09: 修复 `connectTerminal()` 未从 localStorage 获取 token 的问题
