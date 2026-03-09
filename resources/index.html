@@ -81,7 +81,7 @@
           <button id="new-folder-btn" class="btn-toolbar btn-folder" title="New Folder">📁</button>
           <button id="new-session-btn" class="btn-toolbar btn-new" title="New Session">+</button>
           <button id="fullscreen-btn" class="btn-toolbar btn-fullscreen" title="Toggle Fullscreen (F11)">⛶</button>
-          <button id="settings-btn" class="btn-toolbar btn-settings" title="Settings">⚙️</button>
+          <a href="settings.html" id="settings-btn" class="btn-toolbar btn-settings" title="Settings">⚙️</a>
         </div>
         <div class="sidebar-footer">{{ .commit }} · {{ .buildAt }}</div>
         <button class="sidebar-toggle" title="Toggle Sidebar">◀</button>
@@ -483,15 +483,7 @@
             }
           });
 
-          // Listen for settings button
-          const settingsBtn = document.getElementById('settings-btn');
-          if (settingsBtn) {
-            settingsBtn.addEventListener('click', () => {
-              this.showSettingsModal();
-            });
-          }
-
-          // Setup context menu
+        // Setup context menu
           this.setupContextMenu();
 
           // Setup auto-hide sidebar
@@ -839,22 +831,9 @@
 
         initBanner() {
           this.initBannerContextMenu();
-          this.initBannerSettingsButton();
           this.initMarquee();
           // Load notes for current session
           this.updateBannerNotes();
-        }
-
-        initBannerSettingsButton() {
-          const settingsBtn = document.getElementById('banner-settings-btn');
-          if (!settingsBtn) return;
-
-          settingsBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (this.showSettingsModal) {
-              this.showSettingsModal();
-            }
-          });
         }
 
         initBannerContextMenu() {

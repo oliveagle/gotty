@@ -25,10 +25,11 @@ type IRCSession struct {
 
 // IRCHandler 处理 IRC WebSocket 连接
 type IRCHandler struct {
-	server   *Server
-	upgrader websocket.Upgrader
-	sessions map[*IRCSession]bool
-	mu       sync.RWMutex
+	server     *Server
+	upgrader   websocket.Upgrader
+	sessions   map[*IRCSession]bool
+	mu         sync.RWMutex
+	allowOrigins []string // Allowed origins for CSRF protection
 }
 
 // NewIRCHandler 创建一个新的 IRC 处理器
@@ -36,14 +37,46 @@ func NewIRCHandler(server *Server) *IRCHandler {
 	return &IRCHandler{
 		server:   server,
 		sessions: make(map[*IRCSession]bool),
+		allowOrigins: []string{}, // Will be set via SetAllowedOrigins
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
-				return true // 允许所有来源
+				// Security: Validate Origin header to prevent CSWSH attacks
+				origin := r.Header.Get("Origin")
+
+				// Allow requests with no Origin (e.g., from CLI tools or same-origin)
+				if origin == "" {
+					return true
+				}
+
+				// Allow same-origin requests
+				host := r.Host
+				if strings.HasPrefix(origin, "http://"+host) || strings.HasPrefix(origin, "https://"+host) {
+					return true
+				}
+
+				// Allow localhost for development
+				if strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "https://localhost") {
+					return true
+				}
+
+				// Allow 127.0.0.1 for development
+				if strings.HasPrefix(origin, "http://127.0.0.1") || strings.HasPrefix(origin, "https://127.0.0.1") {
+					return true
+				}
+
+				// Reject all other origins
+				log.Printf("[IRC] Rejected WebSocket connection from Origin: %s", origin)
+				return false
 			},
 		},
 	}
+}
+
+// SetAllowedOrigins sets additional allowed origins
+func (h *IRCHandler) SetAllowedOrigins(origins []string) {
+	h.allowOrigins = origins
 }
 
 // HandleWS 处理 WebSocket 连接
