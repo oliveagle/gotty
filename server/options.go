@@ -39,6 +39,11 @@ type Options struct {
 	SummaryModel    string `hcl:"summary_model" flagName:"summary-model" flagDescribe:"LLM model for summarization" default:"Qwen3.5-4B-UD-Q4_K_XL"`
 	SummaryEndpoint string `hcl:"summary_endpoint" flagName:"summary-endpoint" flagDescribe:"LLM API endpoint (Ollama or OpenAI compatible)" default:"http://localhost:43669"`
 
+	// IRC chatroom options
+	EnableIRC         bool   `hcl:"enable_irc" flagName:"irc" flagDescribe:"Enable IRC chatroom mode" default:"false"`
+	IRCDefaultChannel string `hcl:"irc_default_channel" flagName:"irc-channel" flagDescribe:"Default IRC channel" default:"#general"`
+	IRCNetworkName    string `hcl:"irc_network_name" flagName:"irc-network" flagDescribe:"IRC network name" default:"GoTTY Network"`
+
 	TitleVariables map[string]interface{}
 }
 

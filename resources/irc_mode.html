@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GoTTY IRC 聊天室</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #16213e;
+      padding: 10px 20px;
+      border-bottom: 1px solid #0f3460;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 1.2rem; color: #e94560; }
+    .status { font-size: 0.85rem; color: #888; }
+    .status.connected { color: #4ade80; }
+    .status.disconnected { color: #f87171; }
+    #container { display: flex; flex: 1; overflow: hidden; }
+    #sidebar {
+      width: 200px;
+      background: #16213e;
+      border-right: 1px solid #0f3460;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-section {
+      padding: 10px;
+      border-bottom: 1px solid #0f3460;
+    }
+    .sidebar-section h3 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 8px;
+    }
+    #channel-list, #user-list { list-style: none; }
+    #channel-list li, #user-list li {
+      padding: 4px 8px;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+    #channel-list li:hover, #user-list li:hover { background: #0f3460; }
+    #channel-list li.active { background: #e94560; }
+    #user-list li::before { content: '👤 '; }
+    #main { flex: 1; display: flex; flex-direction: column; }
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .message { margin-bottom: 4px; word-wrap: break-word; }
+    .message.system { color: #888; font-style: italic; }
+    .message.privmsg .nick { color: #4ade80; font-weight: bold; }
+    .message .time { color: #666; font-size: 0.75rem; margin-right: 8px; }
+    #input-area {
+      display: flex;
+      border-top: 1px solid #0f3460;
+      background: #16213e;
+    }
+    #nick-display {
+      padding: 12px 15px;
+      background: #0f3460;
+      color: #4ade80;
+      font-family: monospace;
+      min-width: 120px;
+      text-align: center;
+    }
+    #message-input {
+      flex: 1;
+      padding: 12px 15px;
+      border: none;
+      background: #1a1a2e;
+      color: #eee;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    #message-input::placeholder { color: #666; }
+    #send-btn {
+      padding: 12px 20px;
+      background: #e94560;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+    #send-btn:hover { background: #ff6b6b; }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #1a1a2e; }
+    ::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #e94560; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🗨️ GoTTY IRC 聊天室</h1>
+    <span id="status" class="status disconnected">断开连接</span>
+  </header>
+  <div id="container">
+    <div id="sidebar">
+      <div class="sidebar-section">
+        <h3>频道</h3>
+        <ul id="channel-list"><li class="active">{{.DefaultChannel}}</li></ul>
+      </div>
+      <div class="sidebar-section">
+        <h3>用户</h3>
+        <ul id="user-list"></ul>
+      </div>
+    </div>
+    <div id="main">
+      <div id="messages"></div>
+      <div id="input-area">
+        <div id="nick-display">guest</div>
+        <input type="text" id="message-input" placeholder="输入消息或 /help 查看命令..." autocomplete="off">
+        <button id="send-btn">发送</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const defaultChannel = '{{.DefaultChannel}}';
+    const networkName = '{{.NetworkName}}';
+
+    class IRCClient {
+      constructor(url) {
+        this.url = url;
+        this.ws = null;
+        this.nick = 'guest';
+        this.channels = new Set();
+        this.messageHandlers = [];
+        this.connect();
+      }
+      connect() {
+        this.ws = new WebSocket(this.url);
+        this.ws.onopen = () => {
+          this.updateStatus('connected');
+          this.addSystemMessage('已连接到 ' + networkName);
+        };
+        this.ws.onclose = () => {
+          this.updateStatus('disconnected');
+          this.addSystemMessage('已断开连接');
+          setTimeout(() => this.connect(), 3000);
+        };
+        this.ws.onerror = (error) => console.error('WebSocket error:', error);
+        this.ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data);
+          this.handleMessage(msg);
+        };
+      }
+      handleMessage(msg) {
+        this.messageHandlers.forEach(handler => handler(msg));
+        if (msg.type === 'sys') {
+          this.addSystemMessage(msg.data);
+          if (msg.data && msg.data.startsWith('Users in')) {
+            this.updateUserList(msg.data);
+          }
+        } else if (msg.type === 'irc_out') {
+          this.handleIRCMessage(msg);
+        }
+      }
+      handleIRCMessage(msg) {
+        const prefix = msg.tags?.prefix || '';
+        const command = msg.command || '';
+        switch (command) {
+          case 'PRIVMSG': this.addMessage(prefix, msg.data); break;
+          case 'JOIN': this.addSystemMessage(prefix + ' 加入了频道'); break;
+          case 'PART': this.addSystemMessage(prefix + ' 离开了频道'); break;
+          case 'NICK': this.addSystemMessage(prefix + ' 改名为 ' + (msg.params?.[0] || '')); break;
+          case 'TOPIC': this.addSystemMessage('主题：' + msg.data); break;
+        }
+      }
+      send(msg) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify(msg));
+        }
+      }
+      sendMessage(channel, text) {
+        this.send({ type: 'msg', channel: channel, data: text, timestamp: Date.now() });
+      }
+      sendCommand(cmd) {
+        this.send({ type: 'irc_in', data: cmd, timestamp: Date.now() });
+      }
+      setNick(nick) {
+        this.nick = nick;
+        document.getElementById('nick-display').textContent = nick;
+        this.send({ type: 'nick', nick: nick, timestamp: Date.now() });
+      }
+      join(channel) {
+        this.send({ type: 'join', channel: channel, timestamp: Date.now() });
+      }
+      addMessage(nick, text) {
+        const messagesDiv = document.getElementById('messages');
+        const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        const div = document.createElement('div');
+        div.className = 'message privmsg';
+        div.innerHTML = '<span class="time">[' + time + ']</span><span class="nick">&lt;' + nick + '&gt;</span> ' + this.escapeHtml(text);
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+      addSystemMessage(text) {
+        const messagesDiv = document.getElementById('messages');
+        const div = document.createElement('div');
+        div.className = 'message system';
+        div.textContent = '*** ' + text;
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+      updateStatus(status) {
+        const statusEl = document.getElementById('status');
+        statusEl.className = 'status ' + status;
+        statusEl.textContent = status === 'connected' ? '已连接' : '断开连接';
+      }
+      updateUserList(data) {
+        const match = data.match(/Users in [\w#+]+: (.+)/);
+        if (match) {
+          const users = match[1].split(', ');
+          const userList = document.getElementById('user-list');
+          userList.innerHTML = '';
+          users.forEach(user => {
+            const li = document.createElement('li');
+            li.textContent = user;
+            userList.appendChild(li);
+          });
+        }
+      }
+      escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+    }
+
+    const wsUrl = 'ws://' + window.location.host + '/ws';
+    const client = new IRCClient(wsUrl);
+    const input = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
+
+    function sendMessage() {
+      const text = input.value.trim();
+      if (!text) return;
+      if (text.startsWith('/')) {
+        const parts = text.slice(1).split(' ');
+        const cmd = parts[0].toUpperCase();
+        const args = parts.slice(1);
+        switch (cmd) {
+          case 'NICK': client.setNick(args[0] || 'guest'); break;
+          case 'JOIN': client.join(args[0] || defaultChannel); break;
+          case 'MSG': client.sendMessage(args[0], args.slice(1).join(' ')); break;
+          case 'HELP': client.addSystemMessage('命令：/nick, /join, /msg, /part, /topic, /list, /whois, /quit, /help'); break;
+          default: client.sendCommand(text.toUpperCase()); break;
+        }
+      } else {
+        client.sendMessage(defaultChannel, text);
+      }
+      input.value = '';
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+  </script>
+</body>
+</html>

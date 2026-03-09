@@ -2,6 +2,35 @@
 
 ## 已完成的工作
 
+### Phase 1: 基础框架 ✅
+
+- [x] 创建 irc 目录结构
+- [x] 实现 IRC 配置模块 (`irc/config.go`)
+- [x] 实现 IRC 客户端模型 (`irc/client.go`)
+- [x] 实现 IRC 频道模型 (`irc/channel.go`)
+- [x] 实现 IRC 服务器核心 (`irc/server.go`)
+- [x] 实现 IRC 消息格式 (`irc/message.go`)
+- [x] 实现 WebSocket 处理器 (`irc/handler.go`)
+- [x] 创建前端 IRC 客户端 (`js/src/irc/irc-client.ts`)
+- [x] 创建测试 HTML 页面 (`irc/test-chat.html`)
+
+### Phase 2: 集成到 GoTTY ✅
+
+- [x] 添加 IRC 选项到 `server/options.go`
+- [x] 集成 IRC 处理器到 `server/server.go`
+- [x] 创建 IRC 模式 HTML 模板 (`resources/irc_mode.html`)
+- [x] 添加 IRC 路由处理 (`/irc/`, `/irc/ws`)
+- [x] 添加命令行参数支持 (`--irc`, `--irc-channel`, `--irc-network`)
+- [x] 更新 asset.go 包含新模板
+- [x] 编译测试通过
+
+### Phase 3: 文档 ✅
+
+- [x] 设计文档 (`docs/IRC_CHATROOM_DESIGN.md`)
+- [x] 模块 README (`irc/README.md`)
+- [x] 使用指南 (`irc/USAGE.md`)
+- [x] 实现总结 (`irc/IMPLEMENTATION.md`)
+
 ### 1. 后端 Go 代码
 
 #### `irc/config.go`

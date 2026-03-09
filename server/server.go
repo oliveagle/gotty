@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 	noesctmpl "text/template"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 
+	"github.com/oliveagle/gotty/irc"
 	"github.com/oliveagle/gotty/pkg/homedir"
 	"github.com/oliveagle/gotty/pkg/randomstring"
 	"github.com/oliveagle/gotty/summary"
@@ -38,6 +40,8 @@ type Server struct {
 	sessionManager   *SessionManager
 	workspaceManager *WorkspaceManager
 	clipboardManager *ClipboardManager
+
+	ircHandler *irc.IRCHandler
 
 	upgrader      *websocket.Upgrader
 	indexTemplate *template.Template
@@ -96,12 +100,24 @@ func New(factory Factory, options *Options) (*Server, error) {
 		log.Printf("Session summarization enabled with model: %s at %s", options.SummaryModel, options.SummaryEndpoint)
 	}
 
+	// Initialize IRC handler if enabled
+	var ircHandler *irc.IRCHandler
+	if options.EnableIRC {
+		ircConfig := irc.DefaultConfig()
+		ircConfig.DefaultChannel = options.IRCDefaultChannel
+		ircConfig.NetworkName = options.IRCNetworkName
+		ircServer := irc.NewServer(ircConfig)
+		ircHandler = irc.NewIRCHandler(ircServer)
+		log.Printf("IRC chatroom enabled. Network: %s, Default channel: %s", ircConfig.NetworkName, ircConfig.DefaultChannel)
+	}
+
 	return &Server{
 		factory:          factory,
 		options:          options,
 		sessionManager:   sm,
 		workspaceManager: wm,
 		clipboardManager: cm,
+		ircHandler:       ircHandler,
 
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -309,6 +325,7 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 
 	// Session management API
 	siteMux.HandleFunc(pathPrefix+"api/sessions", server.handleSessions)
+	siteMux.HandleFunc(pathPrefix+"api/sessions/reorder", server.handleReorder)
 	siteMux.HandleFunc(pathPrefix+"api/sessions/", server.handleSession)
 
 	// Workspace management API
@@ -317,6 +334,19 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 
 	// Clipboard API (sync server clipboard to browser)
 	siteMux.HandleFunc(pathPrefix+"api/clipboard", server.handleClipboard)
+
+	// IRC chatroom routes
+	if server.options.EnableIRC && server.ircHandler != nil {
+		ircData := struct {
+			DefaultChannel string
+			NetworkName    string
+		}{
+			DefaultChannel: server.options.IRCDefaultChannel,
+			NetworkName:    server.options.IRCNetworkName,
+		}
+		siteMux.HandleFunc("/irc/", server.handleIRCIndex(ircData))
+		siteMux.HandleFunc("/irc/ws", server.ircHandler.HandleWS)
+	}
 
 	siteHandler := http.Handler(siteMux)
 
@@ -374,4 +404,28 @@ func (server *Server) tlsConfig() (*tls.Config, error) {
 		ClientAuth: tls.RequireAndVerifyClientCert,
 	}
 	return tlsConfig, nil
+}
+
+// handleIRCIndex handles the IRC chatroom index page
+func (server *Server) handleIRCIndex(ircCfg struct {
+	DefaultChannel string
+	NetworkName    string
+}) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Parse the IRC mode template
+		ircData, err := Asset("resources/irc_mode.html")
+		if err != nil {
+			http.Error(w, "IRC template not found", 404)
+			return
+		}
+
+		// Simple template replacement
+		content := string(ircData)
+		content = strings.ReplaceAll(content, "{{.DefaultChannel}}", ircCfg.DefaultChannel)
+		content = strings.ReplaceAll(content, "{{.NetworkName}}", ircCfg.NetworkName)
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(content))
+	}
 }
