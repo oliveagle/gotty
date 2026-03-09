@@ -106,6 +106,10 @@ func (options *Options) Validate() error {
 		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
 			return errors.New("public key file not found: " + keyPath)
 		}
+	case "webauthn", "passkey":
+		// WebAuthn/Passkeys authentication
+		// No pre-validation needed, credentials are managed at runtime
+		break
 	default:
 		return errors.New("invalid auth type: " + options.AuthType)
 	}
@@ -273,6 +277,8 @@ func (options *Options) GetAuthKeysList() []string {
 		return []string{"Password Manager Auth"}
 	case "keepassxc":
 		return []string{"KeePassXC Auth"}
+	case "webauthn", "passkey":
+		return []string{"WebAuthn/Passkeys"}
 	}
 
 	return []string{"No authentication"}
