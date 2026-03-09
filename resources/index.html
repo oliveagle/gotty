@@ -238,6 +238,12 @@
               </div>
             </div>
             <button class="btn-confirm btn-cancel" onclick="sessionManager.refreshWeather()" style="margin-top: 10px;">🔄 Refresh Weather</button>
+            <div style="margin-top: 12px;">
+              <a href="/weather-preview.html" target="_blank" class="btn-confirm btn-ok" style="display: inline-flex; align-items: center; gap: 6px; text-decoration: none;">
+                🔍 Open Weather Debug Page
+              </a>
+              <div class="settings-hint" style="margin-top: 6px;">View and adjust weather effects in detail</div>
+            </div>
           </div>
           <div class="settings-section">
             <div class="settings-section-title">About</div>
@@ -362,6 +368,17 @@
           this.selectedColor = 'blue';
           // Banner state
           this.sessionNotes = {}; // Store notes per session: { [sessionId]: string }
+        }
+
+        // Auth-aware fetch wrapper - adds token to all API requests
+        async authFetch(url, options = {}) {
+          const token = window.gotty_auth_token || localStorage.getItem('gotty_auth_token');
+          if (token) {
+            // Add token as query parameter for simplicity
+            const separator = url.includes('?') ? '&' : '?';
+            url = url + separator + 'token=' + encodeURIComponent(token);
+          }
+          return fetch(url, options);
         }
 
         init() {
@@ -541,22 +558,19 @@
               selector.classList.remove('open');
               dropdown.classList.remove('visible');
             } else {
-              // Open - calculate position
-              const sidebar = document.getElementById('sidebar');
-              if (!sidebar) return;
-
-              const sidebarRect = sidebar.getBoundingClientRect();
+              // Open - calculate position using selector element (not entire sidebar)
+              const selectorRect = selector.getBoundingClientRect();
               console.log('Workspace dropdown position:', {
-                left: sidebarRect.left,
-                top: sidebarRect.top,
-                bottom: sidebarRect.bottom,
-                width: sidebarRect.width,
-                height: sidebarRect.height
+                left: selectorRect.left,
+                top: selectorRect.top,
+                bottom: selectorRect.bottom,
+                width: selectorRect.width,
+                height: selectorRect.height
               });
 
-              // Position dropdown at bottom of sidebar
-              dropdown.style.left = sidebarRect.left + 'px';
-              dropdown.style.top = sidebarRect.bottom + 'px';
+              // Position dropdown at bottom of selector
+              dropdown.style.left = selectorRect.left + 'px';
+              dropdown.style.top = selectorRect.bottom + 'px';
               console.log('Dropdown styles set:', dropdown.style.cssText);
 
               selector.classList.add('open');
@@ -585,9 +599,9 @@
           if (sidebar) {
             const observer = new MutationObserver(() => {
               if (dropdown.classList.contains('visible')) {
-                const sidebarRect = sidebar.getBoundingClientRect();
-                dropdown.style.left = sidebarRect.left + 'px';
-                dropdown.style.top = sidebarRect.bottom + 'px';
+                const selectorRect = selector.getBoundingClientRect();
+                dropdown.style.left = selectorRect.left + 'px';
+                dropdown.style.top = selectorRect.bottom + 'px';
               }
             });
             observer.observe(sidebar, { attributes: true, attributeFilter: ['class'] });
@@ -596,7 +610,7 @@
 
         async fetchWorkspaces() {
           try {
-            const response = await fetch('/api/workspaces');
+            const response = await this.authFetch('/api/workspaces');
             const data = await response.json();
             this.workspaces = data.workspaces || [];
             this.activeWorkspaceId = data.active_id;
@@ -670,7 +684,7 @@
           }
 
           try {
-            const response = await fetch('/api/workspaces/' + id + '/activate', {
+            const response = await this.authFetch('/api/workspaces/' + id + '/activate', {
               method: 'PUT'
             });
             if (response.ok) {
@@ -745,7 +759,7 @@
           try {
             if (this.editingWorkspaceId) {
               // Update existing
-              await fetch('/api/workspaces/' + this.editingWorkspaceId, {
+              await this.authFetch('/api/workspaces/' + this.editingWorkspaceId, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -755,7 +769,7 @@
               });
             } else {
               // Create new
-              await fetch('/api/workspaces', {
+              await this.authFetch('/api/workspaces', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -784,7 +798,7 @@
 
           this.showConfirm(`Delete workspace "${ws.name}"? Sessions will be moved to Default.`, async () => {
             try {
-              await fetch('/api/workspaces/' + workspaceId, {
+              await this.authFetch('/api/workspaces/' + workspaceId, {
                 method: 'DELETE'
               });
               await this.fetchWorkspaces();
@@ -797,7 +811,7 @@
         async moveItemToWorkspace(itemId, workspaceId) {
           // Move both sessions and folders to workspace
           try {
-            await fetch('/api/sessions/' + itemId, {
+            await this.authFetch('/api/sessions/' + itemId, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ workspace_id: workspaceId })
@@ -811,7 +825,7 @@
 
         async moveSessionToWorkspace(sessionId, workspaceId) {
           try {
-            await fetch('/api/sessions/' + sessionId, {
+            await this.authFetch('/api/sessions/' + sessionId, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ workspace_id: workspaceId })
@@ -1172,7 +1186,7 @@
             const url = this.activeWorkspaceId
               ? '/api/sessions?workspace_id=' + this.activeWorkspaceId
               : '/api/sessions';
-            const response = await fetch(url);
+            const response = await this.authFetch(url);
             const data = await response.json();
             const newSessions = data.sessions || [];
 
@@ -1309,9 +1323,14 @@
             nickDisplay.textContent = savedNick + (savedNick === 'user' ? ' ⭐' : '');
           }
 
-          // Setup WebSocket connection
+          // Setup WebSocket connection with auth token
           const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const wsUrl = wsProtocol + '//' + window.location.host + '/irc/ws';
+          let wsUrl = wsProtocol + '//' + window.location.host + '/irc/ws';
+          // Add auth token if available
+          const authToken = window.gotty_auth_token || localStorage.getItem('gotty_auth_token');
+          if (authToken) {
+            wsUrl += '?token=' + encodeURIComponent(authToken);
+          }
           this.irc.ws = new WebSocket(wsUrl);
 
           const self = this;
@@ -1703,7 +1722,7 @@
             const url = this.activeWorkspaceId
               ? '/api/sessions?workspace_id=' + this.activeWorkspaceId
               : '/api/sessions';
-            const response = await fetch(url);
+            const response = await this.authFetch(url);
             const data = await response.json();
             this.sessions = data.sessions || [];
             this.renderSessionList();
@@ -1751,7 +1770,7 @@
             if (folderId) {
               options.body = JSON.stringify({ parent_id: folderId });
             }
-            const response = await fetch('/api/sessions', options);
+            const response = await this.authFetch('/api/sessions', options);
             const data = await response.json();
 
             if (data.id) {
@@ -1769,7 +1788,7 @@
 
         async createFolder() {
           try {
-            const response = await fetch('/api/sessions', {
+            const response = await this.authFetch('/api/sessions', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ is_folder: true, title: 'New Folder' })
@@ -1794,7 +1813,7 @@
         async closeSession(id, event) {
           event.stopPropagation();
           try {
-            await fetch('/api/sessions/' + id, {
+            await this.authFetch('/api/sessions/' + id, {
               method: 'DELETE',
             });
 
@@ -1818,7 +1837,7 @@
 
         async killSession(id) {
           try {
-            await fetch('/api/sessions/' + id + '?kill=true', {
+            await this.authFetch('/api/sessions/' + id + '?kill=true', {
               method: 'DELETE',
             });
 
@@ -1953,7 +1972,7 @@
 
         async renameSession(id, newTitle) {
           try {
-            const response = await fetch('/api/sessions/' + id, {
+            const response = await this.authFetch('/api/sessions/' + id, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ title: newTitle })
@@ -1968,7 +1987,7 @@
 
         async moveToFolder(sessionId, folderId) {
           try {
-            const response = await fetch('/api/sessions/' + sessionId, {
+            const response = await this.authFetch('/api/sessions/' + sessionId, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ folder_id: folderId || '' })
@@ -2308,7 +2327,7 @@
 
         async reorderSession(sessionId, parentId, afterId) {
           try {
-            const response = await fetch('/api/sessions/reorder', {
+            const response = await this.authFetch('/api/sessions/reorder', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -2854,6 +2873,43 @@
         }
 
         /**
+         * Calculate lunar phase from Gregorian calendar date
+         * Returns: { phase: number (0-1), age: number (0-29.53), illumination: number (0-1) }
+         * Phase 0 = New Moon, 0.5 = Full Moon
+         */
+        getLunarPhase(date = new Date()) {
+          // Use a simplified algorithm based on known new moon reference
+          // Reference new moon: January 6, 2000 at 18:14 UTC
+          const knownNewMoon = new Date('2000-01-06T18:14:00Z').getTime();
+          const synodicMonth = 29.53058867; // Average lunar cycle in days
+
+          const daysSinceReference = (date.getTime() - knownNewMoon) / (1000 * 60 * 60 * 24);
+          const cycles = daysSinceReference / synodicMonth;
+          const phase = cycles - Math.floor(cycles); // Normalize to 0-1
+          const age = phase * synodicMonth; // Days since new moon
+
+          // Illumination: 0 = new moon, 1 = full moon
+          const illumination = (1 - Math.cos(2 * Math.PI * phase)) / 2;
+
+          return { phase, age, illumination };
+        }
+
+        /**
+         * Get moon phase name based on phase value
+         */
+        getMoonPhaseName(phase) {
+          if (phase < 0.03 || phase > 0.97) return 'new';      // 新月
+          if (phase < 0.22) return 'waxing_crescent';           // 蛾眉月（上弦月前）
+          if (phase < 0.28) return 'first_quarter';             // 上弦月
+          if (phase < 0.47) return 'waxing_gibbous';            // 盈凸月
+          if (phase < 0.53) return 'full';                      // 满月
+          if (phase < 0.72) return 'waning_gibbous';            // 亏凸月
+          if (phase < 0.78) return 'last_quarter';              // 下弦月
+          if (phase < 0.97) return 'waning_crescent';           // 残月（下弦月后）
+          return 'new';
+        }
+
+        /**
          * Determine time period based on current time and sunrise/sunset
          */
         getTimePeriod(sunrise, sunset) {
@@ -2942,6 +2998,10 @@
 
           if (!sun || !moon || !stars || !clouds || !seasonOverlay) return;
 
+          // Calculate lunar phase
+          const lunarPhase = this.getLunarPhase(new Date());
+          const phaseName = this.getMoonPhaseName(lunarPhase.phase);
+
           // Show/hide celestial bodies based on time
           sun.classList.remove('visible');
           moon.classList.remove('visible');
@@ -2954,6 +3014,11 @@
             moon.style.right = '15%';
             moon.style.top = '8px';
             moon.style.bottom = 'auto';
+
+            // Apply moon phase class
+            moon.className = 'moon visible';
+            moon.classList.add(`phase-${phaseName}`);
+
             this.generateStars(stars);
           } else if (timePeriod === 'morning') {
             sun.classList.add('visible');
@@ -3215,21 +3280,18 @@
         const authType = (typeof gotty_auth_type !== 'undefined') ? gotty_auth_type : 'none';
 
         if (authType === 'webauthn') {
-          // WebAuthn/Passkeys auth required
-          const checkWebAuthnAndInit = () => {
-            if (typeof window.WebAuthnAuth !== 'undefined') {
-              const webauthnAuth = new window.WebAuthnAuth((authToken) => {
-                window.gotty_auth_token = authToken;
-                sessionManager = new SessionManager();
-                sessionManager.init();
-                window.sessionManager = sessionManager;
-              });
-              webauthnAuth.show();
+          // WebAuthn is initialized in main.ts
+          // Wait for authentication to complete, then initialize session manager
+          const checkAuthAndInit = () => {
+            if (window.gotty_auth_token) {
+              sessionManager = new SessionManager();
+              sessionManager.init();
+              window.sessionManager = sessionManager;
             } else {
-              setTimeout(checkWebAuthnAndInit, 100);
+              setTimeout(checkAuthAndInit, 100);
             }
           };
-          setTimeout(checkWebAuthnAndInit, 100);
+          setTimeout(checkAuthAndInit, 100);
         } else {
           // No auth required, initialize immediately
           sessionManager = new SessionManager();

@@ -57,14 +57,16 @@ func (u *WebAuthnUser) AddCredential(cred webauthn.Credential) {
 
 // WebAuthnManager manages WebAuthn authentication
 type WebAuthnManager struct {
-	webauthn *webauthn.WebAuthn
-	user     *WebAuthnUser
-	mu       sync.RWMutex
-	dataFile string
+	webauthn       *webauthn.WebAuthn
+	user           *WebAuthnUser
+	mu             sync.RWMutex
+	dataFile       string
+	registerToken  string
+	allowRegister  bool
 }
 
 // NewWebAuthnManager creates a new WebAuthn manager
-func NewWebAuthnManager(displayName, hostname, dataDir string) (*WebAuthnManager, error) {
+func NewWebAuthnManager(displayName, hostname, dataDir, registerToken string, allowRegister bool) (*WebAuthnManager, error) {
 	// Expand data directory
 	dataDir = homedir.Expand(dataDir)
 
@@ -79,16 +81,29 @@ func NewWebAuthnManager(displayName, hostname, dataDir string) (*WebAuthnManager
 		rpID = "localhost"
 	}
 
-	// Build origin
-	origin := "https://" + rpID
+	// Build origins - WebAuthn requires exact origin match including port
+	// For localhost, allow both with and without common ports
+	origins := []string{}
 	if rpID == "localhost" {
-		origin = "http://localhost"
+		// Allow common localhost origins
+		origins = []string{
+			"http://localhost",
+			"http://localhost:13782", // default gotty port
+			"http://localhost:8080",
+			"http://127.0.0.1",
+			"http://127.0.0.1:13782",
+		}
+	} else {
+		// For custom hostname, use https
+		origins = []string{
+			"https://" + rpID,
+		}
 	}
 
 	wconfig := &webauthn.Config{
 		RPDisplayName: displayName,
 		RPID:          rpID,
-		RPOrigins:     []string{origin},
+		RPOrigins:     origins,
 	}
 
 	wn, err := webauthn.New(wconfig)
@@ -98,14 +113,18 @@ func NewWebAuthnManager(displayName, hostname, dataDir string) (*WebAuthnManager
 
 	dataFile := filepath.Join(dataDir, "webauthn_user.json")
 
+	log.Printf("[WebAuthn] RP ID: %s, Allowed origins: %v", rpID, origins)
+
 	mgr := &WebAuthnManager{
-		webauthn: wn,
+		webauthn:      wn,
 		user: &WebAuthnUser{
 			ID:          generateUserID(),
 			Name:        "gotty",
 			DisplayName: "GoTTY User",
 		},
-		dataFile: dataFile,
+		dataFile:      dataFile,
+		registerToken: registerToken,
+		allowRegister: allowRegister,
 	}
 
 	// Load existing user data
@@ -153,10 +172,8 @@ func (m *WebAuthnManager) loadUser() error {
 }
 
 // saveUser saves user data to file
+// Note: This method does NOT acquire locks - caller must hold appropriate lock
 func (m *WebAuthnManager) saveUser() error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
 	userData := struct {
 		ID          []byte                `json:"id"`
 		Name        string                `json:"name"`
@@ -189,6 +206,43 @@ func (m *WebAuthnManager) HasCredentials() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return len(m.user.Credentials) > 0
+}
+
+// CanRegister returns true if registration is allowed
+// Registration is allowed if:
+// 1. No credentials exist yet (first-time setup)
+// 2. allowRegister flag is true AND no credentials exist
+// 3. registerToken is set (requires token to register)
+func (m *WebAuthnManager) CanRegister() bool {
+	m.mu.RLock()
+	hasCreds := len(m.user.Credentials) > 0
+	m.mu.RUnlock()
+
+	// If no credentials exist, always allow registration (first-time setup)
+	if !hasCreds {
+		return true
+	}
+
+	// If register token is set, allow registration with token
+	if m.registerToken != "" {
+		return true
+	}
+
+	// Otherwise, registration is blocked
+	return false
+}
+
+// ValidateRegisterToken validates the registration token
+func (m *WebAuthnManager) ValidateRegisterToken(token string) bool {
+	if m.registerToken == "" {
+		return false // No token configured, registration not allowed after first credential
+	}
+	return m.registerToken == token
+}
+
+// GetRegisterToken returns the configured register token (for checking if token-based registration is enabled)
+func (m *WebAuthnManager) GetRegisterToken() string {
+	return m.registerToken
 }
 
 // BeginRegistration starts the WebAuthn registration process
@@ -251,11 +305,9 @@ func (m *WebAuthnManager) FinishLogin(parsedResponse *protocol.ParsedCredentialA
 
 // WebAuthnSessionData stores session data for WebAuthn flows
 type WebAuthnSessionData struct {
-	Challenge        string    `json:"challenge"`
-	UserID           string    `json:"user_id"`
-	CreatedAt        time.Time `json:"created_at"`
-	ExpiresAt        time.Time `json:"expires_at"`
-	SessionDataBytes []byte    `json:"session_data"`
+	SessionData *webauthn.SessionData
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
 }
 
 // SessionDataManager manages WebAuthn session data
@@ -280,13 +332,10 @@ func (m *SessionDataManager) Store(sessionID string, sessionData *webauthn.Sessi
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	data, _ := json.Marshal(sessionData)
 	m.sessions[sessionID] = &WebAuthnSessionData{
-		Challenge:        string(sessionData.Challenge),
-		UserID:           string(sessionData.UserID),
-		CreatedAt:        time.Now(),
-		ExpiresAt:        time.Now().Add(m.ttl),
-		SessionDataBytes: data,
+		SessionData: sessionData,
+		CreatedAt:   time.Now(),
+		ExpiresAt:   time.Now().Add(m.ttl),
 	}
 }
 
@@ -300,11 +349,7 @@ func (m *SessionDataManager) Get(sessionID string) (*webauthn.SessionData, bool)
 		return nil, false
 	}
 
-	var sd webauthn.SessionData
-	if err := json.Unmarshal(session.SessionDataBytes, &sd); err != nil {
-		return nil, false
-	}
-	return &sd, true
+	return session.SessionData, true
 }
 
 // Delete removes session data
@@ -336,4 +381,137 @@ func ParseWebAuthnOrigin(origin string) (string, error) {
 		return "", err
 	}
 	return u.Host, nil
+}
+
+// AuthSession represents a long-lived authentication session
+type AuthSession struct {
+	Token     string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+// AuthSessionManager manages long-lived auth sessions
+type AuthSessionManager struct {
+	sessions map[string]*AuthSession
+	mu       sync.RWMutex
+	ttl      time.Duration
+	dataFile string
+}
+
+// NewAuthSessionManager creates a new auth session manager
+func NewAuthSessionManager(dataDir string, ttlHours int) *AuthSessionManager {
+	ttl := time.Duration(ttlHours) * time.Hour
+	dataFile := filepath.Join(dataDir, "auth_sessions.json")
+
+	mgr := &AuthSessionManager{
+		sessions: make(map[string]*AuthSession),
+		ttl:      ttl,
+		dataFile: dataFile,
+	}
+
+	// Load existing sessions
+	mgr.loadSessions()
+	go mgr.cleanupExpired()
+
+	return mgr
+}
+
+// loadSessions loads sessions from file
+func (m *AuthSessionManager) loadSessions() error {
+	data, err := os.ReadFile(m.dataFile)
+	if err != nil {
+		return err
+	}
+
+	var sessions map[string]*AuthSession
+	if err := json.Unmarshal(data, &sessions); err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Only load non-expired sessions
+	now := time.Now()
+	for id, session := range sessions {
+		if now.Before(session.ExpiresAt) {
+			m.sessions[id] = session
+		}
+	}
+
+	return nil
+}
+
+// saveSessions saves sessions to file
+func (m *AuthSessionManager) saveSessions() error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	data, err := json.MarshalIndent(m.sessions, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(m.dataFile, data, 0600)
+}
+
+// CreateSession creates a new auth session and returns the token
+func (m *AuthSessionManager) CreateSession() string {
+	token := base64.RawURLEncoding.EncodeToString(generateUserID()) // Reuse generateUserID for random bytes
+
+	session := &AuthSession{
+		Token:     token,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(m.ttl),
+	}
+
+	m.mu.Lock()
+	m.sessions[token] = session
+	m.mu.Unlock()
+
+	m.saveSessions()
+
+	return token
+}
+
+// ValidateToken validates an auth token
+func (m *AuthSessionManager) ValidateToken(token string) bool {
+	if token == "" {
+		return false
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	session, exists := m.sessions[token]
+	if !exists {
+		return false
+	}
+
+	return time.Now().Before(session.ExpiresAt)
+}
+
+// DeleteSession removes a session
+func (m *AuthSessionManager) DeleteSession(token string) {
+	m.mu.Lock()
+	delete(m.sessions, token)
+	m.mu.Unlock()
+
+	m.saveSessions()
+}
+
+// cleanupExpired periodically removes expired sessions
+func (m *AuthSessionManager) cleanupExpired() {
+	ticker := time.NewTicker(1 * time.Hour)
+	for range ticker.C {
+		m.mu.Lock()
+		now := time.Now()
+		for id, session := range m.sessions {
+			if now.After(session.ExpiresAt) {
+				delete(m.sessions, id)
+			}
+		}
+		m.mu.Unlock()
+		m.saveSessions()
+	}
 }

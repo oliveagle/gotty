@@ -12,6 +12,10 @@ export class WebAuthnAuth {
     private errorDiv: HTMLElement;
     private onAuthenticated: (authToken: string) => void;
     private hasAuth: boolean = false;
+    private canRegister: boolean = false;
+    private requiresToken: boolean = false;
+    private isRegistering: boolean = false;
+    private isLoggingIn: boolean = false;
 
     constructor(onAuthenticated: (authToken: string) => void) {
         this.onAuthenticated = onAuthenticated;
@@ -39,27 +43,56 @@ export class WebAuthnAuth {
             this.statusDiv.textContent = 'Passkey registered. Click to authenticate.';
             this.registerBtn.style.display = 'none';
             this.loginBtn.style.display = 'block';
-        } else {
-            this.statusDiv.textContent = 'No Passkey registered. Click to register.';
-            this.registerBtn.style.display = 'block';
+        } else if (this.canRegister) {
+            if (this.requiresToken) {
+                this.statusDiv.textContent = 'Passkey registered. Registration requires token.';
+                this.registerBtn.style.display = 'block';
+                this.registerBtn.textContent = 'Register with Token';
+            } else {
+                this.statusDiv.textContent = 'No Passkey registered. Click to register.';
+                this.registerBtn.style.display = 'block';
+                this.registerBtn.textContent = 'Register Passkey';
+            }
             this.loginBtn.style.display = 'none';
+        } else {
+            // Registration disabled
+            this.statusDiv.textContent = 'Passkey already registered. Registration disabled.';
+            this.registerBtn.style.display = 'none';
+            this.loginBtn.style.display = 'block';
         }
     }
 
     private async register(): Promise<void> {
+        // Prevent duplicate requests
+        if (this.isRegistering) {
+            console.log('[WebAuthn] Registration already in progress');
+            return;
+        }
+        this.isRegistering = true;
+
         this.clearError();
         this.registerBtn.disabled = true;
         this.registerBtn.textContent = 'Registering...';
 
         try {
+            // If token might be required, ask user
+            let token = '';
+            if (this.requiresToken || this.hasAuth) {
+                token = prompt('Enter registration token (or leave empty if not required):') || '';
+            }
+
             // Step 1: Begin registration
-            const beginResp = await fetch('./api/webauthn/register/begin', {
+            const beginUrl = token
+                ? `./api/webauthn/register/begin?token=${encodeURIComponent(token)}`
+                : './api/webauthn/register/begin';
+            const beginResp = await fetch(beginUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
 
             if (!beginResp.ok) {
-                throw new Error('Failed to begin registration');
+                const errorData = await beginResp.json().catch(() => ({ message: 'Failed to begin registration' }));
+                throw new Error(errorData.message || 'Failed to begin registration');
             }
 
             const beginData = await beginResp.json();
@@ -109,7 +142,7 @@ export class WebAuthnAuth {
             });
 
             if (!finishResp.ok) {
-                const errorData = await finishResp.json();
+                const errorData = await finishResp.json().catch(() => ({ message: 'Registration failed' }));
                 throw new Error(errorData.message || 'Failed to complete registration');
             }
 
@@ -123,10 +156,19 @@ export class WebAuthnAuth {
             this.showError(error instanceof Error ? error.message : 'Registration failed');
             this.registerBtn.disabled = false;
             this.registerBtn.textContent = 'Register Passkey';
+        } finally {
+            this.isRegistering = false;
         }
     }
 
     private async login(): Promise<void> {
+        // Prevent duplicate requests
+        if (this.isLoggingIn) {
+            console.log('[WebAuthn] Login already in progress');
+            return;
+        }
+        this.isLoggingIn = true;
+
         this.clearError();
         this.loginBtn.disabled = true;
         this.loginBtn.textContent = 'Authenticating...';
@@ -188,7 +230,7 @@ export class WebAuthnAuth {
             });
 
             if (!finishResp.ok) {
-                const errorData = await finishResp.json();
+                const errorData = await finishResp.json().catch(() => ({ message: 'Authentication failed' }));
                 throw new Error(errorData.message || 'Authentication failed');
             }
 
@@ -203,10 +245,29 @@ export class WebAuthnAuth {
             this.showError(error instanceof Error ? error.message : 'Authentication failed');
             this.loginBtn.disabled = false;
             this.loginBtn.textContent = 'Authenticate';
+        } finally {
+            this.isLoggingIn = false;
         }
     }
 
-    private base64ToUint8Array(base64: string): Uint8Array {
+    /**
+     * Convert base64url string to Uint8Array
+     * WebAuthn uses base64url encoding (RFC 4648), not standard base64
+     */
+    private base64ToUint8Array(base64url: string): Uint8Array {
+        // Convert base64url to standard base64
+        // 1. Replace - with + and _ with /
+        // 2. Add padding if needed
+        let base64 = base64url
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+
+        // Add padding
+        const padding = base64.length % 4;
+        if (padding) {
+            base64 += '='.repeat(4 - padding);
+        }
+
         const binaryString = atob(base64);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
@@ -215,12 +276,21 @@ export class WebAuthnAuth {
         return bytes;
     }
 
+    /**
+     * Convert Uint8Array to base64url string (without padding)
+     * WebAuthn expects base64url encoding (RFC 4648)
+     */
     private uint8ArrayToBase64(bytes: Uint8Array): string {
         let binary = '';
         for (let i = 0; i < bytes.length; i++) {
             binary += String.fromCharCode(bytes[i]);
         }
-        return btoa(binary);
+        const base64 = btoa(binary);
+        // Convert to base64url: replace + with -, / with _, and remove padding
+        return base64
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
     }
 
     private hide(): void {
@@ -243,13 +313,28 @@ export class WebAuthnAuth {
     /**
      * Show the authentication dialog
      */
-    public show(): void {
+    public async show(): Promise<void> {
         this.container.style.display = 'flex';
         this.container.classList.remove('hidden');
         this.clearError();
         this.registerBtn.disabled = false;
         this.loginBtn.disabled = false;
-        this.registerBtn.textContent = 'Register Passkey';
+
+        // Fetch current status from server
+        try {
+            const resp = await fetch('./api/webauthn/status');
+            const status = await resp.json();
+            this.hasAuth = status.has_auth;
+            this.canRegister = status.can_register;
+            this.requiresToken = status.requires_token;
+        } catch (e) {
+            // Fallback to defaults
+            this.hasAuth = (window as any).gotty_webauthn_has_auth || false;
+            this.canRegister = !this.hasAuth;
+            this.requiresToken = false;
+        }
+
+        this.updateUI();
         this.loginBtn.textContent = 'Authenticate';
     }
 
@@ -272,7 +357,7 @@ export function isWebAuthnAuthRequired(): boolean {
 /**
  * Initialize WebAuthn authentication
  */
-export function initWebAuthnAuth(onAuthenticated: (authToken: string) => void): WebAuthnAuth | null {
+export async function initWebAuthnAuth(onAuthenticated: (authToken: string) => void): Promise<WebAuthnAuth | null> {
     const container = document.getElementById('webauthn-auth');
     if (!container) {
         return null;
@@ -283,5 +368,33 @@ export function initWebAuthnAuth(onAuthenticated: (authToken: string) => void): 
         return null;
     }
 
-    return new WebAuthnAuth(onAuthenticated);
+    // Check if there's a cached token in localStorage
+    const cachedToken = localStorage.getItem('gotty_auth_token');
+    if (cachedToken) {
+        // Validate the token with server
+        try {
+            const resp = await fetch(`./api/webauthn/validate?token=${encodeURIComponent(cachedToken)}`);
+            const result = await resp.json();
+            if (result.valid) {
+                console.log('[WebAuthn] Using cached auth token');
+                onAuthenticated(cachedToken);
+                container.style.display = 'none';
+                return null;
+            } else {
+                console.log('[WebAuthn] Cached token invalid or expired');
+                localStorage.removeItem('gotty_auth_token');
+            }
+        } catch (e) {
+            console.log('[WebAuthn] Failed to validate cached token:', e);
+            localStorage.removeItem('gotty_auth_token');
+        }
+    }
+
+    // No valid cached token, show WebAuthn dialog
+    const auth = new WebAuthnAuth((authToken: string) => {
+        // Cache the token in localStorage
+        localStorage.setItem('gotty_auth_token', authToken);
+        onAuthenticated(authToken);
+    });
+    return auth;
 }

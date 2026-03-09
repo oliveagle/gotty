@@ -35,14 +35,14 @@ var (
 
 // Server provides a webtty HTTP endpoint.
 type Server struct {
-	factory          Factory
-	options          *Options
-	sessionManager   *SessionManager
-	workspaceManager *WorkspaceManager
-	clipboardManager *ClipboardManager
-	challengeManager *ChallengeManager
-	webAuthnManager  *WebAuthnManager
-	webAuthnSessions *SessionDataManager
+	factory           Factory
+	options           *Options
+	sessionManager    *SessionManager
+	workspaceManager  *WorkspaceManager
+	clipboardManager  *ClipboardManager
+	webAuthnManager   *WebAuthnManager
+	webAuthnSessions  *SessionDataManager
+	authSessionMgr    *AuthSessionManager
 
 	ircHandler *irc.IRCHandler
 
@@ -96,22 +96,35 @@ func New(factory Factory, options *Options) (*Server, error) {
 	// Initialize clipboard manager
 	cm := NewClipboardManager()
 
-	// Initialize challenge manager for public key authentication
-	challMngr := NewChallengeManager()
-
-	// Initialize WebAuthn manager if needed
+	// Initialize WebAuthn manager if auth is enabled
 	var webAuthnMgr *WebAuthnManager
 	var webAuthnSessions *SessionDataManager
-	if options.EnableAuth && (options.AuthType == "webauthn" || options.AuthType == "passkey") {
+	var authSessionMgr *AuthSessionManager
+	if options.EnableAuth {
 		var err error
-		webAuthnMgr, err = NewWebAuthnManager(options.WebAuthnDisplayName, options.HostName, options.WebAuthnDataDir)
+		webAuthnMgr, err = NewWebAuthnManager(
+			options.WebAuthnDisplayName,
+			options.HostName,
+			options.WebAuthnDataDir,
+			options.WebAuthnRegisterToken,
+			options.WebAuthnAllowRegister,
+		)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to initialize WebAuthn")
 		}
 		webAuthnSessions = NewSessionDataManager()
-		log.Printf("WebAuthn/Passkeys enabled. Display name: %s", options.WebAuthnDisplayName)
+
+		// Initialize auth session manager for long-lived sessions
+		authSessionMgr = NewAuthSessionManager(homedir.Expand(options.WebAuthnDataDir), options.WebAuthnSessionTTL)
+		log.Printf("WebAuthn/Passkeys enabled. Display name: %s, Session TTL: %d hours", options.WebAuthnDisplayName, options.WebAuthnSessionTTL)
+
 		if webAuthnMgr.HasCredentials() {
 			log.Printf("WebAuthn: Found existing credentials")
+			if options.WebAuthnRegisterToken != "" {
+				log.Printf("WebAuthn: Registration allowed with token")
+			} else {
+				log.Printf("WebAuthn: Registration blocked (no token configured)")
+			}
 		} else {
 			log.Printf("WebAuthn: No credentials registered yet, registration required")
 		}
@@ -141,9 +154,9 @@ func New(factory Factory, options *Options) (*Server, error) {
 		sessionManager:   sm,
 		workspaceManager: wm,
 		clipboardManager: cm,
-		challengeManager: challMngr,
 		webAuthnManager:  webAuthnMgr,
 		webAuthnSessions: webAuthnSessions,
+		authSessionMgr:   authSessionMgr,
 		ircHandler:       ircHandler,
 
 		upgrader: &websocket.Upgrader{
@@ -350,30 +363,34 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	siteMux.HandleFunc(pathPrefix+"auth_token.js", server.handleAuthToken)
 	siteMux.HandleFunc(pathPrefix+"config.js", server.handleConfig)
 
-	// Session management API
-	siteMux.HandleFunc(pathPrefix+"api/sessions", server.handleSessions)
-	siteMux.HandleFunc(pathPrefix+"api/sessions/reorder", server.handleReorder)
-	siteMux.HandleFunc(pathPrefix+"api/sessions/", server.handleSession)
+	// Create auth middleware
+	authMiddleware := NewAuthMiddleware(server)
 
-	// Workspace management API
-	siteMux.HandleFunc(pathPrefix+"api/workspaces", server.handleWorkspaces)
-	siteMux.HandleFunc(pathPrefix+"api/workspaces/", server.handleWorkspace)
+	// Session management API (protected)
+	siteMux.HandleFunc(pathPrefix+"api/sessions", authMiddleware.Wrap(server.handleSessions))
+	siteMux.HandleFunc(pathPrefix+"api/sessions/reorder", authMiddleware.Wrap(server.handleReorder))
+	siteMux.HandleFunc(pathPrefix+"api/sessions/", authMiddleware.Wrap(server.handleSession))
 
-	// Clipboard API (sync server clipboard to browser)
-	siteMux.HandleFunc(pathPrefix+"api/clipboard", server.handleClipboard)
+	// Workspace management API (protected)
+	siteMux.HandleFunc(pathPrefix+"api/workspaces", authMiddleware.Wrap(server.handleWorkspaces))
+	siteMux.HandleFunc(pathPrefix+"api/workspaces/", authMiddleware.Wrap(server.handleWorkspace))
 
-	// Weather API proxy (to avoid CORS issues)
+	// Clipboard API (protected)
+	siteMux.HandleFunc(pathPrefix+"api/clipboard", authMiddleware.Wrap(server.handleClipboard))
+
+	// Weather API proxy (to avoid CORS issues) - public for now
 	siteMux.HandleFunc(pathPrefix+"api/weather", server.handleWeather)
 
-	// Challenge API for public key authentication
-	siteMux.HandleFunc(pathPrefix+"api/challenge", server.handleChallenge)
+	// Weather preview debug page
+	siteMux.HandleFunc(pathPrefix+"weather-preview.html", server.handleWeatherPreview)
 
-	// WebAuthn/Passkeys API
+	// WebAuthn/Passkeys API (public - used for authentication flow)
 	siteMux.HandleFunc(pathPrefix+"api/webauthn/status", server.handleWebAuthnStatus)
 	siteMux.HandleFunc(pathPrefix+"api/webauthn/register/begin", server.handleWebAuthnRegisterBegin)
 	siteMux.HandleFunc(pathPrefix+"api/webauthn/register/finish", server.handleWebAuthnRegisterFinish)
 	siteMux.HandleFunc(pathPrefix+"api/webauthn/login/begin", server.handleWebAuthnLoginBegin)
 	siteMux.HandleFunc(pathPrefix+"api/webauthn/login/finish", server.handleWebAuthnLoginFinish)
+	siteMux.HandleFunc(pathPrefix+"api/webauthn/validate", server.handleWebAuthnValidateToken)
 
 	// IRC chatroom routes
 	if server.options.EnableIRC && server.ircHandler != nil {
@@ -385,24 +402,15 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 			NetworkName:    server.options.IRCNetworkName,
 		}
 		siteMux.HandleFunc("/irc/", server.handleIRCIndex(ircData))
-		siteMux.HandleFunc("/irc/ws", server.ircHandler.HandleWS)
+		// IRC WebSocket is protected with token in query parameter
+		siteMux.HandleFunc("/irc/ws", authMiddleware.WrapWS(server.ircHandler.HandleWS))
 	}
 
 	siteHandler := http.Handler(siteMux)
 
-	if server.options.EnableAuth || server.options.EnableBasicAuth {
-		if server.options.AuthType == "basic" || server.options.AuthType == "" {
-			log.Printf("Using Basic Authentication")
-			siteHandler = server.wrapBasicAuth(siteHandler, server.options.Credential)
-		} else if server.options.AuthType == "bitwarden" {
-			log.Printf("Using Bitwarden E2E Encryption Authentication")
-			// Bitwarden authentication is handled in WebSocket connection, no HTTP auth required
-		} else if server.options.AuthType == "webauthn" || server.options.AuthType == "passkey" {
-			log.Printf("Using WebAuthn/Passkeys Authentication")
-			// WebAuthn authentication is handled via API endpoints, no HTTP auth required
-		} else {
-			log.Printf("Unsupported authentication type: %s", server.options.AuthType)
-		}
+	if server.options.EnableAuth {
+		log.Printf("Using WebAuthn/Passkeys Authentication")
+		// WebAuthn authentication is handled via API endpoints, no HTTP auth wrapper needed
 	}
 
 	withGz := gziphandler.GzipHandler(server.wrapHeaders(siteHandler))

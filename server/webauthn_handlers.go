@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"log"
@@ -10,24 +11,40 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
+// jsonError sends a JSON error response
+func jsonError(w http.ResponseWriter, message string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]string{
+		"success": "false",
+		"message": message,
+	})
+}
+
 // handleWebAuthnStatus returns the current WebAuthn status
 func (server *Server) handleWebAuthnStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if server.webAuthnManager == nil {
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"enabled":  false,
-			"message":  "WebAuthn not enabled",
-			"has_auth": false,
+			"enabled":       false,
+			"message":       "WebAuthn not enabled",
+			"has_auth":      false,
+			"can_register":  false,
 		})
 		return
 	}
 
 	hasCredentials := server.webAuthnManager.HasCredentials()
+	canRegister := server.webAuthnManager.CanRegister()
+	requiresToken := hasCredentials && server.webAuthnManager.GetRegisterToken() != ""
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"enabled":  true,
-		"has_auth": hasCredentials,
-		"message":  getStatusMessage(hasCredentials),
+		"enabled":       true,
+		"has_auth":      hasCredentials,
+		"can_register":  canRegister,
+		"requires_token": requiresToken,
+		"message":       getStatusMessage(hasCredentials),
 	})
 }
 
@@ -43,15 +60,34 @@ func (server *Server) handleWebAuthnRegisterBegin(w http.ResponseWriter, r *http
 	w.Header().Set("Content-Type", "application/json")
 
 	if server.webAuthnManager == nil {
-		http.Error(w, "WebAuthn not enabled", http.StatusBadRequest)
+		jsonError(w, "WebAuthn not enabled", http.StatusBadRequest)
 		return
+	}
+
+	// Check if registration is allowed
+	if !server.webAuthnManager.CanRegister() {
+		jsonError(w, "Registration is disabled. A passkey is already registered.", http.StatusForbidden)
+		return
+	}
+
+	// If token is required, validate it
+	if server.webAuthnManager.HasCredentials() && server.webAuthnManager.GetRegisterToken() != "" {
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			jsonError(w, "Registration token required. Use: /api/webauthn/register/begin?token=YOUR_TOKEN", http.StatusForbidden)
+			return
+		}
+		if !server.webAuthnManager.ValidateRegisterToken(token) {
+			jsonError(w, "Invalid registration token", http.StatusForbidden)
+			return
+		}
 	}
 
 	// Begin registration
 	options, sessionData, err := server.webAuthnManager.BeginRegistration()
 	if err != nil {
 		log.Printf("[WebAuthn] Registration begin error: %v", err)
-		http.Error(w, "Failed to begin registration", http.StatusInternalServerError)
+		jsonError(w, "Failed to begin registration", http.StatusInternalServerError)
 		return
 	}
 
@@ -73,7 +109,7 @@ func (server *Server) handleWebAuthnRegisterFinish(w http.ResponseWriter, r *htt
 	w.Header().Set("Content-Type", "application/json")
 
 	if server.webAuthnManager == nil {
-		http.Error(w, "WebAuthn not enabled", http.StatusBadRequest)
+		jsonError(w, "WebAuthn not enabled", http.StatusBadRequest)
 		return
 	}
 
@@ -83,14 +119,14 @@ func (server *Server) handleWebAuthnRegisterFinish(w http.ResponseWriter, r *htt
 		Response  json.RawMessage `json:"response"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		jsonError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	// Get session data
 	sessionData, exists := server.webAuthnSessions.Get(req.SessionID)
 	if !exists {
-		http.Error(w, "Session not found or expired", http.StatusBadRequest)
+		jsonError(w, "Session not found or expired", http.StatusBadRequest)
 		return
 	}
 	defer server.webAuthnSessions.Delete(req.SessionID)
@@ -99,14 +135,14 @@ func (server *Server) handleWebAuthnRegisterFinish(w http.ResponseWriter, r *htt
 	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(bytes.NewReader(req.Response))
 	if err != nil {
 		log.Printf("[WebAuthn] Parse credential error: %v", err)
-		http.Error(w, "Failed to parse credential", http.StatusBadRequest)
+		jsonError(w, "Failed to parse credential: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Finish registration
 	if err := server.webAuthnManager.FinishRegistration(parsedResponse, sessionData); err != nil {
 		log.Printf("[WebAuthn] Registration finish error: %v", err)
-		http.Error(w, "Failed to complete registration", http.StatusBadRequest)
+		jsonError(w, "Failed to complete registration: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -123,12 +159,12 @@ func (server *Server) handleWebAuthnLoginBegin(w http.ResponseWriter, r *http.Re
 	w.Header().Set("Content-Type", "application/json")
 
 	if server.webAuthnManager == nil {
-		http.Error(w, "WebAuthn not enabled", http.StatusBadRequest)
+		jsonError(w, "WebAuthn not enabled", http.StatusBadRequest)
 		return
 	}
 
 	if !server.webAuthnManager.HasCredentials() {
-		http.Error(w, "No credentials registered", http.StatusBadRequest)
+		jsonError(w, "No credentials registered", http.StatusBadRequest)
 		return
 	}
 
@@ -136,7 +172,7 @@ func (server *Server) handleWebAuthnLoginBegin(w http.ResponseWriter, r *http.Re
 	options, sessionData, err := server.webAuthnManager.BeginLogin()
 	if err != nil {
 		log.Printf("[WebAuthn] Login begin error: %v", err)
-		http.Error(w, "Failed to begin login", http.StatusInternalServerError)
+		jsonError(w, "Failed to begin login", http.StatusInternalServerError)
 		return
 	}
 
@@ -158,7 +194,7 @@ func (server *Server) handleWebAuthnLoginFinish(w http.ResponseWriter, r *http.R
 	w.Header().Set("Content-Type", "application/json")
 
 	if server.webAuthnManager == nil {
-		http.Error(w, "WebAuthn not enabled", http.StatusBadRequest)
+		jsonError(w, "WebAuthn not enabled", http.StatusBadRequest)
 		return
 	}
 
@@ -168,14 +204,14 @@ func (server *Server) handleWebAuthnLoginFinish(w http.ResponseWriter, r *http.R
 		Response  json.RawMessage `json:"response"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		jsonError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	// Get session data
 	sessionData, exists := server.webAuthnSessions.Get(req.SessionID)
 	if !exists {
-		http.Error(w, "Session not found or expired", http.StatusBadRequest)
+		jsonError(w, "Session not found or expired", http.StatusBadRequest)
 		return
 	}
 	defer server.webAuthnSessions.Delete(req.SessionID)
@@ -184,7 +220,7 @@ func (server *Server) handleWebAuthnLoginFinish(w http.ResponseWriter, r *http.R
 	parsedResponse, err := protocol.ParseCredentialRequestResponseBytes(req.Response)
 	if err != nil {
 		log.Printf("[WebAuthn] Parse assertion error: %v", err)
-		http.Error(w, "Failed to parse assertion", http.StatusBadRequest)
+		jsonError(w, "Failed to parse assertion: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -192,19 +228,63 @@ func (server *Server) handleWebAuthnLoginFinish(w http.ResponseWriter, r *http.R
 	success, err := server.webAuthnManager.FinishLogin(parsedResponse, sessionData)
 	if err != nil || !success {
 		log.Printf("[WebAuthn] Login finish error: %v", err)
-		http.Error(w, "Authentication failed", http.StatusUnauthorized)
+		jsonError(w, "Authentication failed", http.StatusUnauthorized)
 		return
 	}
 
 	log.Printf("[WebAuthn] Login successful")
 
-	// Return auth token (session ID that can be used for WebSocket auth)
-	authToken := "webauthn:" + base64.StdEncoding.EncodeToString([]byte(req.SessionID))
+	// Create long-lived auth session
+	authToken := server.authSessionMgr.CreateSession()
+	log.Printf("[WebAuthn] Created auth session, TTL: %d hours", server.options.WebAuthnSessionTTL)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":    true,
 		"message":    "Authentication successful",
 		"auth_token": authToken,
+	})
+}
+
+// handleWebAuthnValidateToken validates an auth token
+func (server *Server) handleWebAuthnValidateToken(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if server.authSessionMgr == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"message": "Auth sessions not enabled",
+		})
+		return
+	}
+
+	// Get token from Authorization header or query parameter
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		token = r.URL.Query().Get("token")
+	}
+	// Remove "Bearer " prefix if present
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	if token == "" {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"message": "No token provided",
+		})
+		return
+	}
+
+	valid := server.authSessionMgr.ValidateToken(token)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"valid":   valid,
+		"message": func() string {
+			if valid {
+				return "Token is valid"
+			}
+			return "Token is invalid or expired"
+		}(),
 	})
 }
 
@@ -216,8 +296,9 @@ func generateSessionID() string {
 func randomString(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, n)
+	rand.Read(b) // Use crypto/rand for true randomness
 	for i := range b {
-		b[i] = letters[i%len(letters)]
+		b[i] = letters[int(b[i])%len(letters)]
 	}
 	return string(b)
 }

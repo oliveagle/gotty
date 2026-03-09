@@ -72,23 +72,15 @@ func main() {
 
 		utils.ApplyFlags(cliFlags, flagMappings, c, appOptions, backendOptions)
 
-		// Set EnableAuth based on credential or auth-type being set
-		if c.IsSet("credential") || c.IsSet("auth-type") || appOptions.EnableAuth {
-			appOptions.EnableAuth = true
-		}
-		// Set EnableBasicAuth only for credential (basic auth)
-		if c.IsSet("credential") {
-			appOptions.EnableBasicAuth = true
-		}
 		appOptions.EnableTLSClientAuth = c.IsSet("tls-ca-crt")
+
+		// Track if permit-write was explicitly set by user
+		if c.IsSet("permit-write") {
+			appOptions.SetPermitWriteExplicit()
+		}
 
 		err = appOptions.Validate()
 		if err != nil {
-			exit(err, 6)
-		}
-
-		// Load public key from file if needed
-		if err := appOptions.LoadPublicKey(); err != nil {
 			exit(err, 6)
 		}
 

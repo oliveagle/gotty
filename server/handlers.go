@@ -107,74 +107,20 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 		return errors.Wrapf(err, "failed to authenticate websocket connection")
 	}
 
-	// Authenticate based on auth type
-	if server.options.EnableAuth || server.options.EnableBasicAuth {
-		if server.options.AuthType == "basic" || server.options.AuthType == "" {
-			// Basic authentication: verify AuthToken matches Credential
-			if init.AuthToken != server.options.Credential {
-				log.Printf("Authentication failed for %s", conn.RemoteAddr())
-				return errors.New("failed to authenticate websocket connection: invalid credential")
-			}
-			log.Printf("Authentication succeeded for %s", conn.RemoteAddr())
-		} else if server.options.AuthType == "bitwarden" || server.options.AuthType == "pwmanager" {
-			// Password manager authentication (Bitwarden, generic password manager)
-			// The user fills in the credential via their password manager
-			// We verify it matches the server's configured credential
-			if init.AuthToken == "" {
-				log.Printf("Password manager authentication failed for %s: empty token", conn.RemoteAddr())
-				return errors.New("failed to authenticate websocket connection: empty token")
-			}
-			if init.AuthToken != server.options.Credential {
-				log.Printf("Password manager authentication failed for %s: invalid credential", conn.RemoteAddr())
-				return errors.New("failed to authenticate websocket connection: invalid credential")
-			}
-			log.Printf("Password manager authentication succeeded for %s", conn.RemoteAddr())
-		} else if server.options.AuthType == "keepassxc" {
-			// KeePassXC public key authentication: verify Ed25519 signature
-			// AuthToken format: "session_id:signature_base64"
-			parts := strings.SplitN(init.AuthToken, ":", 2)
-			if len(parts) != 2 {
-				log.Printf("KeePassXC authentication failed for %s: invalid token format", conn.RemoteAddr())
-				return errors.New("failed to authenticate websocket connection: invalid token format")
-			}
-			sessionID := parts[0]
-			signature := parts[1]
-
-			// Get the stored challenge
-			challenge, exists := server.challengeManager.Get(sessionID)
-			if !exists {
-				log.Printf("KeePassXC authentication failed for %s: challenge not found or expired", conn.RemoteAddr())
-				return errors.New("failed to authenticate websocket connection: challenge not found or expired")
-			}
-
-			// Verify signature
-			if !VerifySignature(server.options.PublicKey, challenge.Value, signature) {
-				log.Printf("KeePassXC authentication failed for %s: invalid signature", conn.RemoteAddr())
-				return errors.New("failed to authenticate websocket connection: invalid signature")
-			}
-
-			// Delete used challenge
-			server.challengeManager.Delete(sessionID)
-
-			log.Printf("KeePassXC authentication succeeded for %s", conn.RemoteAddr())
-		} else if server.options.AuthType == "webauthn" || server.options.AuthType == "passkey" {
-			// WebAuthn/Passkeys authentication
-			// AuthToken format: "webauthn:base64_session_id" (from login finish)
-			if init.AuthToken == "" {
-				log.Printf("WebAuthn authentication failed for %s: empty token", conn.RemoteAddr())
-				return errors.New("failed to authenticate websocket connection: empty token")
-			}
-			// For webauthn, the token was already validated in the login finish endpoint
-			// Here we just check if it starts with "webauthn:"
-			if !strings.HasPrefix(init.AuthToken, "webauthn:") {
-				log.Printf("WebAuthn authentication failed for %s: invalid token format", conn.RemoteAddr())
-				return errors.New("failed to authenticate websocket connection: invalid token format")
-			}
-			log.Printf("WebAuthn authentication succeeded for %s", conn.RemoteAddr())
-		} else {
-			log.Printf("Unsupported auth type: %s", server.options.AuthType)
-			return errors.New("unsupported authentication type")
+	// Authenticate using WebAuthn if enabled
+	if server.options.EnableAuth {
+		// WebAuthn/Passkeys authentication
+		if init.AuthToken == "" {
+			log.Printf("WebAuthn authentication failed for %s: empty token", conn.RemoteAddr())
+			return errors.New("failed to authenticate websocket connection: empty token")
 		}
+
+		// Validate token using AuthSessionManager
+		if !server.authSessionMgr.ValidateToken(init.AuthToken) {
+			log.Printf("WebAuthn authentication failed for %s: invalid or expired token", conn.RemoteAddr())
+			return errors.New("failed to authenticate websocket connection: invalid or expired token")
+		}
+		log.Printf("WebAuthn authentication succeeded for %s", conn.RemoteAddr())
 	}
 
 	// Determine slave (either existing session or new)
@@ -384,12 +330,7 @@ func (server *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 func (server *Server) handleAuthToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript")
 
-	if server.options.EnableAuth && (server.options.AuthType == "bitwarden" || server.options.AuthType == "keepassxc" || server.options.AuthType == "pwmanager") {
-		// For password manager auth (bitwarden, keepassxc, pwmanager), tell the client to use password manager
-		// The client will get credentials from their password manager and send it
-		w.Write([]byte("var gotty_auth_type = '" + server.options.AuthType + "';"))
-		w.Write([]byte("var gotty_auth_token = '';"))
-	} else if server.options.EnableAuth && (server.options.AuthType == "webauthn" || server.options.AuthType == "passkey") {
+	if server.options.EnableAuth {
 		// WebAuthn/Passkeys authentication
 		w.Write([]byte("var gotty_auth_type = 'webauthn';"))
 		w.Write([]byte("var gotty_auth_token = '';"))
@@ -399,58 +340,11 @@ func (server *Server) handleAuthToken(w http.ResponseWriter, r *http.Request) {
 			hasAuth = "true"
 		}
 		w.Write([]byte("var gotty_webauthn_has_auth = " + hasAuth + ";"))
-	} else if server.options.EnableAuth && (server.options.AuthType == "basic" || server.options.AuthType == "") {
-		// Basic auth - return credential
-		w.Write([]byte("var gotty_auth_type = 'basic';"))
-		w.Write([]byte("var gotty_auth_token = '" + server.options.Credential + "';"))
 	} else {
 		// No auth
 		w.Write([]byte("var gotty_auth_type = 'none';"))
 		w.Write([]byte("var gotty_auth_token = '';"))
 	}
-
-	// Include public key for keepassxc authentication
-	if server.options.EnableAuth && server.options.AuthType == "keepassxc" && server.options.PublicKey != "" {
-		w.Write([]byte("var gotty_public_key = '" + server.options.PublicKey + "';"))
-	}
-}
-
-// handleChallenge generates and returns a challenge for public key authentication
-func (server *Server) handleChallenge(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Only allow challenge generation for keepassxc auth
-	if !server.options.EnableAuth || server.options.AuthType != "keepassxc" {
-		http.Error(w, "Challenge endpoint only available for keepassxc authentication", http.StatusBadRequest)
-		return
-	}
-
-	// Parse request body
-	var req struct {
-		SessionID string `json:"session_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.SessionID == "" {
-		http.Error(w, "session_id is required", http.StatusBadRequest)
-		return
-	}
-
-	// Generate challenge
-	challenge := server.challengeManager.Generate(req.SessionID)
-
-	// Return challenge
-	json.NewEncoder(w).Encode(map[string]string{
-		"challenge": challenge,
-	})
 }
 
 func (server *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
@@ -957,4 +851,17 @@ func (server *Server) handleWeather(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(buf.Bytes())
+}
+
+// handleWeatherPreview serves the weather preview debug page
+func (server *Server) handleWeatherPreview(w http.ResponseWriter, r *http.Request) {
+	// Read the weather-preview.html from embedded assets
+	data, err := Asset("resources/weather-preview.html")
+	if err != nil {
+		http.Error(w, "Weather preview page not found", 404)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(data)
 }

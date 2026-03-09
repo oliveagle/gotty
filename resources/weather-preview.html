@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天气效果预览 - 调试页面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a0a;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header with controls */
+        .controls-bar {
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            padding: 15px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .controls-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .controls-title {
+            color: #4a9eff;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .back-btn {
+            background: #4a9eff;
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+            transition: background 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #3a8eef;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .control-group {
+            background: #2d2d2d;
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .control-label {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .control-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .control-btn {
+            background: #3a3a3a;
+            border: 1px solid #444;
+            color: #e0e0e0;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .control-btn:hover {
+            background: #4a4a4a;
+            border-color: #4a9eff;
+            color: #4a9eff;
+        }
+
+        .control-btn.active {
+            background: #4a9eff;
+            border-color: #4a9eff;
+            color: white;
+        }
+
+        /* Time slider */
+        .time-slider-container {
+            background: #2d2d2d;
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .time-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #0f0f1a 0%, #4a90d0 25%, #8ab8d0 50%, #d4a4a4 75%, #1a1a2e 100%);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .time-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #4a9eff;
+            cursor: pointer;
+            border: 2px solid #fff;
+        }
+
+        .time-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 11px;
+            color: #666;
+        }
+
+        /* Main preview area */
+        .preview-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Large sky preview */
+        .sky-preview {
+            flex: 1;
+            min-height: 400px;
+            position: relative;
+            overflow: hidden;
+            transition: background 1s ease;
+        }
+
+        .sky-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        /* Sun */
+        .sun {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #fff7e6 0%, #ffd700 40%, #ff8c00 100%);
+            box-shadow: 0 0 40px rgba(255, 200, 0, 0.6), 0 0 80px rgba(255, 150, 0, 0.4);
+            transition: all 1s ease;
+            opacity: 0;
+        }
+
+        .sun.visible {
+            opacity: 1;
+        }
+
+        /* Moon - realistic rendering with visible maria (dark seas) - cool silver/white tone */
+        .moon {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            /* Base sphere with cool silvery shading */
+            background: radial-gradient(circle at 35% 35%,
+                #f5f5f0 0%,
+                #d5d5d0 40%,
+                #b5b5b0 70%,
+                #959590 100%);
+            box-shadow:
+                inset -8px -8px 20px rgba(0, 0, 0, 0.4),
+                inset 4px 4px 15px rgba(255, 255, 255, 0.2),
+                0 0 20px rgba(255, 255, 255, 0.3),
+                0 0 40px rgba(255, 255, 255, 0.15);
+            transition: all 1s ease;
+            opacity: 0;
+        }
+
+        .moon.visible {
+            opacity: 1;
+        }
+
+        /* Moon surface texture - maria (dark seas) and highlands - cool gray tones */
+        .moon::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            /* Realistic moon surface with maria patterns - cool gray/blue-gray colors */
+            background:
+                /* Oceanus Procellarum - large dark area on western side */
+                radial-gradient(ellipse 35% 25% at 30% 45%, rgba(90, 95, 100, 0.45) 0%, transparent 60%),
+                /* Mare Imbrium - large circular sea */
+                radial-gradient(ellipse 20% 18% at 40% 35%, rgba(85, 90, 95, 0.4) 0%, transparent 55%),
+                /* Mare Serenitatis */
+                radial-gradient(ellipse 15% 14% at 55% 38%, rgba(90, 95, 100, 0.35) 0%, transparent 50%),
+                /* Mare Tranquillitatis */
+                radial-gradient(ellipse 12% 10% at 60% 50%, rgba(85, 90, 95, 0.3) 0%, transparent 45%),
+                /* Mare Fecunditatis */
+                radial-gradient(ellipse 14% 12% at 58% 58%, rgba(90, 95, 100, 0.3) 0%, transparent 50%),
+                /* Mare Nubium */
+                radial-gradient(ellipse 18% 15% at 38% 60%, rgba(85, 90, 95, 0.35) 0%, transparent 55%),
+                /* Mare Humorum */
+                radial-gradient(ellipse 10% 10% at 30% 65%, rgba(90, 95, 100, 0.3) 0%, transparent 45%),
+                /* Mare Crisium - isolated oval sea on eastern limb */
+                radial-gradient(ellipse 10% 14% at 72% 30%, rgba(80, 85, 90, 0.4) 0%, transparent 50%),
+                /* Mare Frigoris - cold northern sea */
+                radial-gradient(ellipse 20% 8% at 50% 18%, rgba(85, 90, 95, 0.3) 0%, transparent 60%),
+                /* Sinus Iridum - Bay of Rainbows */
+                radial-gradient(ellipse 8% 10% at 38% 28%, rgba(90, 95, 100, 0.35) 0%, transparent 50%),
+                /* Highland regions - brighter areas with cool white */
+                radial-gradient(ellipse 20% 15% at 65% 20%, rgba(245, 245, 240, 0.25) 0%, transparent 60%),
+                radial-gradient(ellipse 15% 12% at 25% 75%, rgba(240, 240, 235, 0.2) 0%, transparent 55%);
+            transition: all 1s ease;
+            filter: contrast(1.15) saturate(0.8);
+        }
+
+        /* Subtle crater texture overlay - cool gray */
+        .moon::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background:
+                /* Tycho crater with rays - prominent southern crater */
+                radial-gradient(circle at 55% 70%, rgba(220, 220, 225, 0.2) 0%, transparent 8%),
+                /* Copernicus crater - central highland */
+                radial-gradient(circle at 35% 45%, rgba(215, 215, 220, 0.15) 0%, transparent 6%),
+                /* Kepler crater */
+                radial-gradient(circle at 30% 42%, rgba(215, 215, 220, 0.12) 0%, transparent 4%),
+                /* Plato crater - northern dark plain */
+                radial-gradient(circle at 48% 22%, rgba(100, 105, 110, 0.25) 0%, transparent 5%);
+            z-index: 3;
+            pointer-events: none;
+            mix-blend-mode: overlay;
+        }
+
+        /* Moon Phases - using mask to reveal illuminated portion - cool silvery tones */
+        .moon.phase-new {
+            opacity: 0;
+            box-shadow: none;
+        }
+        .moon.phase-new::after {
+            opacity: 0;
+        }
+        .moon.phase-new::before {
+            opacity: 0;
+        }
+
+        /* Waxing Crescent - thin sliver on right side illuminated */
+        .moon.phase-waxing-crescent {
+            background: radial-gradient(circle at 35% 35%,
+                #d8d8d8 0%,
+                #b8b8b8 40%,
+                #989898 70%,
+                #787878 100%);
+            box-shadow:
+                inset -6px -6px 15px rgba(0, 0, 0, 0.5),
+                0 0 15px rgba(255, 255, 255, 0.2);
+        }
+        .moon.phase-waxing-crescent::after {
+            mask-image: linear-gradient(to right, transparent 0%, black 15%, black 35%, transparent 40%);
+            -webkit-mask-image: linear-gradient(to right, transparent 0%, black 15%, black 35%, transparent 40%);
+            filter: brightness(1.5) contrast(1.25);
+        }
+
+        /* First Quarter - right half illuminated */
+        .moon.phase-first-quarter {
+            background: radial-gradient(circle at 35% 35%,
+                #d0d0d0 0%,
+                #b0b0b0 40%,
+                #909090 70%,
+                #707070 100%);
+            box-shadow:
+                inset -6px -6px 15px rgba(0, 0, 0, 0.45),
+                0 0 18px rgba(255, 255, 255, 0.25);
+        }
+        .moon.phase-first-quarter::after {
+            mask-image: linear-gradient(to right, transparent 0%, black 45%, black 55%, transparent 60%);
+            -webkit-mask-image: linear-gradient(to right, transparent 0%, black 45%, black 55%, transparent 60%);
+            filter: brightness(1.45) contrast(1.2);
+        }
+
+        /* Waxing Gibbous - more than half illuminated */
+        .moon.phase-waxing-gibbous {
+            background: radial-gradient(circle at 35% 35%,
+                #d8d8d8 0%,
+                #b8b8b8 40%,
+                #989898 70%,
+                #787878 100%);
+            box-shadow:
+                inset -5px -5px 12px rgba(0, 0, 0, 0.35),
+                0 0 22px rgba(255, 255, 255, 0.3);
+        }
+        .moon.phase-waxing-gibbous::after {
+            mask-image: linear-gradient(to right, black 5%, black 65%, transparent 75%);
+            -webkit-mask-image: linear-gradient(to right, black 5%, black 65%, transparent 75%);
+            filter: brightness(1.3) contrast(1.15);
+        }
+
+        /* Full Moon - completely illuminated - cool silvery white */
+        .moon.phase-full {
+            background: radial-gradient(circle at 32% 32%,
+                #fafafa 0%,
+                #e8e8e8 35%,
+                #c8c8c8 65%,
+                #a8a8a8 100%);
+            box-shadow:
+                inset -4px -4px 10px rgba(0, 0, 0, 0.25),
+                inset 3px 3px 8px rgba(255, 255, 255, 0.3),
+                0 0 25px rgba(255, 255, 255, 0.4),
+                0 0 50px rgba(255, 255, 255, 0.2);
+        }
+        .moon.phase-full::after {
+            filter: brightness(1.2) contrast(1.1);
+        }
+
+        /* Waning Gibbous - more than half illuminated, shadow on right */
+        .moon.phase-waning-gibbous {
+            background: radial-gradient(circle at 35% 35%,
+                #d8d8d8 0%,
+                #b8b8b8 40%,
+                #989898 70%,
+                #787878 100%);
+            box-shadow:
+                inset -5px -5px 12px rgba(0, 0, 0, 0.35),
+                0 0 22px rgba(255, 255, 255, 0.3);
+        }
+        .moon.phase-waning-gibbous::after {
+            mask-image: linear-gradient(to right, transparent 5%, black 25%, black 65%, black 95%);
+            -webkit-mask-image: linear-gradient(to right, transparent 5%, black 25%, black 65%, black 95%);
+            filter: brightness(1.3) contrast(1.15);
+        }
+
+        /* Last Quarter - left half illuminated */
+        .moon.phase-last-quarter {
+            background: radial-gradient(circle at 35% 35%,
+                #d0d0d0 0%,
+                #b0b0b0 40%,
+                #909090 70%,
+                #707070 100%);
+            box-shadow:
+                inset -6px -6px 15px rgba(0, 0, 0, 0.45),
+                0 0 18px rgba(255, 255, 255, 0.25);
+        }
+        .moon.phase-last-quarter::after {
+            mask-image: linear-gradient(to right, transparent 40%, black 45%, black 55%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to right, transparent 40%, black 45%, black 55%, transparent 100%);
+            filter: brightness(1.45) contrast(1.2);
+        }
+
+        /* Waning Crescent - thin sliver on left side illuminated */
+        .moon.phase-waning-crescent {
+            background: radial-gradient(circle at 35% 35%,
+                #d8d8d8 0%,
+                #b8b8b8 40%,
+                #989898 70%,
+                #787878 100%);
+            box-shadow:
+                inset -6px -6px 15px rgba(0, 0, 0, 0.5),
+                0 0 15px rgba(255, 255, 255, 0.2);
+        }
+        .moon.phase-waning-crescent::after {
+            mask-image: linear-gradient(to right, transparent 60%, black 65%, black 85%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to right, transparent 60%, black 65%, black 85%, transparent 100%);
+            filter: brightness(1.5) contrast(1.25);
+        }
+
+        /* Stars */
+        .stars {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0;
+            transition: opacity 1.5s ease;
+        }
+
+        .stars.visible {
+            opacity: 1;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 2s ease-in-out infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.5); }
+        }
+
+        /* Milky Way Galaxy - subtle nebula glow across night sky */
+        .milky-way {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0;
+            transition: opacity 2s ease;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .milky-way.visible {
+            opacity: 1;
+        }
+
+        .milky-way-band {
+            position: absolute;
+            width: 150%;
+            height: 60%;
+            top: 10%;
+            left: -25%;
+            transform: rotate(-30deg);
+            background:
+                radial-gradient(ellipse 50% 30% at 50% 50%,
+                    rgba(180, 200, 255, 0.08) 0%,
+                    rgba(150, 170, 220, 0.06) 30%,
+                    rgba(100, 120, 180, 0.04) 50%,
+                    transparent 70%);
+            filter: blur(20px);
+        }
+
+        /* Dust lanes in Milky Way */
+        .milky-way::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(ellipse 40% 20% at 40% 40%,
+                    rgba(30, 30, 50, 0.15) 0%,
+                    transparent 60%),
+                radial-gradient(ellipse 30% 15% at 60% 60%,
+                    rgba(25, 25, 45, 0.12) 0%,
+                    transparent 55%);
+            filter: blur(15px);
+        }
+
+        /* Clouds */
+        .clouds {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0;
+            transition: opacity 1s ease;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .clouds.visible {
+            opacity: 1;
+        }
+
+        .cloud {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            filter: blur(8px);
+            animation: cloud-float 180s linear infinite;
+        }
+
+        @keyframes cloud-float {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
+
+        /* Season overlay */
+        .season-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            transition: opacity 1s ease;
+            z-index: 0;
+        }
+
+        .season-overlay.spring {
+            background: linear-gradient(180deg,
+                rgba(255, 183, 197, 0.12) 0%,
+                rgba(183, 255, 205, 0.08) 100%);
+        }
+
+        .season-overlay.summer {
+            background: linear-gradient(180deg,
+                rgba(255, 223, 128, 0.1) 0%,
+                rgba(255, 183, 77, 0.06) 100%);
+        }
+
+        .season-overlay.autumn {
+            background: linear-gradient(180deg,
+                rgba(255, 140, 82, 0.12) 0%,
+                rgba(205, 92, 92, 0.08) 100%);
+        }
+
+        .season-overlay.winter {
+            background: linear-gradient(180deg,
+                rgba(200, 230, 255, 0.1) 0%,
+                rgba(230, 240, 255, 0.06) 100%);
+        }
+
+        /* Time-based themes - Clean, deep sky colors */
+        .sky-preview.theme-morning {
+            background: linear-gradient(180deg,
+                #87CEEB 0%,
+                #B0E0F0 40%,
+                #D4EDFF 100%);
+        }
+
+        .sky-preview.theme-noon {
+            background: linear-gradient(180deg,
+                #4A90E2 0%,
+                #7AB8E8 60%,
+                #C8E5F5 100%);
+        }
+
+        .sky-preview.theme-dusk {
+            background: linear-gradient(180deg,
+                #FF6B4A 0%,
+                #FF9B6A 30%,
+                #8B5A9B 70%,
+                #2D1B3A 100%);
+        }
+
+        /* Deep clear night sky - pure black fading to subtle deep blue at horizon */
+        .sky-preview.theme-night {
+            background: linear-gradient(180deg,
+                #000000 0%,
+                #000002 30%,
+                #050510 60%,
+                #0A0A1A 100%);
+        }
+
+        /* Weather overlays */
+        .sky-preview.weather-cloudy.theme-morning {
+            background: linear-gradient(110deg,
+                #d4b8a8 0%,
+                #e0c8b8 20%,
+                #d8d0c0 45%,
+                #b8c0c8 70%,
+                #a8b0b8 100%);
+        }
+
+        .sky-preview.weather-cloudy.theme-noon {
+            background: linear-gradient(180deg,
+                #9aa8b8 0%,
+                #b0bcc8 50%,
+                #c8d0d8 100%);
+        }
+
+        .sky-preview.weather-cloudy.theme-dusk {
+            background: linear-gradient(70deg,
+                #d4b8a8 0%,
+                #c8b0a0 25%,
+                #b0a0a0 50%,
+                #7a6a7a 80%,
+                #5a4a5a 100%);
+        }
+
+        .sky-preview.weather-cloudy.theme-night {
+            background: linear-gradient(180deg,
+                #1a1f2a 0%,
+                #2a2f3a 50%,
+                #3a3f4a 100%);
+        }
+
+        .sky-preview.weather-rainy.theme-morning {
+            background: linear-gradient(110deg,
+                #a8b0b8 0%,
+                #b0b8c0 25%,
+                #b8c0c8 55%,
+                #a8b0b8 80%,
+                #98a0a8 100%);
+        }
+
+        .sky-preview.weather-rainy.theme-noon {
+            background: linear-gradient(180deg,
+                #7a8898 0%,
+                #8a98a8 50%,
+                #9aa8b8 100%);
+        }
+
+        .sky-preview.weather-rainy.theme-dusk {
+            background: linear-gradient(70deg,
+                #a8a0a8 0%,
+                #989098 25%,
+                #888088 50%,
+                #6a5a6a 75%,
+                #5a4a5a 100%);
+        }
+
+        .sky-preview.weather-rainy.theme-night {
+            background: linear-gradient(180deg,
+                #1a1e25 0%,
+                #232730 50%,
+                #2d313a 100%);
+        }
+
+        /* Info bar */
+        .info-bar {
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .info-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .info-label {
+            color: #666;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .info-value {
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .moon-phase-gallery {
+            display: flex;
+            gap: 10px;
+            padding: 10px 20px;
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            overflow-x: auto;
+        }
+
+        .moon-phase-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            min-width: 60px;
+        }
+
+        .moon-phase-item:hover {
+            background: #2d2d2d;
+        }
+
+        .moon-phase-item.active {
+            background: #2d2d2d;
+            border: 1px solid #4a9eff;
+        }
+
+        .moon-phase-item .moon-display {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #1a1a2e;
+            position: relative;
+        }
+
+        .moon-phase-item .moon-display::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #fffef0 0%, #f5f5e8 40%, #e8e8d8 100%);
+        }
+
+        .moon-phase-item .moon-display.phase-new {
+            background: #1a1a2e;
+        }
+        .moon-phase-item .moon-display.phase-new::after {
+            display: none;
+        }
+
+        .moon-phase-item .moon-display.phase-waxing-crescent::after {
+            clip-path: ellipse(25% 100% at 75% 50%);
+        }
+
+        .moon-phase-item .moon-display.phase-first-quarter::after {
+            clip-path: ellipse(50% 100% at 75% 50%);
+        }
+
+        .moon-phase-item .moon-display.phase-waxing-gibbous::after {
+            clip-path: ellipse(75% 100% at 65% 50%);
+        }
+
+        .moon-phase-item .moon-display.phase-full {
+            background: radial-gradient(circle at 30% 30%, #ffffff 0%, #fffef0 30%, #f5f5e8 70%, #e8e8d8 100%);
+        }
+        .moon-phase-item .moon-display.phase-full::after {
+            clip-path: none;
+        }
+
+        .moon-phase-item .moon-display.phase-waning-gibbous::after {
+            clip-path: ellipse(75% 100% at 35% 50%);
+        }
+
+        .moon-phase-item .moon-display.phase-last-quarter::after {
+            clip-path: ellipse(50% 100% at 25% 50%);
+        }
+
+        .moon-phase-item .moon-display.phase-waning-crescent::after {
+            clip-path: ellipse(25% 100% at 25% 50%);
+        }
+
+        .moon-phase-label {
+            font-size: 10px;
+            color: #888;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- Controls Bar -->
+    <div class="controls-bar">
+        <div class="controls-header">
+            <div class="controls-title">🌤️ 天气效果预览调试页面</div>
+            <a href="/" class="back-btn">← 返回 GoTTY</a>
+        </div>
+
+        <div class="controls-grid">
+            <!-- Time Control -->
+            <div class="control-group">
+                <div class="control-label">时段</div>
+                <div class="control-buttons">
+                    <button class="control-btn" data-time="morning">🌅 早晨</button>
+                    <button class="control-btn" data-time="noon">☀️ 中午</button>
+                    <button class="control-btn" data-time="dusk">🌇 黄昏</button>
+                    <button class="control-btn active" data-time="night">🌙 夜晚</button>
+                </div>
+            </div>
+
+            <!-- Weather Control -->
+            <div class="control-group">
+                <div class="control-label">天气</div>
+                <div class="control-buttons">
+                    <button class="control-btn active" data-weather="clear">☀️ 晴朗</button>
+                    <button class="control-btn" data-weather="cloudy">☁️ 多云</button>
+                    <button class="control-btn" data-weather="rainy">🌧️ 雨天</button>
+                </div>
+            </div>
+
+            <!-- Season Control -->
+            <div class="control-group">
+                <div class="control-label">季节</div>
+                <div class="control-buttons">
+                    <button class="control-btn" data-season="spring">🌸 春</button>
+                    <button class="control-btn active" data-season="summer">☀️ 夏</button>
+                    <button class="control-btn" data-season="autumn">🍂 秋</button>
+                    <button class="control-btn" data-season="winter">❄️ 冬</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Time Slider -->
+        <div class="time-slider-container" style="margin-top: 15px;">
+            <input type="range" min="0" max="1439" value="1320" class="time-slider" id="time-slider">
+            <div class="time-labels">
+                <span>00:00</span>
+                <span>06:00</span>
+                <span>12:00</span>
+                <span>18:00</span>
+                <span>23:59</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Preview Area -->
+    <div class="preview-area">
+        <!-- Sky Preview -->
+        <div class="sky-preview theme-night" id="sky-preview">
+            <div class="sky-container">
+                <div class="sun" id="sun"></div>
+                <div class="moon visible phase-full" id="moon"></div>
+                <div class="stars" id="stars"></div>
+                <div class="clouds" id="clouds"></div>
+                <div class="season-overlay summer" id="season"></div>
+            </div>
+        </div>
+
+        <!-- Moon Phase Gallery -->
+        <div class="moon-phase-gallery">
+            <div class="moon-phase-item active" data-phase="full">
+                <div class="moon-display phase-full"></div>
+                <div class="moon-phase-label">满月</div>
+            </div>
+            <div class="moon-phase-item" data-phase="waxing-gibbous">
+                <div class="moon-display phase-waxing-gibbous"></div>
+                <div class="moon-phase-label">盈凸月</div>
+            </div>
+            <div class="moon-phase-item" data-phase="first-quarter">
+                <div class="moon-display phase-first-quarter"></div>
+                <div class="moon-phase-label">上弦月</div>
+            </div>
+            <div class="moon-phase-item" data-phase="waxing-crescent">
+                <div class="moon-display phase-waxing-crescent"></div>
+                <div class="moon-phase-label">蛾眉月</div>
+            </div>
+            <div class="moon-phase-item" data-phase="new">
+                <div class="moon-display phase-new"></div>
+                <div class="moon-phase-label">新月</div>
+            </div>
+            <div class="moon-phase-item" data-phase="waning-crescent">
+                <div class="moon-display phase-waning-crescent"></div>
+                <div class="moon-phase-label">残月</div>
+            </div>
+            <div class="moon-phase-item" data-phase="last-quarter">
+                <div class="moon-display phase-last-quarter"></div>
+                <div class="moon-phase-label">下弦月</div>
+            </div>
+            <div class="moon-phase-item" data-phase="waning-gibbous">
+                <div class="moon-display phase-waning-gibbous"></div>
+                <div class="moon-phase-label">亏凸月</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Bar -->
+    <div class="info-bar">
+        <div class="info-left">
+            <div class="info-item">
+                <div class="info-label">当前时间</div>
+                <div class="info-value" id="current-time">--:--:--</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">时段</div>
+                <div class="info-value" id="time-period">夜晚</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">天气</div>
+                <div class="info-value" id="weather-type">晴朗</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">季节</div>
+                <div class="info-value" id="season-type">夏季</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">月相</div>
+                <div class="info-value" id="moon-phase">满月</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">月龄</div>
+                <div class="info-value" id="moon-age">--</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let currentTimePeriod = 'night';
+        let currentWeather = 'clear';
+        let currentSeason = 'summer';
+        let currentMoonPhase = 'full';
+
+        // Lunar phase calculation
+        function getLunarPhase(date = new Date()) {
+            const knownNewMoon = new Date('2000-01-06T18:14:00Z').getTime();
+            const synodicMonth = 29.53058867;
+
+            const daysSinceReference = (date.getTime() - knownNewMoon) / (1000 * 60 * 60 * 24);
+            const cycles = daysSinceReference / synodicMonth;
+            const phase = cycles - Math.floor(cycles);
+            const age = phase * synodicMonth;
+            const illumination = (1 - Math.cos(2 * Math.PI * phase)) / 2;
+
+            return { phase, age, illumination };
+        }
+
+        function getMoonPhaseName(phase) {
+            if (phase < 0.03 || phase > 0.97) return 'new';
+            if (phase < 0.22) return 'waxing_crescent';
+            if (phase < 0.28) return 'first_quarter';
+            if (phase < 0.47) return 'waxing_gibbous';
+            if (phase < 0.53) return 'full';
+            if (phase < 0.72) return 'waning_gibbous';
+            if (phase < 0.78) return 'last_quarter';
+            if (phase < 0.97) return 'waning_crescent';
+            return 'new';
+        }
+
+        const moonPhaseNames = {
+            'new': '新月',
+            'waxing_crescent': '蛾眉月',
+            'first_quarter': '上弦月',
+            'waxing_gibbous': '盈凸月',
+            'full': '满月',
+            'waning_gibbous': '亏凸月',
+            'last_quarter': '下弦月',
+            'waning_crescent': '残月'
+        };
+
+        const periodNames = {
+            'morning': '早晨',
+            'noon': '中午',
+            'dusk': '黄昏',
+            'night': '夜晚'
+        };
+
+        const weatherNames = {
+            'clear': '晴朗',
+            'cloudy': '多云',
+            'rainy': '雨天'
+        };
+
+        const seasonNames = {
+            'spring': '春季',
+            'summer': '夏季',
+            'autumn': '秋季',
+            'winter': '冬季'
+        };
+
+        // Generate stars
+        function generateStars(container, count = 100) {
+            container.innerHTML = '';
+            for (let i = 0; i < count; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = `${Math.random() * 100}%`;
+                star.style.top = `${Math.random() * 100}%`;
+                star.style.animationDelay = `${Math.random() * 2}s`;
+                star.style.opacity = `${0.3 + Math.random() * 0.7}`;
+                container.appendChild(star);
+            }
+        }
+
+        // Generate clouds
+        function generateClouds(container, intensity = 'light') {
+            container.innerHTML = '';
+            const numClouds = intensity === 'light' ? 3 : 5;
+            const cloudHeights = intensity === 'light' ? [20, 40, 60] : [15, 30, 45, 60, 75];
+
+            cloudHeights.slice(0, numClouds).forEach((top, index) => {
+                const cloud = document.createElement('div');
+                cloud.className = 'cloud';
+                const width = 150 + Math.random() * 200;
+                const height = 40 + Math.random() * 60;
+                cloud.style.width = `${width}px`;
+                cloud.style.height = `${height}px`;
+                cloud.style.top = `${top}%`;
+                cloud.style.left = `${-20 - Math.random() * 20}%`;
+                cloud.style.animationDuration = `${180 + Math.random() * 120}s`;
+                cloud.style.animationDelay = `${index * 10}s`;
+                container.appendChild(cloud);
+            });
+        }
+
+        // Update preview
+        function updatePreview() {
+            const sky = document.getElementById('sky-preview');
+            const sun = document.getElementById('sun');
+            const moon = document.getElementById('moon');
+            const stars = document.getElementById('stars');
+            const clouds = document.getElementById('clouds');
+            const season = document.getElementById('season');
+
+            // Remove existing classes
+            sky.classList.remove('theme-morning', 'theme-noon', 'theme-dusk', 'theme-night');
+            sky.classList.remove('weather-cloudy', 'weather-rainy');
+            season.classList.remove('spring', 'summer', 'autumn', 'winter');
+
+            // Add time class
+            sky.classList.add(`theme-${currentTimePeriod}`);
+
+            // Add weather class
+            if (currentWeather !== 'clear') {
+                sky.classList.add(`weather-${currentWeather}`);
+            }
+
+            // Add season class
+            season.classList.add(currentSeason);
+
+            // Update celestial bodies
+            sun.classList.remove('visible');
+            moon.classList.remove('visible');
+            stars.classList.remove('visible');
+
+            if (currentTimePeriod === 'night') {
+                moon.className = `moon visible phase-${currentMoonPhase}`;
+                moon.style.right = '15%';
+                moon.style.top = '15%';
+                stars.classList.add('visible');
+                generateStars(stars);
+            } else if (currentTimePeriod === 'morning') {
+                sun.classList.add('visible');
+                sun.style.left = '15%';
+                sun.style.top = '20%';
+            } else if (currentTimePeriod === 'noon') {
+                sun.classList.add('visible');
+                sun.style.left = '50%';
+                sun.style.top = '10%';
+            } else if (currentTimePeriod === 'dusk') {
+                sun.classList.add('visible');
+                sun.style.right = '15%';
+                sun.style.top = '20%';
+            }
+
+            // Update clouds
+            if (currentWeather === 'cloudy') {
+                clouds.classList.add('visible');
+                generateClouds(clouds, 'light');
+            } else if (currentWeather === 'rainy') {
+                clouds.classList.add('visible');
+                generateClouds(clouds, 'heavy');
+            } else {
+                clouds.classList.remove('visible');
+            }
+
+            // Update info display
+            document.getElementById('time-period').textContent = periodNames[currentTimePeriod];
+            document.getElementById('weather-type').textContent = weatherNames[currentWeather];
+            document.getElementById('season-type').textContent = seasonNames[currentSeason];
+            document.getElementById('moon-phase').textContent = moonPhaseNames[currentMoonPhase] || currentMoonPhase;
+
+            // Update lunar info
+            const lunarPhase = getLunarPhase(new Date());
+            document.getElementById('moon-age').textContent = `${lunarPhase.age.toFixed(1)} 天 (${Math.round(lunarPhase.illumination * 100)}%)`;
+        }
+
+        // Update time display
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleTimeString('zh-CN', { hour12: false });
+        }
+
+        // Time slider
+        function minutesToTimePeriod(minutes) {
+            if (minutes < 330) return 'night';
+            if (minutes < 390) return 'morning';
+            if (minutes < 480) return 'morning';
+            if (minutes < 960) return 'noon';
+            if (minutes < 1050) return 'dusk';
+            return 'night';
+        }
+
+        // Event listeners
+        document.getElementById('time-slider').addEventListener('input', (e) => {
+            const minutes = parseInt(e.target.value);
+            currentTimePeriod = minutesToTimePeriod(minutes);
+
+            document.querySelectorAll('[data-time]').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.time === currentTimePeriod);
+            });
+
+            updatePreview();
+        });
+
+        // Time period buttons
+        document.querySelectorAll('[data-time]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-time]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentTimePeriod = btn.dataset.time;
+
+                const timeMap = {
+                    'morning': 420,
+                    'noon': 720,
+                    'dusk': 1020,
+                    'night': 1320
+                };
+                document.getElementById('time-slider').value = timeMap[currentTimePeriod];
+
+                updatePreview();
+            });
+        });
+
+        // Weather buttons
+        document.querySelectorAll('[data-weather]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-weather]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentWeather = btn.dataset.weather;
+                updatePreview();
+            });
+        });
+
+        // Season buttons
+        document.querySelectorAll('[data-season]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-season]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentSeason = btn.dataset.season;
+                updatePreview();
+            });
+        });
+
+        // Moon phase gallery
+        document.querySelectorAll('.moon-phase-item').forEach(item => {
+            item.addEventListener('click', () => {
+                document.querySelectorAll('.moon-phase-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                currentMoonPhase = item.dataset.phase;
+                updatePreview();
+            });
+        });
+
+        // Initialize
+        updateTime();
+        updatePreview();
+        setInterval(updateTime, 1000);
+    </script>
+</body>
+</html>

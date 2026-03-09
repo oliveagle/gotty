@@ -1,24 +1,9 @@
 package server
 
-import (
-	"encoding/base64"
-	"encoding/binary"
-	"encoding/pem"
-	"os"
-	"strings"
-
-	"github.com/pkg/errors"
-
-	"github.com/oliveagle/gotty/pkg/homedir"
-)
-
 type Options struct {
 	Address             string           `hcl:"address" flagName:"address" flagSName:"a" flagDescribe:"IP address to listen" default:"127.0.0.1"`
 	Port                string           `hcl:"port" flagName:"port" flagSName:"p" flagDescribe:"Port number to liten" default:"13782"`
-	EnableAuth          bool             `hcl:"enable_auth" flagName:"" flagSName:"" flagDescribe:"Enable authentication" default:"false"`
-	EnableBasicAuth     bool             `hcl:"enable_basic_auth" flagName:"" flagSName:"" flagDescribe:"Enable basic authentication (deprecated, use enable_auth and auth_type)" default:"false"`
-	AuthType            string           `hcl:"auth_type" flagName:"auth-type" flagSName:"" flagDescribe:"Auth type: basic or bitwarden (default: basic)"`
-	Credential          string           `hcl:"credential" flagName:"credential" flagSName:"c" flagDescribe:"Credential for Basic Authentication (ex: user:pass, default disabled)" default:""`
+	EnableAuth          bool             `hcl:"enable_auth" flagName:"auth" flagSName:"A" flagDescribe:"Enable WebAuthn authentication" default:"false"`
 	EnableRandomUrl     bool             `hcl:"enable_random_url" flagName:"random-url" flagSName:"r" flagDescribe:"Add a random string to the URL" default:"false"`
 	RandomUrlLength     int              `hcl:"random_url_length" flagName:"random-url-length" flagDescribe:"Random URL length" default:"8"`
 	EnableTLS           bool             `hcl:"enable_tls" flagName:"tls" flagSName:"t" flagDescribe:"Enable TLS/SSL" default:"false"`
@@ -55,154 +40,32 @@ type Options struct {
 	// Host display options
 	HostName string `hcl:"host_name" flagName:"host-name" flagDescribe:"Custom host name displayed in sidebar and browser tab (empty to use URL host)" default:""`
 
-	// Public key authentication options
-	PublicKeyFile string `hcl:"public_key_file" flagName:"public-key-file" flagDescribe:"Path to Ed25519 public key file for challenge-response authentication (required for keepassxc auth type)" default:"~/.gotty.pub"`
-
 	// WebAuthn/Passkeys options
-	WebAuthnDisplayName string `hcl:"webauthn_display_name" flagName:"webauthn-display-name" flagDescribe:"Display name for WebAuthn relying party" default:"GoTTY"`
-	WebAuthnDataDir     string `hcl:"webauthn_data_dir" flagName:"webauthn-data-dir" flagDescribe:"Directory to store WebAuthn credentials" default:"~/.config/gotty/webauthn"`
-
-	// Loaded public key (populated at runtime)
-	PublicKey string
+	WebAuthnDisplayName   string `hcl:"webauthn_display_name" flagName:"webauthn-display-name" flagDescribe:"Display name for WebAuthn relying party" default:"GoTTY"`
+	WebAuthnDataDir       string `hcl:"webauthn_data_dir" flagName:"webauthn-data-dir" flagDescribe:"Directory to store WebAuthn credentials" default:"~/.config/gotty/webauthn"`
+	WebAuthnRegisterToken string `hcl:"webauthn_register_token" flagName:"webauthn-register-token" flagDescribe:"Token required for new passkey registration (empty = no registration allowed after first credential)" default:""`
+	WebAuthnAllowRegister bool   `hcl:"webauthn_allow_register" flagName:"webauthn-allow-register" flagDescribe:"Allow new passkey registration (only works if no credentials exist or register-token is set)" default:"false"`
+	WebAuthnSessionTTL    int    `hcl:"webauthn_session_ttl" flagName:"webauthn-session-ttl" flagDescribe:"Session TTL in hours for WebAuthn authentication (0 = require auth every time)" default:"168"`
 
 	TitleVariables map[string]interface{}
+
+	// Internal flags for tracking explicit settings
+	permitWriteExplicit bool
+}
+
+// SetPermitWriteExplicit marks that PermitWrite was explicitly set by user
+func (options *Options) SetPermitWriteExplicit() {
+	options.permitWriteExplicit = true
 }
 
 func (options *Options) Validate() error {
-	if options.AuthType == "" {
-		options.AuthType = "basic"
+	// WebAuthn is the only auth type, no validation needed
+	// Credentials are managed at runtime
+
+	// When auth is enabled, default PermitWrite to true unless explicitly set to false
+	if options.EnableAuth && !options.permitWriteExplicit {
+		options.PermitWrite = true
 	}
-
-	// Backward compatibility: if EnableBasicAuth is true, set AuthType to basic
-	if options.EnableBasicAuth {
-		options.EnableAuth = true
-		if options.AuthType == "" {
-			options.AuthType = "basic"
-		}
-	}
-
-	// Only validate if authentication is enabled
-	if !options.EnableAuth && !options.EnableBasicAuth {
-		return nil
-	}
-
-	// Validate based on auth type
-	switch options.AuthType {
-	case "basic":
-		if options.Credential == "" {
-			return errors.New("credential is required for basic authentication")
-		}
-	case "bitwarden", "pwmanager":
-		// Password manager auth doesn't require any server-side configuration
-		// The client will handle authentication using their password manager
-		break
-	case "keepassxc":
-		// KeePassXC requires public key file for challenge-response authentication
-		if options.PublicKeyFile == "" {
-			return errors.New("public_key_file is required for keepassxc authentication")
-		}
-		// Check if file exists (will be expanded and loaded at runtime)
-		keyPath := homedir.Expand(options.PublicKeyFile)
-		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
-			return errors.New("public key file not found: " + keyPath)
-		}
-	case "webauthn", "passkey":
-		// WebAuthn/Passkeys authentication
-		// No pre-validation needed, credentials are managed at runtime
-		break
-	default:
-		return errors.New("invalid auth type: " + options.AuthType)
-	}
-
-	if options.EnableTLSClientAuth && !options.EnableTLS {
-		return errors.New("TLS client authentication is enabled, but TLS is not enabled")
-	}
-	return nil
-}
-
-// LoadPublicKey loads the Ed25519 public key from file
-// Supports: PEM format, raw base64, and SSH public key format (ssh-ed25519)
-func (options *Options) LoadPublicKey() error {
-	if options.PublicKeyFile == "" {
-		return nil
-	}
-
-	keyPath := homedir.Expand(options.PublicKeyFile)
-	data, err := os.ReadFile(keyPath)
-	if err != nil {
-		return errors.Wrapf(err, "failed to read public key file: %s", keyPath)
-	}
-
-	content := strings.TrimSpace(string(data))
-
-	// Try PEM format first
-	if strings.HasPrefix(content, "-----BEGIN") {
-		block, _ := pem.Decode(data)
-		if block == nil {
-			return errors.New("failed to parse PEM block from public key file")
-		}
-		// Extract DER bytes and encode to base64
-		options.PublicKey = base64.StdEncoding.EncodeToString(block.Bytes)
-		return nil
-	}
-
-	// Try SSH public key format (ssh-ed25519 AAAA... or ssh-rsa AAAA...)
-	if strings.HasPrefix(content, "ssh-") {
-		parts := strings.Fields(content)
-		if len(parts) < 2 {
-			return errors.New("invalid SSH public key format")
-		}
-
-		keyType := parts[0]
-		keyData := parts[1]
-
-		// Decode the base64 key data
-		decoded, err := base64.StdEncoding.DecodeString(keyData)
-		if err != nil {
-			return errors.Wrap(err, "failed to decode SSH public key")
-		}
-
-		switch keyType {
-		case "ssh-ed25519":
-			// SSH Ed25519 public key format:
-			// 4 bytes: length of "ssh-ed25519"
-			// "ssh-ed25519"
-			// 4 bytes: length of public key (32)
-			// 32 bytes: public key
-			if len(decoded) < 8 {
-				return errors.New("SSH Ed25519 public key too short")
-			}
-			// Skip the key type prefix
-			keyTypeLen := int(binary.BigEndian.Uint32(decoded[0:4]))
-			if len(decoded) < 4+keyTypeLen+4 {
-				return errors.New("malformed SSH Ed25519 public key")
-			}
-			pubKeyLen := int(binary.BigEndian.Uint32(decoded[4+keyTypeLen : 4+keyTypeLen+4]))
-			pubKeyStart := 4 + keyTypeLen + 4
-			pubKeyEnd := pubKeyStart + pubKeyLen
-			if len(decoded) < pubKeyEnd {
-				return errors.New("malformed SSH Ed25519 public key")
-			}
-			pubKey := decoded[pubKeyStart:pubKeyEnd]
-			options.PublicKey = base64.StdEncoding.EncodeToString(pubKey)
-
-		case "ssh-rsa":
-			// For RSA, we don't support it in Ed25519 signature verification
-			// But let's provide a clear error message
-			return errors.New("RSA keys are not supported for challenge-response authentication, please use Ed25519 key (ssh-keygen -t ed25519)")
-
-		default:
-			return errors.New("unsupported SSH key type: " + keyType + " (only ssh-ed25519 is supported)")
-		}
-		return nil
-	}
-
-	// Assume raw base64 format
-	// Validate it's valid base64
-	if _, err := base64.StdEncoding.DecodeString(content); err != nil {
-		return errors.New("public key file is neither valid PEM, SSH public key, nor base64 format")
-	}
-	options.PublicKey = content
 
 	return nil
 }
@@ -266,20 +129,8 @@ type HtermPrefernces struct {
 
 // GetAuthKeysList returns a formatted list of authorized keys for logging
 func (options *Options) GetAuthKeysList() []string {
-	if options.AuthType == "basic" || options.AuthType == "" {
-		return []string{"Basic Authentication"}
-	}
-
-	switch options.AuthType {
-	case "bitwarden":
-		return []string{"Bitwarden E2E Encryption"}
-	case "pwmanager":
-		return []string{"Password Manager Auth"}
-	case "keepassxc":
-		return []string{"KeePassXC Auth"}
-	case "webauthn", "passkey":
+	if options.EnableAuth {
 		return []string{"WebAuthn/Passkeys"}
 	}
-
 	return []string{"No authentication"}
 }

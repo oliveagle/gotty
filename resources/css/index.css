@@ -244,7 +244,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: #2d2d2d;
     transition: background 0.5s ease;
     position: relative;
-    overflow: visible;  /* Changed to visible to allow dropdown to escape */
+    overflow: hidden;  /* Restored to hidden to contain sky elements */
 }
 
 /* ============================================
@@ -284,8 +284,46 @@ body.sidebar-auto-hide #sidebar-trigger {
     width: 26px;
     height: 26px;
     border-radius: 50%;
-    background: radial-gradient(circle at 70% 70%, #f5f5f5 0%, #e8e8e8 50%, #c8c8c8 100%);
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.4), 0 0 30px rgba(200, 220, 255, 0.3);
+    background: radial-gradient(circle at 30% 30%, #fffef0 0%, #f5f5e8 40%, #e8e8d8 100%);
+    box-shadow: 0 0 15px rgba(255, 255, 230, 0.5), 0 0 30px rgba(255, 255, 200, 0.3);
+    transition: all 1s ease;
+    opacity: 0;
+    overflow: hidden;
+}
+
+.moon.visible {
+    opacity: 1;
+}
+
+/* Moon craters - only visible on illuminated part */
+.moon::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 30% 40%, rgba(180, 180, 160, 0.35) 0%, transparent 40%),
+        radial-gradient(circle at 70% 60%, rgba(180, 180, 160, 0.25) 0%, transparent 30%),
+        radial-gradient(circle at 50% 80%, rgba(180, 180, 160, 0.3) 0%, transparent 35%);
+    z-index: 2;
+    pointer-events: none;
+}
+
+/* ============================================
+   Moon Phases - Realistic illumination
+   Using layered gradients to simulate spherical lighting
+   The terminator line should be curved, not straight
+   ============================================ */
+
+/* Base moon style - dark sphere */
+.moon {
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #1a1a2e;  /* Dark base for shadow */
+    box-shadow: 0 0 15px rgba(255, 255, 230, 0.5), 0 0 30px rgba(255, 255, 200, 0.3);
     transition: all 1s ease;
     opacity: 0;
 }
@@ -294,7 +332,18 @@ body.sidebar-auto-hide #sidebar-trigger {
     opacity: 1;
 }
 
-/* Moon craters */
+/* illuminated part overlay - using clip-path for curved terminator */
+.moon::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #fffef0 0%, #f5f5e8 40%, #e8e8d8 100%);
+    transition: all 1s ease;
+}
+
+/* Moon craters - only visible on illuminated part */
 .moon::before {
     content: '';
     position: absolute;
@@ -302,9 +351,73 @@ body.sidebar-auto-hide #sidebar-trigger {
     height: 100%;
     border-radius: 50%;
     background:
-        radial-gradient(circle at 30% 40%, rgba(180, 180, 180, 0.4) 0%, transparent 40%),
-        radial-gradient(circle at 70% 60%, rgba(180, 180, 180, 0.3) 0%, transparent 30%),
-        radial-gradient(circle at 50% 80%, rgba(180, 180, 180, 0.35) 0%, transparent 35%);
+        radial-gradient(circle at 30% 40%, rgba(180, 180, 160, 0.35) 0%, transparent 40%),
+        radial-gradient(circle at 70% 60%, rgba(180, 180, 160, 0.25) 0%, transparent 30%),
+        radial-gradient(circle at 50% 80%, rgba(180, 180, 160, 0.3) 0%, transparent 35%);
+    z-index: 2;
+    pointer-events: none;
+}
+
+/* ============================================
+   Moon Phases - Using clip-path for terminator
+   Northern hemisphere view: waxing = right side lit, waning = left side lit
+   ============================================ */
+
+/* New Moon - not visible */
+.moon.phase-new {
+    background: #1a1a2e;
+    box-shadow: none;
+}
+.moon.phase-new::after {
+    display: none;
+}
+.moon.phase-new::before {
+    display: none;
+}
+
+/* Waxing Crescent - thin sliver on right */
+.moon.phase-waxing-crescent::after {
+    background: radial-gradient(circle at 30% 30%, #fffef0 0%, #f5f5e8 50%, #e8e8d8 100%);
+    clip-path: ellipse(25% 100% at 75% 50%);
+}
+
+/* First Quarter - right half illuminated with curved terminator */
+.moon.phase-first-quarter::after {
+    background: radial-gradient(circle at 35% 30%, #fffef0 0%, #f5f5e8 50%, #e8e8d8 100%);
+    clip-path: ellipse(50% 100% at 75% 50%);
+}
+
+/* Waxing Gibbous - more than half, curved terminator moving left */
+.moon.phase-waxing-gibbous::after {
+    background: radial-gradient(circle at 30% 30%, #fffef0 0%, #f5f5e8 50%, #e8e8d8 100%);
+    clip-path: ellipse(75% 100% at 65% 50%);
+}
+
+/* Full Moon - completely illuminated */
+.moon.phase-full {
+    background: radial-gradient(circle at 30% 30%, #ffffff 0%, #fffef0 30%, #f5f5e8 70%, #e8e8d8 100%);
+    box-shadow: 0 0 20px rgba(255, 255, 230, 0.6), 0 0 40px rgba(255, 255, 200, 0.4);
+}
+.moon.phase-full::after {
+    clip-path: none;
+}
+
+/* Waning Gibbous - more than half, curved terminator from left */
+.moon.phase-waning-gibbous::after {
+    background: radial-gradient(circle at 70% 30%, #fffef0 0%, #f5f5e8 50%, #e8e8d8 100%);
+    clip-path: ellipse(75% 100% at 35% 50%);
+}
+
+/* Last Quarter - left half illuminated */
+.moon.phase-last-quarter::after {
+    background: radial-gradient(circle at 65% 30%, #fffef0 0%, #f5f5e8 50%, #e8e8d8 100%);
+    clip-path: ellipse(50% 100% at 25% 50%);
+}
+
+/* Waning Crescent - thin sliver on left */
+.moon.phase-waning-crescent::after {
+    background: radial-gradient(circle at 70% 30%, #fffef0 0%, #f5f5e8 50%, #e8e8d8 100%);
+    clip-path: ellipse(25% 100% at 25% 50%);
 }
 
 /* Stars - generated by JS */
@@ -346,6 +459,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     opacity: 0;
     transition: opacity 1s ease;
     pointer-events: none;
+    z-index: 1;  /* Behind text content */
 }
 
 .clouds.visible {
@@ -354,10 +468,10 @@ body.sidebar-auto-hide #sidebar-trigger {
 
 .cloud {
     position: absolute;
-    background: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.4);  /* Reduced opacity for subtlety */
     border-radius: 50%;
-    filter: blur(8px);
-    animation: cloud-float 180s linear infinite;
+    filter: blur(4px);  /* Reduced blur for clarity */
+    animation: cloud-float 300s linear infinite;  /* Slower movement */
 }
 
 .cloud::before,
@@ -382,34 +496,35 @@ body.sidebar-auto-hide #sidebar-trigger {
     bottom: 0;
     pointer-events: none;
     transition: opacity 1s ease;
+    z-index: 0;  /* Behind content */
 }
 
 /* Spring - soft pink/green hints */
 .season-overlay.spring {
     background: linear-gradient(180deg,
-        rgba(255, 183, 197, 0.15) 0%,
-        rgba(183, 255, 205, 0.1) 100%);
+        rgba(255, 183, 197, 0.08) 0%,  /* Reduced from 0.15 */
+        rgba(183, 255, 205, 0.05) 100%);  /* Reduced from 0.1 */
 }
 
 /* Summer - warm golden glow */
 .season-overlay.summer {
     background: linear-gradient(180deg,
-        rgba(255, 223, 128, 0.12) 0%,
-        rgba(255, 183, 77, 0.08) 100%);
+        rgba(255, 223, 128, 0.06) 0%,  /* Reduced from 0.12 */
+        rgba(255, 183, 77, 0.04) 100%);  /* Reduced from 0.08 */
 }
 
 /* Autumn - orange/red tones */
 .season-overlay.autumn {
     background: linear-gradient(180deg,
-        rgba(255, 140, 82, 0.15) 0%,
-        rgba(205, 92, 92, 0.1) 100%);
+        rgba(255, 140, 82, 0.08) 0%,  /* Reduced from 0.15 */
+        rgba(205, 92, 92, 0.05) 100%);  /* Reduced from 0.1 */
 }
 
 /* Winter - cool blue/white */
 .season-overlay.winter {
     background: linear-gradient(180deg,
-        rgba(200, 230, 255, 0.12) 0%,
-        rgba(230, 240, 255, 0.08) 100%);
+        rgba(200, 230, 255, 0.06) 0%,  /* Reduced from 0.12 */
+        rgba(230, 240, 255, 0.04) 100%);  /* Reduced from 0.08 */
 }
 
 .sidebar-header h3 {
@@ -1214,7 +1329,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     border: 1px solid #444;
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    z-index: 2000;
+    z-index: 10000;  /* Increased from 2000 to ensure visibility */
     display: none;
     max-height: 300px;
     overflow-y: auto;
@@ -1901,6 +2016,18 @@ body.sidebar-auto-hide #sidebar-trigger {
 
 .btn-settings-detect:active {
     background: #5a7a9a;
+}
+
+/* Weather debug page link in settings */
+.settings-section a.btn-confirm {
+    font-size: 13px;
+    padding: 10px 16px;
+    transition: all 0.2s;
+}
+
+.settings-section a.btn-confirm:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(74, 158, 255, 0.4);
 }
 
 /* ==================== Dynamic Background Themes ==================== */
