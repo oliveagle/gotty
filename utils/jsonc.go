@@ -1,121 +1,71 @@
 package utils
 
 import (
-	"bufio"
 	"bytes"
-	"strings"
 )
 
 // StripJSONCComments removes comments from JSONC content
 // Supports:
 // - Single line comments: // comment
 // - Multi-line comments: /* comment */
-// - Trailing comments: "key": "value" // comment
 func StripJSONCComments(content []byte) []byte {
 	var result bytes.Buffer
-	reader := bytes.NewReader(content)
-	scanner := bufio.NewReader(reader)
-
+	i := 0
+	n := len(content)
 	inString := false
-	inSingleComment := false
-	inMultiComment :=
-		false
 
-	for {
-		b, err := scanner.ReadByte()
-		if err != nil {
-			break
-		}
+	for i < n {
+		c := content[i]
 
-		// Handle string literals (don't process comments inside strings)
-		if !inSingleComment && !inMultiComment {
-			if b == '"' && !inString {
-				inString = true
-				result.WriteByte(b)
-				continue
-			}
-			if b == '"' && inString {
+		// Handle string literals
+		if inString {
+			result.WriteByte(c)
+			if c == '\\' && i+1 < n {
+				// Escape sequence, write next char too
+				i++
+				result.WriteByte(content[i])
+			} else if c == '"' {
 				inString = false
-				result.WriteByte(b)
-				continue
 			}
-			if inString {
-				result.WriteByte(b)
-				// Handle escaped quotes
-				if b == '\\' {
-					next, err := scanner.ReadByte()
-					if err == nil {
-						result.WriteByte(next)
-					}
+			i++
+			continue
+		}
+
+		// Check for string start
+		if c == '"' {
+			result.WriteByte(c)
+			inString = true
+			i++
+			continue
+		}
+
+		// Check for single-line comment
+		if c == '/' && i+1 < n && content[i+1] == '/' {
+			// Skip until end of line
+			i += 2
+			for i < n && content[i] != '\n' && content[i] != '\r' {
+				i++
+			}
+			continue
+		}
+
+		// Check for multi-line comment
+		if c == '/' && i+1 < n && content[i+1] == '*' {
+			i += 2
+			for i < n {
+				if content[i] == '*' && i+1 < n && content[i+1] == '/' {
+					i += 2
+					break
 				}
-				continue
+				i++
 			}
-		}
-
-		// Handle single-line comments
-		if !inMultiComment && b == '/' {
-			next, err := scanner.ReadByte()
-			if err != nil {
-				result.WriteByte(b)
-				break
-			}
-			if next == '/' && !inSingleComment {
-				inSingleComment = true
-				continue
-			}
-			if next == '*' && !inSingleComment {
-				inMultiComment = true
-				continue
-			}
-			// Not a comment, write both bytes
-			result.WriteByte(b)
-			result.WriteByte(next)
 			continue
 		}
 
-		// End of single-line comment
-		if inSingleComment && (b == '\n' || b == '\r') {
-			inSingleComment = false
-			result.WriteByte(b)
-			continue
-		}
-
-		// Inside single-line comment, skip
-		if inSingleComment {
-			continue
-		}
-
-		// End of multi-line comment
-		if inMultiComment && b == '*' {
-			next, err := scanner.ReadByte()
-			if err != nil {
-				break
-			}
-			if next == '/' {
-				inMultiComment = false
-				continue
-			}
-			// Not end of comment, continue skipping
-			continue
-		}
-
-		// Inside multi-line comment, skip
-		if inMultiComment {
-			continue
-		}
-
-		result.WriteByte(b)
+		// Regular character
+		result.WriteByte(c)
+		i++
 	}
 
 	return result.Bytes()
-}
-
-// isJSONCFile checks if the file is a JSONC file based on extension
-func isJSONCFile(filePath string) bool {
-	return strings.HasSuffix(strings.ToLower(filePath), ".jsonc")
-}
-
-// isJSONFile checks if the file is a JSON file based on extension
-func isJSONFile(filePath string) bool {
-	return strings.HasSuffix(strings.ToLower(filePath), ".json")
 }
