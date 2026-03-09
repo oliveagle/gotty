@@ -97,11 +97,6 @@ export class Xterm {
         // WebGL may override the initial cursorBlink setting
         this.term.options.cursorBlink = true;
 
-        // Re-enable cursor blink on focus (WebGL may disable it on blur)
-        this.term.on('focus', () => {
-            this.term.options.cursorBlink = true;
-        });
-
         // Fit after DOM layout is complete
         // Delay slightly to ensure CSS and flexbox layout are settled
         setTimeout(() => {
