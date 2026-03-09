@@ -119,7 +119,7 @@
 
       <div id="main">
         <div id="terminal"></div>
-        <!-- IRC Chat Container (overlay) -->
+        <!-- IRC Chat Container (replaces terminal when active) -->
         <div id="irc-chat-container" class="irc-chat-container" style="display: none;">
           <div class="irc-chat-header">
             <span id="irc-chat-channel">#general</span>
@@ -174,11 +174,18 @@
           // Set host display with real-time clock
           const hostElem = document.getElementById('header-host');
           if (hostElem) {
+            // Create host and time elements
+            hostElem.innerHTML = '<div class="header-host-name"></div><div class="header-host-time"></div>';
+            const hostNameEl = hostElem.querySelector('.header-host-name');
+            const hostTimeEl = hostElem.querySelector('.header-host-time');
+            if (hostNameEl) hostNameEl.textContent = window.location.host;
+
             const updateClock = () => {
+              if (!hostTimeEl) return;
               const now = new Date();
               const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false });
               const dateStr = now.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
-              hostElem.textContent = `${window.location.host} | ${dateStr} ${timeStr}`;
+              hostTimeEl.textContent = `${dateStr} ${timeStr}`;
             };
             updateClock();
             setInterval(updateClock, 1000);
@@ -2017,6 +2024,20 @@
           this.closer = wt.open();
 
           term.showMessage('Connecting...', 10000);
+
+          // Fit terminal after connection, considering current sidebar state
+          // Sidebar affects terminal width when it's visible and not in auto-hide mode
+          const sidebar = document.getElementById('sidebar');
+          const isCollapsed = sidebar && (
+            sidebar.classList.contains('collapsed') ||
+            sidebar.classList.contains('auto-hide')
+          );
+          if (term.fitWithSidebarState) {
+            // Delay fit to ensure DOM is ready
+            setTimeout(() => {
+              term.fitWithSidebarState(isCollapsed);
+            }, 200);
+          }
         }
 
         getActiveSessionId() {
