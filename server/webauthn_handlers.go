@@ -238,6 +238,16 @@ func (server *Server) handleWebAuthnLoginFinish(w http.ResponseWriter, r *http.R
 	authToken := server.authSessionMgr.CreateSession()
 	log.Printf("[WebAuthn] Created auth session, TTL: %d hours", server.options.WebAuthnSessionTTL)
 
+	// Set cookie for browser navigation (allows direct access to protected pages)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "gotty_auth_token",
+		Value:    authToken,
+		Path:     "/",
+		MaxAge:   server.options.WebAuthnSessionTTL * 3600,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":    true,
 		"message":    "Authentication successful",
