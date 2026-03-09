@@ -86,13 +86,17 @@ func NewWebAuthnManager(displayName, hostname, dataDir, registerToken string, al
 	// For localhost, allow both with and without common ports
 	origins := []string{}
 	if rpID == "localhost" {
-		// Allow common localhost origins
+		// Allow common localhost origins (both HTTP and HTTPS)
 		origins = []string{
 			"http://localhost",
 			"http://localhost:13782", // default gotty port
 			"http://localhost:8080",
 			"http://127.0.0.1",
 			"http://127.0.0.1:13782",
+			"https://localhost",
+			"https://localhost:13782",
+			"https://127.0.0.1",
+			"https://127.0.0.1:13782",
 		}
 	} else {
 		// For custom hostname, use https
