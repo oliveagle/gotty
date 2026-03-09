@@ -215,6 +215,8 @@
               <span id="marquee-content" class="marquee-content"></span>
             </div>
           </div>
+          <!-- Settings button (visible on hover) -->
+          <button id="banner-settings-btn" class="banner-settings-btn" title="Settings">⚙️</button>
         </div>
 
         <!-- Banner context menu -->
@@ -724,9 +726,22 @@
 
         initBanner() {
           this.initBannerContextMenu();
+          this.initBannerSettingsButton();
           this.initMarquee();
           // Load notes for current session
           this.updateBannerNotes();
+        }
+
+        initBannerSettingsButton() {
+          const settingsBtn = document.getElementById('banner-settings-btn');
+          if (!settingsBtn) return;
+
+          settingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (this.showSettingsModal) {
+              this.showSettingsModal();
+            }
+          });
         }
 
         initBannerContextMenu() {
@@ -2681,7 +2696,7 @@
         }
 
         /**
-         * Update sidebar background based on time and weather
+         * Update sidebar header background based on time and weather
          */
         updateDynamicBackground() {
           const cityCode = localStorage.getItem('gotty_city_code') || '101020100';
@@ -2695,22 +2710,22 @@
             // Determine time period
             const timePeriod = this.getTimePeriod(today.sunrise, today.sunset);
 
-            // Apply theme class
-            const sidebar = document.getElementById('sidebar');
-            if (!sidebar) return;
+            // Apply theme class to sidebar-header
+            const header = document.querySelector('.sidebar-header');
+            if (!header) return;
 
             // Remove existing theme classes
-            sidebar.classList.remove('theme-morning', 'theme-noon', 'theme-dusk', 'theme-night');
-            sidebar.classList.remove('weather-cloudy', 'weather-rainy');
+            header.classList.remove('theme-morning', 'theme-noon', 'theme-dusk', 'theme-night');
+            header.classList.remove('weather-cloudy', 'weather-rainy');
 
             // Add time-based theme
-            sidebar.classList.add(`theme-${timePeriod}`);
+            header.classList.add(`theme-${timePeriod}`);
 
             // Add weather-based overlay
             if (weatherType.includes('云') || weatherType.includes('阴')) {
-              sidebar.classList.add('weather-cloudy');
+              header.classList.add('weather-cloudy');
             } else if (weatherType.includes('雨') || weatherType.includes('雪')) {
-              sidebar.classList.add('weather-rainy');
+              header.classList.add('weather-rainy');
             }
 
             // Store current theme for periodic updates
@@ -2722,10 +2737,10 @@
          * Clear dynamic background theme
          */
         clearDynamicBackground() {
-          const sidebar = document.getElementById('sidebar');
-          if (sidebar) {
-            sidebar.classList.remove('theme-morning', 'theme-noon', 'theme-dusk', 'theme-night');
-            sidebar.classList.remove('weather-cloudy', 'weather-rainy');
+          const header = document.querySelector('.sidebar-header');
+          if (header) {
+            header.classList.remove('theme-morning', 'theme-noon', 'theme-dusk', 'theme-night');
+            header.classList.remove('weather-cloudy', 'weather-rainy');
           }
         }
 

@@ -818,6 +818,7 @@ func (sm *SessionManager) ListByWorkspace(workspaceID string) []*Session {
 }
 
 // MoveToWorkspace moves a session to a different workspace
+// If the session is a folder, also moves all its children
 func (sm *SessionManager) MoveToWorkspace(sessionID string, workspaceID string) bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -833,6 +834,16 @@ func (sm *SessionManager) MoveToWorkspace(sessionID string, workspaceID string) 
 	}
 
 	session.WorkspaceID = workspaceID
+
+	// If this is a folder, also move all children (sessions with this folder as parent)
+	if session.IsFolder {
+		for _, s := range sm.sessions {
+			if s.ParentID == sessionID {
+				s.WorkspaceID = workspaceID
+			}
+		}
+	}
+
 	sm.saveMetadata()
 	return true
 }

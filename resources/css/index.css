@@ -241,6 +241,8 @@ body.sidebar-auto-hide #sidebar-trigger {
     flex-direction: column;
     padding: 12px 15px;
     border-bottom: 1px solid #1a1a1a;
+    background: #2d2d2d;
+    transition: background 0.5s ease;
 }
 
 .sidebar-header h3 {
@@ -1728,68 +1730,68 @@ body.sidebar-auto-hide #sidebar-trigger {
 }
 
 /* ==================== Dynamic Background Themes ==================== */
-/* Sidebar background themes based on time of day and weather */
+/* Sidebar header background themes based on time of day and weather */
 
-/* Time-based themes (override default background with transition) */
-#sidebar[class*="theme-"] {
+/* Time-based themes (apply to sidebar-header) */
+.sidebar-header[class*="theme-"] {
     transition: background 0.5s ease;
 }
 
-#sidebar.theme-morning {
+.sidebar-header.theme-morning {
     background: linear-gradient(180deg, #ff7e5f 0%, #feb47b 50%, #ffcf8a 100%);
 }
 
-#sidebar.theme-noon {
+.sidebar-header.theme-noon {
     background: linear-gradient(180deg, #4facfe 0%, #00f2fe 50%, #89f9fe 100%);
 }
 
-#sidebar.theme-dusk {
+.sidebar-header.theme-dusk {
     background: linear-gradient(180deg, #fa709a 0%, #fee140 50%, #ff9a5e 100%);
 }
 
-#sidebar.theme-night {
+.sidebar-header.theme-night {
     background: linear-gradient(180deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
 }
 
 /* Weather overlay adjustments */
-#sidebar.weather-cloudy {
+.sidebar-header.weather-cloudy {
     background: linear-gradient(180deg, #4a5568 0%, #2d3748 50%, #1a202c 100%);
 }
 
-#sidebar.weather-rainy {
+.sidebar-header.weather-rainy {
     background: linear-gradient(180deg, #2c3e50 0%, #34495e 50%, #4a5568 100%);
 }
 
-#sidebar.weather-cloudy.theme-morning {
+.sidebar-header.weather-cloudy.theme-morning {
     background: linear-gradient(180deg, #cc8a7a 0%, #e8a87a 50%, #d4af37 100%);
 }
 
-#sidebar.weather-cloudy.theme-noon {
+.sidebar-header.weather-cloudy.theme-noon {
     background: linear-gradient(180deg, #5a6578 0%, #6a7588 50%, #7a8598 100%);
 }
 
-#sidebar.weather-cloudy.theme-dusk {
+.sidebar-header.weather-cloudy.theme-dusk {
     background: linear-gradient(180deg, #d46a7a 0%, #c4a85a 50%, #d48a5a 100%);
 }
 
-#sidebar.weather-cloudy.theme-night {
+.sidebar-header.weather-cloudy.theme-night {
     background: linear-gradient(180deg, #1a2030 0%, #2a3040 50%, #1a2530 100%);
 }
 
 /* Rainy overlays */
-#sidebar.weather-rainy.theme-morning {
+.sidebar-header.weather-rainy.theme-morning {
     background: linear-gradient(180deg, #4a5058 0%, #5a5860 50%, #6a6068 100%);
 }
 
-#sidebar.weather-rainy.theme-noon {
+.sidebar-header.weather-rainy.theme-noon {
     background: linear-gradient(180deg, #3a4858 0%, #4a5868 50%, #5a6878 100%);
 }
 
-#sidebar.weather-rainy.theme-dusk {
+.sidebar-header.weather-rainy.theme-dusk {
     background: linear-gradient(180deg, #4a4858 0%, #5a5060 50%, #6a5868 100%);
 }
 
-#sidebar.weather-rainy.theme-night {
+.sidebar-header.weather-rainy.theme-night {
     background: linear-gradient(180deg, #1a1d22 0%, #222530 50%, #1a2028 100%);
 }
 
@@ -1799,7 +1801,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     to { opacity: 1; }
 }
 
-#sidebar[class*="theme-"] {
+.sidebar-header[class*="theme-"] {
     animation: theme-fade 0.5s ease;
 }
 
@@ -1816,6 +1818,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     border-bottom: 1px solid #2a2a3a;
     min-height: 25px;
     flex-shrink: 0;
+    position: relative;
 }
 
 .banner-left {
@@ -1871,7 +1874,6 @@ body.sidebar-auto-hide #sidebar-trigger {
 .banner-marquee {
     position: relative;
     width: 100%;
-    max-width: 60%;
     overflow: hidden;
     background: rgba(30, 30, 50, 0.5);
     border-radius: 3px;
@@ -1938,4 +1940,25 @@ body.sidebar-auto-hide #sidebar-trigger {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 13px;
     line-height: 1.5;
+}
+
+/* Banner settings button */
+.banner-settings-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 14px;
+    color: #666;
+    opacity: 0.5;
+    transition: opacity 0.2s, color 0.2s, background 0.2s;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.banner-settings-btn:hover {
+    opacity: 1;
+    color: var(--ws-primary);
+    background: rgba(74, 158, 255, 0.15);
+    border-radius: 3px;
 }
