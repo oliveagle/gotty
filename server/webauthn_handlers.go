@@ -198,6 +198,15 @@ func (server *Server) handleWebAuthnLoginFinish(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// SECURITY: Check if IP is blocked due to too many failed attempts
+	clientIP := extractIP(r)
+	if server.loginAttemptMgr != nil && server.loginAttemptMgr.IsBlocked(clientIP) {
+		remaining := server.loginAttemptMgr.GetRemainingBlockTime(clientIP)
+		log.Printf("[SECURITY] Login attempt from blocked IP: %s (blocked for %v)", clientIP, remaining)
+		jsonError(w, "Too many failed attempts. Please try again later.", http.StatusTooManyRequests)
+		return
+	}
+
 	// Parse request
 	var req struct {
 		SessionID string          `json:"session_id"`
@@ -228,11 +237,24 @@ func (server *Server) handleWebAuthnLoginFinish(w http.ResponseWriter, r *http.R
 	success, err := server.webAuthnManager.FinishLogin(parsedResponse, sessionData)
 	if err != nil || !success {
 		log.Printf("[WebAuthn] Login finish error: %v", err)
+
+		// SECURITY: Record failed login attempt
+		if server.loginAttemptMgr != nil {
+			server.loginAttemptMgr.RecordFailure(clientIP)
+			attempts := server.loginAttemptMgr.GetAttemptCount(clientIP)
+			log.Printf("[SECURITY] Failed login attempt #%d from IP: %s", attempts, clientIP)
+		}
+
 		jsonError(w, "Authentication failed", http.StatusUnauthorized)
 		return
 	}
 
 	log.Printf("[WebAuthn] Login successful")
+
+	// SECURITY: Clear failed attempts on successful login
+	if server.loginAttemptMgr != nil {
+		server.loginAttemptMgr.RecordSuccess(clientIP)
+	}
 
 	// Create long-lived auth session
 	authToken := server.authSessionMgr.CreateSession()

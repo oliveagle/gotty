@@ -44,6 +44,7 @@ type Server struct {
 	webAuthnSessions  *SessionDataManager
 	authSessionMgr    *AuthSessionManager
 	loginAttemptMgr   *LoginAttemptManager // SECURITY: Login attempt tracking
+	ipFilter          *IPFilter            // SECURITY: IP-based access control
 
 	ircHandler *irc.IRCHandler
 
@@ -176,6 +177,12 @@ func New(factory Factory, options *Options) (*Server, error) {
 		log.Printf("IRC chatroom enabled. Network: %s, Default channel: %s", ircConfig.NetworkName, ircConfig.DefaultChannel)
 	}
 
+	// SECURITY: Initialize login attempt manager (5 attempts, 15 minute block)
+	loginAttemptMgr := NewLoginAttemptManager(5, 15*time.Minute)
+
+	// SECURITY: Initialize IP filter
+	ipFilter := NewIPFilter()
+
 	return &Server{
 		factory:          factory,
 		options:          options,
@@ -185,6 +192,8 @@ func New(factory Factory, options *Options) (*Server, error) {
 		webAuthnManager:  webAuthnMgr,
 		webAuthnSessions: webAuthnSessions,
 		authSessionMgr:   authSessionMgr,
+		loginAttemptMgr:  loginAttemptMgr,
+		ipFilter:         ipFilter,
 		ircHandler:       ircHandler,
 
 		upgrader: &websocket.Upgrader{
