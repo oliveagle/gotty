@@ -49,7 +49,7 @@ export declare class Xterm {
     fit(): void;
     /**
      * Fit terminal after sidebar toggle.
-     * Fits twice with delay to ensure correct dimensions after CSS transition.
+     * Waits for CSS transition (200ms) to complete before fitting.
      *
      * @param sidebarCollapsed - Whether sidebar is collapsed (hidden)
      */

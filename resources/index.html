@@ -124,6 +124,7 @@
           this.editingId = null;
           this.expandedSessions = new Set();
           this.draggedId = null;
+          this.dropTarget = null;
           this.refreshInterval = null;
           // Visit history for navigation
           this.visitHistory = [];
@@ -240,8 +241,10 @@
 
           // Restore sidebar state
           const collapsed = localStorage.getItem('sidebar_collapsed') === 'true';
+          const sidebar = document.getElementById('sidebar');
+
           if (collapsed) {
-            document.getElementById('sidebar').classList.add('collapsed');
+            sidebar.classList.add('collapsed');
             const toggleBtn = document.querySelector('.sidebar-toggle');
             if (toggleBtn) {
               toggleBtn.textContent = '▶';
@@ -553,6 +556,7 @@
         toggleSidebar() {
           const sidebar = document.getElementById('sidebar');
           const toggleBtn = document.querySelector('.sidebar-toggle');
+
           sidebar.classList.toggle('collapsed');
           const isCollapsed = sidebar.classList.contains('collapsed');
           localStorage.setItem('sidebar_collapsed', isCollapsed);
@@ -565,8 +569,7 @@
             floatBtn.style.display = isCollapsed ? 'flex' : 'none';
           }
 
-          // Use direct calculation instead of waiting for transitionend
-          // Sidebar width is fixed: 210px + 1px border = 211px
+          // Fit terminal to new width
           if (this.term && this.term.fitWithSidebarState) {
             this.term.fitWithSidebarState(isCollapsed);
           }
@@ -657,7 +660,6 @@
         enableAutoHide() {
           const sidebar = document.getElementById('sidebar');
           const autohideBtn = document.getElementById('autohide-btn');
-          const main = document.getElementById('main');
 
           if (sidebar) {
             sidebar.classList.add('auto-hide');
@@ -667,16 +669,17 @@
             autohideBtn.classList.add('active');
             autohideBtn.title = 'Disable Auto-Hide Sidebar';
           }
-          if (main) {
-            main.classList.remove('sidebar-expanded');
-          }
           localStorage.setItem('sidebar_auto_hide', 'true');
+
+          // Fit terminal to new width (sidebar is now hidden, so collapsed=true)
+          if (this.term && this.term.fitWithSidebarState) {
+            this.term.fitWithSidebarState(true);
+          }
         }
 
         disableAutoHide() {
           const sidebar = document.getElementById('sidebar');
           const autohideBtn = document.getElementById('autohide-btn');
-          const main = document.getElementById('main');
 
           if (sidebar) {
             sidebar.classList.remove('auto-hide', 'visible');
@@ -686,10 +689,13 @@
             autohideBtn.classList.remove('active');
             autohideBtn.title = 'Enable Auto-Hide Sidebar';
           }
-          if (main) {
-            main.classList.remove('sidebar-expanded');
-          }
           localStorage.setItem('sidebar_auto_hide', 'false');
+
+          // Fit terminal to new width
+          if (this.term && this.term.fitWithSidebarState) {
+            const isCollapsed = sidebar && sidebar.classList.contains('collapsed');
+            this.term.fitWithSidebarState(isCollapsed);
+          }
         }
 
         toggleFullscreen() {
@@ -1034,7 +1040,10 @@
         handleDragEnd(event) {
           event.target.classList.remove('dragging');
           this.draggedId = null;
-          document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+          // Clear all drag-related styles
+          document.querySelectorAll('.drag-over, .drag-insert-before, .drag-insert-after').forEach(el => {
+            el.classList.remove('drag-over', 'drag-insert-before', 'drag-insert-after');
+          });
         }
 
         handleDragOver(event) {
@@ -1042,13 +1051,43 @@
           event.dataTransfer.dropEffect = 'move';
         }
 
-        handleDragEnter(folderId, event) {
+        handleDragEnterForReorder(targetId, event) {
           event.preventDefault();
-          const folder = this.sessions.find(s => s.id === folderId);
-          if (folder && folder.is_folder && this.draggedId !== folderId) {
-            // Clear all drag-over first, then add to current
-            document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-            event.currentTarget.classList.add('drag-over');
+          if (this.draggedId === targetId) return;
+
+          const targetEl = event.currentTarget;
+          if (!targetEl.classList.contains('session-item')) return;
+
+          // Determine drop position based on mouse Y position within the element
+          const rect = targetEl.getBoundingClientRect();
+          const y = event.clientY;
+          const midpoint = rect.top + rect.height / 2;
+
+          // Clear all previous indicators
+          document.querySelectorAll('.drag-insert-before, .drag-insert-after, .drag-over').forEach(el => {
+            el.classList.remove('drag-insert-before', 'drag-insert-after', 'drag-over');
+          });
+
+          // Check if target is a folder and mouse is in the center zone (for folder drop)
+          const target = this.sessions.find(s => s.id === targetId);
+          if (target && target.is_folder) {
+            const folderZoneTop = rect.top + rect.height * 0.3;
+            const folderZoneBottom = rect.top + rect.height * 0.7;
+            if (y >= folderZoneTop && y <= folderZoneBottom) {
+              // Drop into folder
+              targetEl.classList.add('drag-over');
+              this.dropTarget = { type: 'folder', id: targetId };
+              return;
+            }
+          }
+
+          // Insert before or after
+          if (y < midpoint) {
+            targetEl.classList.add('drag-insert-before');
+            this.dropTarget = { type: 'insert', targetId: targetId, position: 'before' };
+          } else {
+            targetEl.classList.add('drag-insert-after');
+            this.dropTarget = { type: 'insert', targetId: targetId, position: 'after' };
           }
         }
 
@@ -1058,19 +1097,74 @@
           const x = event.clientX;
           const y = event.clientY;
           if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-            event.currentTarget.classList.remove('drag-over');
+            event.currentTarget.classList.remove('drag-over', 'drag-insert-before', 'drag-insert-after');
           }
         }
 
-        handleDrop(folderId, event) {
+        async handleDropForReorder(event) {
           event.preventDefault();
-          event.currentTarget.classList.remove('drag-over');
+          event.currentTarget.classList.remove('drag-over', 'drag-insert-before', 'drag-insert-after');
 
-          if (this.draggedId && this.draggedId !== folderId) {
-            const folder = this.sessions.find(s => s.id === folderId);
-            if (folder && folder.is_folder) {
-              this.moveToFolder(this.draggedId, folderId);
+          if (!this.draggedId || !this.dropTarget) return;
+
+          const dragged = this.sessions.find(s => s.id === this.draggedId);
+          if (!dragged) return;
+
+          if (this.dropTarget.type === 'folder') {
+            // Drop into folder
+            await this.reorderSession(this.draggedId, this.dropTarget.id, '');
+          } else if (this.dropTarget.type === 'insert') {
+            // Insert before/after target
+            const target = this.sessions.find(s => s.id === this.dropTarget.targetId);
+            if (!target) return;
+
+            // Determine parent and after_id
+            let parentId = target.parent_id || '';
+            let afterId = '';
+
+            if (this.dropTarget.position === 'after') {
+              afterId = this.dropTarget.targetId;
+            } else {
+              // Insert before target - find the previous sibling
+              const siblings = this.sessions
+                .filter(s => s.parent_id === target.parent_id)
+                .sort((a, b) => (a.order || 0) - (b.order || 0));
+              const targetIndex = siblings.findIndex(s => s.id === target.id);
+              if (targetIndex > 0) {
+                afterId = siblings[targetIndex - 1].id;
+              }
+              // If targetIndex is 0, afterId stays empty (insert at beginning)
             }
+
+            await this.reorderSession(this.draggedId, parentId, afterId);
+          }
+
+          this.dropTarget = null;
+        }
+
+        async reorderSession(sessionId, parentId, afterId) {
+          try {
+            const response = await fetch('/api/sessions/reorder', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                session_id: sessionId,
+                parent_id: parentId || '',
+                after_id: afterId || ''
+              })
+            });
+            if (response.ok) {
+              // Expand parent folder if moving into one
+              if (parentId) {
+                this.expandedSessions.add(parentId);
+                localStorage.setItem('expanded_sessions', JSON.stringify([...this.expandedSessions]));
+              }
+              await this.fetchSessions();
+            } else {
+              console.error('Failed to reorder session:', await response.text());
+            }
+          } catch (error) {
+            console.error('Failed to reorder session:', error);
           }
         }
 
@@ -1140,13 +1234,11 @@
           container.querySelectorAll('.session-item[draggable="true"]').forEach(el => {
             el.addEventListener('dragstart', (e) => this.handleDragStart(el.dataset.sessionId, e));
             el.addEventListener('dragend', (e) => this.handleDragEnd(e));
-          });
-          // Folders and their children containers are drop targets
-          container.querySelectorAll('.session-item.folder, .folder-drop-zone').forEach(el => {
+            // All session items are drop targets for reorder
             el.addEventListener('dragover', (e) => this.handleDragOver(e));
-            el.addEventListener('dragenter', (e) => this.handleDragEnter(el.dataset.folderId || el.dataset.parentId, e));
+            el.addEventListener('dragenter', (e) => this.handleDragEnterForReorder(el.dataset.sessionId, e));
             el.addEventListener('dragleave', (e) => this.handleDragLeave(e));
-            el.addEventListener('drop', (e) => this.handleDrop(el.dataset.folderId || el.dataset.parentId, e));
+            el.addEventListener('drop', (e) => this.handleDropForReorder(e));
           });
         }
 
@@ -1193,8 +1285,8 @@
             depth > 0 ? 'child' : ''
           ].filter(Boolean).join(' ');
 
-          // Draggable attribute (sessions are draggable, folders are drop targets)
-          const draggableAttr = !isFolder ? 'draggable="true"' : '';
+          // Draggable attribute (both sessions and folders are draggable)
+          const draggableAttr = 'draggable="true"';
 
           // Click handler (folders don't connect to terminal)
           const clickHandler = isFolder

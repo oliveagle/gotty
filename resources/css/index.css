@@ -138,11 +138,6 @@ body.sidebar-auto-hide #sidebar-trigger {
     display: block;
 }
 
-/* Adjust main content for auto-hide mode */
-#main.sidebar-expanded {
-    margin-left: 210px;
-}
-
 #sidebar.collapsed {
     width: 0;
     border-right: none;
@@ -713,6 +708,39 @@ body.sidebar-auto-hide #sidebar-trigger {
     border: 2px dashed #6ab7ff !important;
 }
 
+/* Drag insert indicators for reorder */
+.session-item.drag-insert-before {
+    position: relative;
+}
+
+.session-item.drag-insert-before::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #4a9eff;
+    border-radius: 2px;
+    z-index: 10;
+}
+
+.session-item.drag-insert-after {
+    position: relative;
+}
+
+.session-item.drag-insert-after::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #4a9eff;
+    border-radius: 2px;
+    z-index: 10;
+}
+
 /* Activity indicator */
 .activity-dot {
     width: 6px;
@@ -1205,6 +1233,15 @@ body.sidebar-auto-hide #sidebar-trigger {
 .session-item.folder.drag-over {
     background: var(--ws-primary-dark) !important;
     border: 2px dashed var(--ws-primary-light) !important;
+}
+
+/* Drag insert indicators for reorder (workspace theme aware) */
+.session-item.drag-insert-before::before {
+    background: var(--ws-primary);
+}
+
+.session-item.drag-insert-after::after {
+    background: var(--ws-primary);
 }
 
 .sidebar-toggle:hover {

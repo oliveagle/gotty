@@ -93,12 +93,14 @@ export class Xterm {
             this.webglAddon = null;
         }
 
-        // Fit after everything is loaded
-        this.fitAddon.fit();
-
-        // Store last known dimensions
-        this.lastWidth = Math.round(elem.clientWidth);
-        this.lastHeight = Math.round(elem.clientHeight);
+        // Fit after DOM layout is complete
+        // Delay slightly to ensure CSS and flexbox layout are settled
+        setTimeout(() => {
+            this.lastWidth = Math.round(this.elem.clientWidth);
+            this.lastHeight = Math.round(this.elem.clientHeight);
+            console.log(`[resize] initial fit: ${this.lastWidth}x${this.lastHeight}`);
+            this.fitAddon.fit();
+        }, 100);
 
         // Create ResizeObserver but keep it disconnected
         // We'll only use it for window resize events
@@ -361,24 +363,21 @@ export class Xterm {
 
     /**
      * Fit terminal after sidebar toggle.
-     * Fits twice with delay to ensure correct dimensions after CSS transition.
+     * Waits for CSS transition (200ms) to complete before fitting.
      *
      * @param sidebarCollapsed - Whether sidebar is collapsed (hidden)
      */
     fitWithSidebarState(sidebarCollapsed: boolean): void {
         console.log(`[resize] fitWithSidebarState: collapsed=${sidebarCollapsed}`);
 
-        // Fit once after short delay
+        // Wait for CSS transition to complete (200ms transition + buffer)
         setTimeout(() => {
-            void this.elem.offsetHeight;
-            console.log(`[resize] fit 1: terminalWidth=${this.elem.clientWidth}`);
-            this.fitAddon.fit();
-        }, 50);
+            const width = Math.round(this.elem.clientWidth);
+            const height = Math.round(this.elem.clientHeight);
+            console.log(`[resize] fit: terminalSize=${width}x${height}`);
 
-        // Fit again after transition completes
-        setTimeout(() => {
-            void this.elem.offsetHeight;
-            console.log(`[resize] fit 2: terminalWidth=${this.elem.clientWidth}`);
+            this.lastWidth = width;
+            this.lastHeight = height;
             this.fitAddon.fit();
             this.term.scrollToBottom();
             console.log(`[resize] fit done: ${this.term.cols}x${this.term.rows}`);
