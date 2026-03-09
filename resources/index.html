@@ -800,6 +800,21 @@
                   const channel = match[1];
                   const users = match[2].split(', ');
                   this.updateChannelUserCount(channel, users.length);
+                  this.addChannelToList(channel, users.length);
+                }
+              }
+              // Show chat on join confirmation
+              if (msg.data && msg.data.startsWith('Joined channel')) {
+                const match = msg.data.match(/Joined channel ([\w#+]+)/);
+                if (match) {
+                  const channel = match[1];
+                  this.irc.channels.add(channel);
+                  this.addChannelToList(channel, 1);
+                  // Auto show chat on first join
+                  if (!this.irc.chatVisible) {
+                    this.showIRCChat(channel);
+                    this.irc.chatVisible = true;
+                  }
                 }
               }
               break;
@@ -818,6 +833,10 @@
                   break;
                 case 'NICK':
                   this.addSystemMessage(prefix + ' 改名为 ' + (msg.params?.[0] || ''));
+                  if (prefix === this.irc.nick) {
+                    this.irc.nick = msg.params?.[0] || this.irc.nick;
+                    document.getElementById('irc-nick-display').textContent = this.irc.nick;
+                  }
                   break;
                 case 'TOPIC':
                   this.addSystemMessage('主题：' + msg.data);
@@ -831,6 +850,37 @@
               }
               break;
           }
+        }
+
+        addChannelToList(channel, userCount) {
+          const channelsList = document.getElementById('irc-channels-list');
+          if (!channelsList) return;
+
+          // Check if channel already exists
+          const existingItem = channelsList.querySelector('.irc-channel-item[data-channel="' + channel + '"]');
+          if (existingItem) return;
+
+          // Remove loading message if present
+          const loadingMsg = channelsList.querySelector('.irc-channel-loading');
+          if (loadingMsg) {
+            loadingMsg.remove();
+          }
+
+          // Create channel item
+          const item = document.createElement('div');
+          item.className = 'irc-channel-item';
+          item.dataset.channel = channel;
+          item.innerHTML = '<span class="irc-channel-name">' + channel + '</span><span class="irc-channel-count">(' + userCount + ')</span>';
+
+          // Click to open chat
+          item.addEventListener('click', () => {
+            this.showIRCChat(channel);
+            // Update active state
+            channelsList.querySelectorAll('.irc-channel-item').forEach(el => el.classList.remove('active'));
+            item.classList.add('active');
+          });
+
+          channelsList.appendChild(item);
         }
 
         addMessage(nick, text) {

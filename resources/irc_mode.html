@@ -245,7 +245,7 @@
       }
     }
 
-    const wsUrl = 'ws://' + window.location.host + '/ws';
+    const wsUrl = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/irc/ws';
     const client = new IRCClient(wsUrl);
     const input = document.getElementById('message-input');
     const sendBtn = document.getElementById('send-btn');

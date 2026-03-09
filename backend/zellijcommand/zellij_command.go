@@ -79,6 +79,11 @@ func stripANSI(s string) string {
 
 // New creates a new ZellijCommand, connecting to existing session or creating a new one
 func New(sessionName string, command string, argv []string, options ...Option) (*ZellijCommand, error) {
+	return NewWithTab(sessionName, command, argv, "", options...)
+}
+
+// NewWithTab creates a new ZellijCommand, connecting to existing session and optionally switching to a specific tab
+func NewWithTab(sessionName string, command string, argv []string, targetTab string, options ...Option) (*ZellijCommand, error) {
 	var cmd *exec.Cmd
 	exists := sessionExists(sessionName)
 
@@ -117,6 +122,20 @@ func New(sessionName string, command string, argv []string, options ...Option) (
 
 	for _, option := range options {
 		option(zcmd)
+	}
+
+	// Switch to target tab after attach (if specified and attaching to existing session)
+	if exists && targetTab != "" {
+		go func() {
+			// Wait a bit for zellij to initialize
+			time.Sleep(500 * time.Millisecond)
+			// Send zellij action to switch tab (use --session to target specific session)
+			switchCmd := exec.Command("zellij", "--session", sessionName, "action", "go-to-tab-name", targetTab)
+			if err := switchCmd.Run(); err != nil {
+				// Log but don't fail - tab switch is best effort
+				fmt.Printf("Failed to switch to tab %s: %v\n", targetTab, err)
+			}
+		}()
 	}
 
 	// When the process is closed by the user,

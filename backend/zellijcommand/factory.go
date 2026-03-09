@@ -61,7 +61,13 @@ func (factory *Factory) NewWithID(sessionID string, params map[string][]string) 
 	// Use gotty- prefix for zellij session name
 	sessionName := "gotty-" + sessionID
 
-	return New(sessionName, factory.command, argv, factory.opts...)
+	// Check if target_tab is specified in params
+	targetTab := ""
+	if tabs, ok := params["_target_tab"]; ok && len(tabs) > 0 {
+		targetTab = tabs[0]
+	}
+
+	return NewWithTab(sessionName, factory.command, argv, targetTab, factory.opts...)
 }
 
 // IsPersistent returns true - zellij sessions persist after client disconnect
