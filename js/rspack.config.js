@@ -1,5 +1,4 @@
 const path = require('path');
-const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = {
     mode: 'production',
@@ -18,23 +17,29 @@ module.exports = {
         rules: [
             {
                 test: /\.tsx?$/,
-                loader: "ts-loader",
-                exclude: /node_modules/
+                use: {
+                    loader: 'builtin:swc-loader',
+                    options: {
+                        jsc: {
+                            parser: {
+                                syntax: 'typescript'
+                            }
+                        }
+                    }
+                },
+                type: 'javascript/auto'
             }
         ]
     },
-    plugins: [
-        new CopyPlugin({
+    builtins: {
+        copy: {
             patterns: [
                 { from: 'node_modules/@xterm/xterm/lib/xterm.css', to: '.' }
             ]
-        })
-    ],
+        }
+    },
     performance: {
         maxAssetSize: 2000000,
         maxEntrypointSize: 2000000
-    },
-    optimization: {
-        usedExports: true
     }
 };

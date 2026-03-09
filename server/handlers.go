@@ -317,6 +317,8 @@ func (server *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"title":    titleBuf.String(),
 		"commit":   BuildCommit,
 		"buildAt":  BuildTime,
+		// Host name for display
+		"hostName": server.options.HostName,
 		// IRC chatroom config
 		"enableIRC":      server.options.EnableIRC,
 		"ircChannel":     server.options.IRCDefaultChannel,
@@ -810,4 +812,50 @@ func (server *Server) handleWorkspaceActivate(w http.ResponseWriter, r *http.Req
 		"icon":        workspace.Icon,
 		"active":      true,
 	})
+}
+
+// handleWeather proxies weather API requests to avoid CORS issues
+func (server *Server) handleWeather(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+
+	// Get city code from query parameter
+	cityCode := r.URL.Query().Get("city")
+	if cityCode == "" {
+		cityCode = "101020100" // Default to Shanghai
+	}
+
+	// Fetch weather data from sojson API
+	weatherURL := fmt.Sprintf("http://t.weather.sojson.com/api/weather/city/%s", cityCode)
+
+	resp, err := http.Get(weatherURL)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to fetch weather: %v", err), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response status and headers
+	w.WriteHeader(resp.StatusCode)
+
+	// Copy response body
+	buf := new(bytes.Buffer)
+	_, err = buf.ReadFrom(resp.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read response: %v", err), http.StatusBadGateway)
+		return
+	}
+	w.Write(buf.Bytes())
 }

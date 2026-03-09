@@ -50,7 +50,7 @@ func main() {
 		},
 		&cli.StringFlag{
 			Name:    "backend",
-			Value:   "local",
+			Value:   "zellij",
 			Usage:   "Backend type: 'local' for direct command, 'zellij' for persistent sessions",
 			EnvVars: []string{"GOTTY_BACKEND"},
 		},

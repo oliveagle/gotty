@@ -5,7 +5,7 @@ import (
 )
 
 type Options struct {
-	Address             string           `hcl:"address" flagName:"address" flagSName:"a" flagDescribe:"IP address to listen" default:"0.0.0.0"`
+	Address             string           `hcl:"address" flagName:"address" flagSName:"a" flagDescribe:"IP address to listen" default:"127.0.0.1"`
 	Port                string           `hcl:"port" flagName:"port" flagSName:"p" flagDescribe:"Port number to liten" default:"13782"`
 	EnableAuth          bool             `hcl:"enable_auth" flagName:"" flagSName:"" flagDescribe:"Enable authentication" default:"false"`
 	EnableBasicAuth     bool             `hcl:"enable_basic_auth" flagName:"" flagSName:"" flagDescribe:"Enable basic authentication (deprecated, use enable_auth and auth_type)" default:"false"`
@@ -40,9 +40,12 @@ type Options struct {
 	SummaryEndpoint string `hcl:"summary_endpoint" flagName:"summary-endpoint" flagDescribe:"LLM API endpoint (Ollama or OpenAI compatible)" default:"http://localhost:43669"`
 
 	// IRC chatroom options
-	EnableIRC         bool   `hcl:"enable_irc" flagName:"irc" flagDescribe:"Enable IRC chatroom mode" default:"false"`
+	EnableIRC         bool   `hcl:"enable_irc" flagName:"irc" flagDescribe:"Enable IRC chatroom mode" default:"true"`
 	IRCDefaultChannel string `hcl:"irc_default_channel" flagName:"irc-channel" flagDescribe:"Default IRC channel" default:"#general"`
 	IRCNetworkName    string `hcl:"irc_network_name" flagName:"irc-network" flagDescribe:"IRC network name" default:"GoTTY Network"`
+
+	// Host display options
+	HostName string `hcl:"host_name" flagName:"host-name" flagDescribe:"Custom host name displayed in sidebar and browser tab (empty to use URL host)" default:""`
 
 	TitleVariables map[string]interface{}
 }

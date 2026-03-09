@@ -71,6 +71,15 @@ func NewSessionManager() *SessionManager {
 	homeDir, _ := os.UserHomeDir()
 	metadataFile := filepath.Join(homeDir, ".config", "gotty", "sessions.json")
 
+	// Ensure directory exists
+	dir := filepath.Dir(metadataFile)
+	if err := os.MkdirAll(dir, 0755); err == nil {
+		// Ensure file exists with empty array if not present
+		if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
+			os.WriteFile(metadataFile, []byte("[]"), 0644)
+		}
+	}
+
 	return &SessionManager{
 		sessions:     make(map[string]*Session),
 		metadataFile: metadataFile,

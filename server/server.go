@@ -335,6 +335,9 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	// Clipboard API (sync server clipboard to browser)
 	siteMux.HandleFunc(pathPrefix+"api/clipboard", server.handleClipboard)
 
+	// Weather API proxy (to avoid CORS issues)
+	siteMux.HandleFunc(pathPrefix+"api/weather", server.handleWeather)
+
 	// IRC chatroom routes
 	if server.options.EnableIRC && server.ircHandler != nil {
 		ircData := struct {

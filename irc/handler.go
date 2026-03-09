@@ -62,9 +62,9 @@ func (h *IRCHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 		sendChan: make(chan *WSMessage, 256),
 	}
 
-	// 创建客户端
-	nick := h.server.GenerateNick()
-	session.client = NewClient(fmt.Sprintf("%p", conn), nick)
+	// 创建客户端 - 先用临时昵称，等待客户端发送 nick
+	tempNick := h.server.GenerateNick()
+	session.client = NewClient(fmt.Sprintf("%p", conn), tempNick)
 	h.server.AddClient(session.client)
 
 	// 注册会话
@@ -74,13 +74,8 @@ func (h *IRCHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 
 	// 发送欢迎消息
 	session.Send(NewSysMessage(fmt.Sprintf("Welcome to %s!", h.server.networkName)))
-	session.Send(NewSysMessage(fmt.Sprintf("Your nickname is %s", nick)))
-	session.Send(NewSysMessage(fmt.Sprintf("Joining default channel %s", h.server.config.DefaultChannel)))
 
-	// 自动加入默认频道
-	session.handleJoin(h.server.config.DefaultChannel)
-
-	// 启动读写 goroutine
+	// 启动读写 goroutine (先不加入频道，等待 nick 设置)
 	go session.readLoop()
 	go session.writeLoop()
 }
@@ -296,7 +291,14 @@ func (s *IRCSession) handleNick(newNick string) {
 
 	oldNick := s.client.GetNick()
 	s.client.SetNick(newNick)
-	s.Send(NewSysMessage(fmt.Sprintf("Nickname changed from %s to %s", oldNick, newNick)))
+	s.Send(NewSysMessage(fmt.Sprintf("Your nickname is %s", newNick)))
+
+	// 如果是第一次设置昵称（从 guest_ 改为真实昵称），自动加入默认频道
+	if strings.HasPrefix(oldNick, "guest_") && len(s.client.Channels) == 0 {
+		s.Send(NewSysMessage(fmt.Sprintf("Joining default channel %s", s.server.config.DefaultChannel)))
+		s.handleJoin(s.server.config.DefaultChannel)
+		return // 不需要广播昵称更改
+	}
 
 	// 通知频道中的其他用户
 	for channel := range s.client.Channels {

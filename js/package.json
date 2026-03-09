@@ -4,15 +4,13 @@
   "description": "Share your terminal as a web application",
   "private": true,
   "scripts": {
-    "build": "webpack --mode production",
-    "dev": "webpack --mode development --watch"
+    "build": "rspack build --mode production",
+    "dev": "rspack build --mode development --watch"
   },
   "devDependencies": {
-    "copy-webpack-plugin": "^12.0.2",
-    "ts-loader": "^9.5.2",
-    "typescript": "^5.7.3",
-    "webpack": "^5.98.0",
-    "webpack-cli": "^6.0.1"
+    "@rspack/cli": "^1.2.8",
+    "@rspack/core": "^1.2.8",
+    "typescript": "^5.7.3"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

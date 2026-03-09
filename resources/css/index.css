@@ -145,7 +145,10 @@ body.sidebar-auto-hide #sidebar-trigger {
 }
 
 #sidebar.collapsed .sidebar-header,
-#sidebar.collapsed #session-list {
+#sidebar.collapsed #session-list,
+#sidebar.collapsed #irc-channels-section,
+#sidebar.collapsed .sidebar-toolbar,
+#sidebar.collapsed .sidebar-footer {
     opacity: 0;
     pointer-events: none;
 }
@@ -469,12 +472,38 @@ body.sidebar-auto-hide #sidebar-trigger {
     display: flex;
     flex-direction: column;
     background: black;
+    position: relative;
 }
 
-#terminal {
+#terminal-wrapper {
     flex: 1;
     width: 100%;
     height: 100%;
+    position: relative;
+}
+
+#terminal {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* IRC Chat Container - mutually exclusive with terminal */
+#irc-chat-container {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    background: #000000;
+    display: none;
+}
+
+#irc-chat-container.visible {
+    display: flex;
+    flex-direction: column;
 }
 
 /* Scrollbar styling */
@@ -1493,15 +1522,15 @@ body.sidebar-auto-hide #sidebar-trigger {
 
 /* IRC Chat Container (replaces terminal when active) */
 .irc-chat-container {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 210px;
-    background: #1a1a2e;
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    background: #000000;
+    display: none;
+}
+
+.irc-chat-container.visible {
     display: flex;
-    flex-direction: column;
-    z-index: 10;
 }
 
 .irc-chat-header {
@@ -1509,30 +1538,14 @@ body.sidebar-auto-hide #sidebar-trigger {
     justify-content: space-between;
     align-items: center;
     padding: 10px 15px;
-    background: rgba(22, 33, 62, 0.9);
-    border-bottom: 1px solid rgba(15, 52, 96, 0.5);
+    background: #0a0a0a;
+    border-bottom: 1px solid #1e2127;
 }
 
 #irc-chat-channel {
-    color: #e94560;
+    color: #4a9eff;
     font-size: 14px;
     font-weight: 600;
-}
-
-.btn-irc-close {
-    background: transparent;
-    border: none;
-    color: #888;
-    cursor: pointer;
-    padding: 4px 8px;
-    font-size: 16px;
-    border-radius: 4px;
-    transition: all 0.2s;
-}
-
-.btn-irc-close:hover {
-    color: #ff6b6b;
-    background: rgba(255, 107, 107, 0.1);
 }
 
 .irc-messages {
@@ -1547,6 +1560,7 @@ body.sidebar-auto-hide #sidebar-trigger {
 .irc-message {
     margin-bottom: 4px;
     word-wrap: break-word;
+    color: #e0e0e0;
 }
 
 .irc-message.system {
@@ -1570,37 +1584,37 @@ body.sidebar-auto-hide #sidebar-trigger {
     align-items: center;
     gap: 10px;
     padding: 12px 15px;
-    background: rgba(22, 33, 62, 0.9);
-    border-top: 1px solid rgba(15, 52, 96, 0.5);
+    background: #0a0a0a;
+    border-top: 1px solid #1e2127;
 }
 
 .irc-nick-display {
-    color: #4ade80;
+    color: #4a9eff;
     font-family: monospace;
     font-size: 12px;
     padding: 4px 8px;
-    background: rgba(0, 0, 0, 0.3);
+    background: #000000;
     border-radius: 4px;
 }
 
 .irc-chat-input {
     flex: 1;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(15, 52, 96, 0.5);
+    background: #000000;
+    border: 1px solid #505050;
     border-radius: 4px;
     padding: 8px 12px;
-    color: #eee;
+    color: #e0e0e0;
     font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
     font-size: 13px;
     outline: none;
 }
 
 .irc-chat-input:focus {
-    border-color: rgba(233, 69, 96, 0.5);
+    border-color: #4a9eff;
 }
 
 .btn-irc-send {
-    background: #e94560;
+    background: #4a9eff;
     border: none;
     color: white;
     padding: 8px 16px;
@@ -1611,5 +1625,317 @@ body.sidebar-auto-hide #sidebar-trigger {
 }
 
 .btn-irc-send:hover {
-    background: #ff6b6b;
+    background: #3a8be0;
+}
+
+/* Settings styles */
+.settings-section {
+    margin-bottom: 20px;
+}
+
+.settings-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #333;
+}
+
+.settings-item {
+    margin-bottom: 12px;
+}
+
+.settings-label {
+    display: block;
+    font-size: 13px;
+    color: #ccc;
+    margin-bottom: 6px;
+}
+
+.settings-input {
+    width: 100%;
+    padding: 8px 12px;
+    background: #2a2a35;
+    border: 1px solid #444;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.settings-input:focus {
+    border-color: #4a9eff;
+}
+
+.settings-checkbox {
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.settings-info {
+    background: #2a2a35;
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.settings-info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+    color: #aaa;
+}
+
+.settings-info-row span:first-child {
+    color: #888;
+}
+
+.btn-settings {
+    font-size: 16px;
+}
+
+.settings-hint {
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+}
+
+/* City detection button */
+.btn-settings-detect {
+    display: inline-block;
+    padding: 6px 12px;
+    background: #3a5a7a;
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+    margin-top: 6px;
+    transition: background 0.2s;
+}
+
+.btn-settings-detect:hover {
+    background: #4a6a8a;
+}
+
+.btn-settings-detect:active {
+    background: #5a7a9a;
+}
+
+/* ==================== Dynamic Background Themes ==================== */
+/* Sidebar background themes based on time of day and weather */
+
+/* Time-based themes (override default background with transition) */
+#sidebar[class*="theme-"] {
+    transition: background 0.5s ease;
+}
+
+#sidebar.theme-morning {
+    background: linear-gradient(180deg, #ff7e5f 0%, #feb47b 50%, #ffcf8a 100%);
+}
+
+#sidebar.theme-noon {
+    background: linear-gradient(180deg, #4facfe 0%, #00f2fe 50%, #89f9fe 100%);
+}
+
+#sidebar.theme-dusk {
+    background: linear-gradient(180deg, #fa709a 0%, #fee140 50%, #ff9a5e 100%);
+}
+
+#sidebar.theme-night {
+    background: linear-gradient(180deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+}
+
+/* Weather overlay adjustments */
+#sidebar.weather-cloudy {
+    background: linear-gradient(180deg, #4a5568 0%, #2d3748 50%, #1a202c 100%);
+}
+
+#sidebar.weather-rainy {
+    background: linear-gradient(180deg, #2c3e50 0%, #34495e 50%, #4a5568 100%);
+}
+
+#sidebar.weather-cloudy.theme-morning {
+    background: linear-gradient(180deg, #cc8a7a 0%, #e8a87a 50%, #d4af37 100%);
+}
+
+#sidebar.weather-cloudy.theme-noon {
+    background: linear-gradient(180deg, #5a6578 0%, #6a7588 50%, #7a8598 100%);
+}
+
+#sidebar.weather-cloudy.theme-dusk {
+    background: linear-gradient(180deg, #d46a7a 0%, #c4a85a 50%, #d48a5a 100%);
+}
+
+#sidebar.weather-cloudy.theme-night {
+    background: linear-gradient(180deg, #1a2030 0%, #2a3040 50%, #1a2530 100%);
+}
+
+/* Rainy overlays */
+#sidebar.weather-rainy.theme-morning {
+    background: linear-gradient(180deg, #4a5058 0%, #5a5860 50%, #6a6068 100%);
+}
+
+#sidebar.weather-rainy.theme-noon {
+    background: linear-gradient(180deg, #3a4858 0%, #4a5868 50%, #5a6878 100%);
+}
+
+#sidebar.weather-rainy.theme-dusk {
+    background: linear-gradient(180deg, #4a4858 0%, #5a5060 50%, #6a5868 100%);
+}
+
+#sidebar.weather-rainy.theme-night {
+    background: linear-gradient(180deg, #1a1d22 0%, #222530 50%, #1a2028 100%);
+}
+
+/* Animation for theme transitions */
+@keyframes theme-fade {
+    from { opacity: 0.8; }
+    to { opacity: 1; }
+}
+
+#sidebar[class*="theme-"] {
+    animation: theme-fade 0.5s ease;
+}
+
+/* ============================================
+   Banner: Session Notes + Marquee Display
+   ============================================ */
+
+#banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0px 5px;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    border-bottom: 1px solid #2a2a3a;
+    min-height: 25px;
+    flex-shrink: 0;
+}
+
+.banner-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 40%;
+}
+
+.banner-label {
+    font-size: 10px;
+    color: #666;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.banner-notes {
+    font-size: 11px;
+    color: #ccc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    padding: 1px 4px;
+    border-radius: 3px;
+    transition: background 0.2s, color 0.2s;
+    user-select: none;
+    max-width: 280px;
+}
+
+.banner-notes:hover {
+    background: rgba(74, 158, 255, 0.1);
+    color: #fff;
+}
+
+.banner-notes:empty::before {
+    content: 'Right-click to add notes...';
+    color: #555;
+    font-style: italic;
+}
+
+.banner-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    padding-left: 10px;
+}
+
+.banner-marquee {
+    position: relative;
+    width: 100%;
+    max-width: 60%;
+    overflow: hidden;
+    background: rgba(30, 30, 50, 0.5);
+    border-radius: 3px;
+    padding: 1px 8px;
+}
+
+.marquee-content {
+    display: inline-block;
+    white-space: nowrap;
+    font-size: 10px;
+    color: #888;
+    animation: marquee 25s linear infinite;
+    padding-left: 100%;
+}
+
+.marquee-content .marquee-item {
+    display: inline-block;
+    padding: 0 8px;
+}
+
+.marquee-content .marquee-item:not(:last-child)::after {
+    content: '·';
+    margin-left: 8px;
+    color: #444;
+}
+
+.marquee-content .marquee-label {
+    color: #555;
+    margin-right: 3px;
+}
+
+.marquee-content .marquee-value {
+    color: var(--ws-primary);
+    font-weight: 600;
+}
+
+.marquee-content .marquee-value.warning {
+    color: #f59e0b;
+}
+
+.marquee-content .marquee-value.danger {
+    color: #ef4444;
+}
+
+@keyframes marquee {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(-100%);
+    }
+}
+
+/* Pause marquee on hover */
+.banner-marquee:hover .marquee-content {
+    animation-play-state: paused;
+}
+
+/* Notes modal textarea */
+.workspace-form-textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 100px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
 }
