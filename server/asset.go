@@ -106,7 +106,7 @@ func resourcesCssIndexCss() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/css/index.css", size: 52763, mode: os.FileMode(420), modTime: time.Unix(1773072173, 0)}
+	info := bindataFileInfo{name: "resources/css/index.css", size: 52763, mode: os.FileMode(436), modTime: time.Unix(1773075654, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -126,7 +126,7 @@ func resourcesCssSettingsCss() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/css/settings.css", size: 6414, mode: os.FileMode(384), modTime: time.Unix(1773064270, 0)}
+	info := bindataFileInfo{name: "resources/css/settings.css", size: 6414, mode: os.FileMode(436), modTime: time.Unix(1773075654, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -146,7 +146,7 @@ func resourcesCssXtermCss() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/css/xterm.css", size: 7112, mode: os.FileMode(420), modTime: time.Unix(1773039792, 0)}
+	info := bindataFileInfo{name: "resources/css/xterm.css", size: 7112, mode: os.FileMode(436), modTime: time.Unix(1772873014, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -166,7 +166,7 @@ func resourcesCssXterm_customizeCss() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/css/xterm_customize.css", size: 1256, mode: os.FileMode(420), modTime: time.Unix(1773039792, 0)}
+	info := bindataFileInfo{name: "resources/css/xterm_customize.css", size: 1256, mode: os.FileMode(436), modTime: time.Unix(1772879527, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -186,7 +186,7 @@ func resourcesFaviconPng() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/favicon.png", size: 863, mode: os.FileMode(420), modTime: time.Unix(1772779703, 0)}
+	info := bindataFileInfo{name: "resources/favicon.png", size: 863, mode: os.FileMode(436), modTime: time.Unix(1772813190, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -206,7 +206,7 @@ func resourcesIndexCss() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/index.css", size: 4012, mode: os.FileMode(420), modTime: time.Unix(1773039792, 0)}
+	info := bindataFileInfo{name: "resources/index.css", size: 4012, mode: os.FileMode(436), modTime: time.Unix(1772870163, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -226,7 +226,7 @@ func resourcesIndexHtml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/index.html", size: 129174, mode: os.FileMode(420), modTime: time.Unix(1773067672, 0)}
+	info := bindataFileInfo{name: "resources/index.html", size: 129174, mode: os.FileMode(436), modTime: time.Unix(1773075717, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -246,7 +246,7 @@ func resourcesIrc_modeHtml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/irc_mode.html", size: 9600, mode: os.FileMode(420), modTime: time.Unix(1773039792, 0)}
+	info := bindataFileInfo{name: "resources/irc_mode.html", size: 9600, mode: os.FileMode(436), modTime: time.Unix(1773032710, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -266,7 +266,7 @@ func resourcesJsGottyBundleJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/js/gotty-bundle.js", size: 699472, mode: os.FileMode(420), modTime: time.Unix(1773076439, 0)}
+	info := bindataFileInfo{name: "resources/js/gotty-bundle.js", size: 699472, mode: os.FileMode(436), modTime: time.Unix(1773077510, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -286,7 +286,7 @@ func resourcesJsGottyBundleJsMap() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/js/gotty-bundle.js.map", size: 1892157, mode: os.FileMode(420), modTime: time.Unix(1773039792, 0)}
+	info := bindataFileInfo{name: "resources/js/gotty-bundle.js.map", size: 1892157, mode: os.FileMode(436), modTime: time.Unix(1772987224, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -306,7 +306,7 @@ func resourcesJsSettingsJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/js/settings.js", size: 10547, mode: os.FileMode(384), modTime: time.Unix(1773070018, 0)}
+	info := bindataFileInfo{name: "resources/js/settings.js", size: 10547, mode: os.FileMode(436), modTime: time.Unix(1773075654, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -326,7 +326,7 @@ func resourcesSettingsHtml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/settings.html", size: 9022, mode: os.FileMode(384), modTime: time.Unix(1773064234, 0)}
+	info := bindataFileInfo{name: "resources/settings.html", size: 9022, mode: os.FileMode(436), modTime: time.Unix(1773075654, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -346,7 +346,7 @@ func resourcesWeatherPreviewHtml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/weather-preview.html", size: 40388, mode: os.FileMode(384), modTime: time.Unix(1773064242, 0)}
+	info := bindataFileInfo{name: "resources/weather-preview.html", size: 40388, mode: os.FileMode(436), modTime: time.Unix(1773075654, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -366,7 +366,7 @@ func resourcesXterm_customizeCss() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/xterm_customize.css", size: 550, mode: os.FileMode(420), modTime: time.Unix(1772779703, 0)}
+	info := bindataFileInfo{name: "resources/xterm_customize.css", size: 550, mode: os.FileMode(436), modTime: time.Unix(1772813190, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }

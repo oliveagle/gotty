@@ -99,9 +99,10 @@ func NewWebAuthnManager(displayName, hostname, dataDir, registerToken string, al
 			"https://127.0.0.1:13782",
 		}
 	} else {
-		// For custom hostname, use https
+		// For custom hostname, use https with port
 		origins = []string{
 			"https://" + rpID,
+			"https://" + rpID + ":13782", // default gotty port
 		}
 	}
 
