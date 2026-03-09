@@ -157,6 +157,20 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, s
 			server.challengeManager.Delete(sessionID)
 
 			log.Printf("KeePassXC authentication succeeded for %s", conn.RemoteAddr())
+		} else if server.options.AuthType == "webauthn" || server.options.AuthType == "passkey" {
+			// WebAuthn/Passkeys authentication
+			// AuthToken format: "webauthn:base64_session_id" (from login finish)
+			if init.AuthToken == "" {
+				log.Printf("WebAuthn authentication failed for %s: empty token", conn.RemoteAddr())
+				return errors.New("failed to authenticate websocket connection: empty token")
+			}
+			// For webauthn, the token was already validated in the login finish endpoint
+			// Here we just check if it starts with "webauthn:"
+			if !strings.HasPrefix(init.AuthToken, "webauthn:") {
+				log.Printf("WebAuthn authentication failed for %s: invalid token format", conn.RemoteAddr())
+				return errors.New("failed to authenticate websocket connection: invalid token format")
+			}
+			log.Printf("WebAuthn authentication succeeded for %s", conn.RemoteAddr())
 		} else {
 			log.Printf("Unsupported auth type: %s", server.options.AuthType)
 			return errors.New("unsupported authentication type")
@@ -375,6 +389,16 @@ func (server *Server) handleAuthToken(w http.ResponseWriter, r *http.Request) {
 		// The client will get credentials from their password manager and send it
 		w.Write([]byte("var gotty_auth_type = '" + server.options.AuthType + "';"))
 		w.Write([]byte("var gotty_auth_token = '';"))
+	} else if server.options.EnableAuth && (server.options.AuthType == "webauthn" || server.options.AuthType == "passkey") {
+		// WebAuthn/Passkeys authentication
+		w.Write([]byte("var gotty_auth_type = 'webauthn';"))
+		w.Write([]byte("var gotty_auth_token = '';"))
+		// Include WebAuthn status
+		hasAuth := "false"
+		if server.webAuthnManager != nil && server.webAuthnManager.HasCredentials() {
+			hasAuth = "true"
+		}
+		w.Write([]byte("var gotty_webauthn_has_auth = " + hasAuth + ";"))
 	} else if server.options.EnableAuth && (server.options.AuthType == "basic" || server.options.AuthType == "") {
 		// Basic auth - return credential
 		w.Write([]byte("var gotty_auth_type = 'basic';"))

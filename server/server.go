@@ -368,6 +368,13 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	// Challenge API for public key authentication
 	siteMux.HandleFunc(pathPrefix+"api/challenge", server.handleChallenge)
 
+	// WebAuthn/Passkeys API
+	siteMux.HandleFunc(pathPrefix+"api/webauthn/status", server.handleWebAuthnStatus)
+	siteMux.HandleFunc(pathPrefix+"api/webauthn/register/begin", server.handleWebAuthnRegisterBegin)
+	siteMux.HandleFunc(pathPrefix+"api/webauthn/register/finish", server.handleWebAuthnRegisterFinish)
+	siteMux.HandleFunc(pathPrefix+"api/webauthn/login/begin", server.handleWebAuthnLoginBegin)
+	siteMux.HandleFunc(pathPrefix+"api/webauthn/login/finish", server.handleWebAuthnLoginFinish)
+
 	// IRC chatroom routes
 	if server.options.EnableIRC && server.ircHandler != nil {
 		ircData := struct {
@@ -390,6 +397,9 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 		} else if server.options.AuthType == "bitwarden" {
 			log.Printf("Using Bitwarden E2E Encryption Authentication")
 			// Bitwarden authentication is handled in WebSocket connection, no HTTP auth required
+		} else if server.options.AuthType == "webauthn" || server.options.AuthType == "passkey" {
+			log.Printf("Using WebAuthn/Passkeys Authentication")
+			// WebAuthn authentication is handled via API endpoints, no HTTP auth required
 		} else {
 			log.Printf("Unsupported authentication type: %s", server.options.AuthType)
 		}

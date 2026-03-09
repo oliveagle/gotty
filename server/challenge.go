@@ -4,8 +4,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/binary"
-	"strings"
 	"sync"
 	"time"
 )

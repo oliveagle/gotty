@@ -54,6 +54,37 @@
       </div>
     </div>
 
+    <!-- WebAuthn/Passkeys Authentication Overlay -->
+    <div id="webauthn-auth" class="pwmanager-auth" style="display: none;">
+      <div class="pwmanager-dialog">
+        <div class="pwmanager-icon">🔑</div>
+        <h2 class="pwmanager-title">Passkey Authentication</h2>
+        <p class="pwmanager-subtitle" id="webauthn-status">Loading...</p>
+
+        <div class="webauthn-buttons">
+          <button type="button" class="pwmanager-btn" id="webauthn-register" style="display: none;">
+            Register Passkey
+          </button>
+          <button type="button" class="pwmanager-btn" id="webauthn-login" style="display: none;">
+            Authenticate
+          </button>
+        </div>
+
+        <div class="pwmanager-hints">
+          <details>
+            <summary>💡 How to use Passkeys</summary>
+            <div class="pwmanager-hint-content">
+              <p><strong>KeePassXC:</strong> Store your Passkey in KeePassXC 2.7.7+</p>
+              <p><strong>Browser:</strong> Use built-in Passkey support (Chrome, Firefox, Safari)</p>
+              <p><strong>Hardware Key:</strong> YubiKey, Titan Key, or other FIDO2 authenticators</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="pwmanager-error" id="webauthn-error"></div>
+      </div>
+    </div>
+
     <div id="app">
       <!-- Trigger zone for auto-hide sidebar -->
       <div id="sidebar-trigger"></div>
@@ -3194,6 +3225,25 @@
           };
           // Start checking after a short delay to allow auth UI to appear
           setTimeout(checkAuthAndInit, 100);
+        } else if (authType === 'webauthn') {
+          // WebAuthn/Passkeys auth required
+          const checkWebAuthnAndInit = () => {
+            if (typeof window.WebAuthnAuth !== 'undefined') {
+              // WebAuthn module loaded, initialize
+              const webauthnAuth = new window.WebAuthnAuth((authToken) => {
+                // Auth completed, set token and initialize
+                window.gotty_auth_token = authToken;
+                sessionManager = new SessionManager();
+                sessionManager.init();
+                window.sessionManager = sessionManager;
+              });
+              webauthnAuth.show();
+            } else {
+              // Wait for WebAuthn module to load
+              setTimeout(checkWebAuthnAndInit, 100);
+            }
+          };
+          setTimeout(checkWebAuthnAndInit, 100);
         } else {
           // No auth required, initialize immediately
           sessionManager = new SessionManager();

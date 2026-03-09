@@ -3,6 +3,7 @@ import { Xterm } from "./xterm";
 import { Terminal, WebTTY, protocols } from "./webtty";
 import { ConnectionFactory } from "./websocket";
 import { PWManagerAuth, isPWManagerAuthRequired, initPWManagerAuth } from "./pwmanager-auth";
+import { WebAuthnAuth, isWebAuthnAuthRequired, initWebAuthnAuth } from "./webauthn-auth";
 
 // Export classes to global scope for use in inline scripts
 (window as any).Hterm = Hterm;
@@ -12,6 +13,8 @@ import { PWManagerAuth, isPWManagerAuthRequired, initPWManagerAuth } from "./pwm
 (window as any).protocols = protocols;
 (window as any).PWManagerAuth = PWManagerAuth;
 (window as any).isPWManagerAuthRequired = isPWManagerAuthRequired;
+(window as any).WebAuthnAuth = WebAuthnAuth;
+(window as any).isWebAuthnAuthRequired = isWebAuthnAuthRequired;
 
 // Global variables from server
 declare var gotty_auth_token: string;
@@ -132,6 +135,12 @@ if (elem !== null) {
                 (window as any).gotty_auth_token = password;
                 console.log("Password manager authentication completed");
             });
+        } else if (authType === "webauthn") {
+            // Initialize WebAuthn for session mode
+            initWebAuthnAuth((authToken: string) => {
+                (window as any).gotty_auth_token = authToken;
+                console.log("WebAuthn authentication completed");
+            });
         } else {
             // Hide auth UI if not needed
             const authContainer = document.getElementById("pwmanager-auth");
@@ -149,6 +158,11 @@ if (elem !== null) {
             // Password manager authentication
             initPWManagerAuth((password: string) => {
                 startTerminal(password);
+            });
+        } else if (authType === "webauthn") {
+            // WebAuthn authentication
+            initWebAuthnAuth((authToken: string) => {
+                startTerminal(authToken);
             });
         } else if (authType === "basic" && !authToken) {
             const authUI = createBasicAuthUI((token) => {
