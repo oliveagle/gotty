@@ -3,6 +3,8 @@
  *
  * Supports KeePassXC, Bitwarden, 1Password, LastPass and other password managers
  * through standard HTML form auto-fill detection.
+ *
+ * For KeePassXC: Uses Ed25519 challenge-response authentication
  */
 
 export class PWManagerAuth {
@@ -13,6 +15,10 @@ export class PWManagerAuth {
     private errorDiv: HTMLElement;
     private onAuthenticated: (password: string) => void;
     private autoSubmitTimeout: number | null = null;
+    private authType: string;
+    private publicKey: string | null = null;
+    private sessionId: string | null = null;
+    private challenge: string | null = null;
 
     constructor(onAuthenticated: (password: string) => void) {
         this.onAuthenticated = onAuthenticated;
@@ -23,8 +29,92 @@ export class PWManagerAuth {
         this.submitBtn = document.getElementById('pwmanager-submit') as HTMLButtonElement;
         this.errorDiv = document.getElementById('pwmanager-error')!;
 
+        // Get auth type from server
+        this.authType = (window as any).gotty_auth_type || 'none';
+
+        // Get public key for KeePassXC auth
+        if (this.authType === 'keepassxc') {
+            this.publicKey = (window as any).gotty_public_key || null;
+            this.setupKeePassXCAuth();
+        }
+
         this.setupListeners();
         this.focusPassword();
+    }
+
+    /**
+     * Setup KeePassXC challenge-response authentication
+     */
+    private async setupKeePassXCAuth(): Promise<void> {
+        if (!this.publicKey) {
+            this.showError('Server configuration error: public key not found');
+            return;
+        }
+
+        // Generate session ID
+        this.sessionId = this.generateSessionId();
+
+        // Fetch challenge from server
+        try {
+            const response = await fetch('./api/challenge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: this.sessionId })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to get challenge from server');
+            }
+
+            const data = await response.json();
+            this.challenge = data.challenge;
+
+            // Update UI to show challenge
+            this.updateUIForKeePassXC();
+        } catch (error) {
+            console.error('Failed to setup KeePassXC auth:', error);
+            this.showError('Failed to initialize authentication');
+        }
+    }
+
+    /**
+     * Generate a random session ID
+     */
+    private generateSessionId(): string {
+        const array = new Uint8Array(16);
+        crypto.getRandomValues(array);
+        return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    /**
+     * Update UI for KeePassXC challenge-response authentication
+     */
+    private updateUIForKeePassXC(): void {
+        const subtitle = document.querySelector('.pwmanager-subtitle');
+        if (subtitle) {
+            subtitle.innerHTML = `
+                <div style="text-align: left; margin-top: 10px;">
+                    <p style="font-size: 12px; color: #888; margin-bottom: 8px;">
+                        Challenge (sign this with your private key):
+                    </p>
+                    <code style="display: block; background: #1a1a1f; padding: 8px; border-radius: 4px;
+                                font-size: 10px; word-break: break-all; color: #4ade80; margin-bottom: 12px;">
+                        ${this.challenge}
+                    </code>
+                    <p style="font-size: 11px; color: #888;">
+                        1. Copy the challenge above<br>
+                        2. Sign it with your Ed25519 private key<br>
+                        3. Paste the base64-encoded signature below
+                    </p>
+                </div>
+            `;
+        }
+
+        // Update password field placeholder
+        this.passwordInput.placeholder = 'Paste base64 signature here...';
+
+        // Update button text
+        this.submitBtn.textContent = 'Verify Signature';
     }
 
     private setupListeners(): void {
@@ -40,7 +130,7 @@ export class PWManagerAuth {
 
             // Auto-submit after a short delay when password is filled
             // This helps with password manager auto-fill
-            if (this.passwordInput.value.length > 0) {
+            if (this.passwordInput.value.length > 0 && this.authType !== 'keepassxc') {
                 this.scheduleAutoSubmit();
             }
         });
@@ -88,10 +178,12 @@ export class PWManagerAuth {
     }
 
     private handleSubmit(): void {
-        const password = this.passwordInput.value;
+        const inputValue = this.passwordInput.value;
 
-        if (!password) {
-            this.showError('Please enter a password');
+        if (!inputValue) {
+            this.showError(this.authType === 'keepassxc'
+                ? 'Please enter your signature'
+                : 'Please enter a password');
             this.passwordInput.focus();
             return;
         }
@@ -103,8 +195,14 @@ export class PWManagerAuth {
         // Hide the auth dialog
         this.hide();
 
+        // For KeePassXC, send session_id:signature format
+        // For other password managers, send the value directly
+        const authToken = this.authType === 'keepassxc' && this.sessionId
+            ? `${this.sessionId}:${inputValue}`
+            : inputValue;
+
         // Call the authentication callback
-        this.onAuthenticated(password);
+        this.onAuthenticated(authToken);
     }
 
     private hide(): void {
@@ -134,7 +232,7 @@ export class PWManagerAuth {
         this.container.classList.remove('hidden');
         this.passwordInput.value = '';
         this.submitBtn.disabled = false;
-        this.submitBtn.textContent = 'Connect';
+        this.submitBtn.textContent = this.authType === 'keepassxc' ? 'Verify Signature' : 'Connect';
         this.clearError();
         this.focusPassword();
     }
@@ -155,7 +253,7 @@ export class PWManagerAuth {
 export function isPWManagerAuthRequired(): boolean {
     // Check if server has set auth_type
     const authType = (window as any).gotty_auth_type;
-    return authType === 'bitwarden' || authType === 'pwmanager';
+    return authType === 'bitwarden' || authType === 'pwmanager' || authType === 'keepassxc';
 }
 
 /**

@@ -1,6 +1,6 @@
 module github.com/oliveagle/gotty
 
-go 1.23
+go 1.25.0
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1
@@ -15,6 +15,7 @@ require (
 
 require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
+	github.com/go-webauthn/webauthn v0.16.0 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect

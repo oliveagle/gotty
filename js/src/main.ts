@@ -125,7 +125,7 @@ if (elem !== null) {
         // But we still need to handle password manager auth if required
         const authType = (typeof gotty_auth_type !== "undefined") ? gotty_auth_type : "none";
 
-        if (authType === "bitwarden" || authType === "pwmanager") {
+        if (authType === "bitwarden" || authType === "pwmanager" || authType === "keepassxc") {
             // Initialize password manager auth for session mode
             initPWManagerAuth((password: string) => {
                 // Store the password for session manager to use
@@ -145,7 +145,7 @@ if (elem !== null) {
         const authType = (typeof gotty_auth_type !== "undefined") ? gotty_auth_type : "none";
         const authToken = (typeof gotty_auth_token !== "undefined") ? gotty_auth_token : "";
 
-        if (authType === "bitwarden" || authType === "pwmanager") {
+        if (authType === "bitwarden" || authType === "pwmanager" || authType === "keepassxc") {
             // Password manager authentication
             initPWManagerAuth((password: string) => {
                 startTerminal(password);

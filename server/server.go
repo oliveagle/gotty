@@ -40,6 +40,7 @@ type Server struct {
 	sessionManager   *SessionManager
 	workspaceManager *WorkspaceManager
 	clipboardManager *ClipboardManager
+	challengeManager *ChallengeManager
 
 	ircHandler *irc.IRCHandler
 
@@ -93,6 +94,9 @@ func New(factory Factory, options *Options) (*Server, error) {
 	// Initialize clipboard manager
 	cm := NewClipboardManager()
 
+	// Initialize challenge manager for public key authentication
+	challMngr := NewChallengeManager()
+
 	// Migrate sessions without workspace to default workspace
 	sm.MigrateToWorkspace(DefaultWorkspaceID)
 
@@ -117,6 +121,7 @@ func New(factory Factory, options *Options) (*Server, error) {
 		sessionManager:   sm,
 		workspaceManager: wm,
 		clipboardManager: cm,
+		challengeManager: challMngr,
 		ircHandler:       ircHandler,
 
 		upgrader: &websocket.Upgrader{
@@ -337,6 +342,9 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 
 	// Weather API proxy (to avoid CORS issues)
 	siteMux.HandleFunc(pathPrefix+"api/weather", server.handleWeather)
+
+	// Challenge API for public key authentication
+	siteMux.HandleFunc(pathPrefix+"api/challenge", server.handleChallenge)
 
 	// IRC chatroom routes
 	if server.options.EnableIRC && server.ircHandler != nil {

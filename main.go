@@ -87,6 +87,11 @@ func main() {
 			exit(err, 6)
 		}
 
+		// Load public key from file if needed
+		if err := appOptions.LoadPublicKey(); err != nil {
+			exit(err, 6)
+		}
+
 		// Create factory based on backend type
 		var factory server.Factory
 		backendType := c.String("backend")

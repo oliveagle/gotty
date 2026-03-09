@@ -59,6 +59,14 @@
       <div id="sidebar-trigger"></div>
       <div id="sidebar">
         <div class="sidebar-header">
+          <!-- Sky container for weather/time visualization -->
+          <div class="sky-container">
+            <div class="sun" id="sky-sun"></div>
+            <div class="moon" id="sky-moon"></div>
+            <div class="stars" id="sky-stars"></div>
+            <div class="clouds" id="sky-clouds"></div>
+            <div class="season-overlay" id="season-overlay"></div>
+          </div>
           <div class="header-host" id="header-host"></div>
           <div class="workspace-selector" id="workspace-selector">
             <span class="workspace-icon" id="workspace-icon">📁</span>
@@ -402,6 +410,10 @@
 
           // Initialize dynamic background if enabled
           this.initDynamicBackground();
+
+          // Apply banner position setting
+          const savedBannerPosition = localStorage.getItem('gotty_banner_position') || 'top';
+          this.applyBannerPosition(savedBannerPosition);
 
           // Initialize workspace selector
           this.initWorkspaceSelector();
@@ -1007,6 +1019,10 @@
           this.updateMarquee();
           // Update time every second
           setInterval(() => this.updateMarquee(), 1000);
+          // Refresh weather data every 10 minutes
+          setInterval(() => this.loadWeatherForMarquee(), 10 * 60 * 1000);
+          // Load weather initially
+          this.loadWeatherForMarquee();
         }
 
         updateMarquee() {
@@ -1017,13 +1033,11 @@
           const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false });
           const dateStr = now.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', weekday: 'short' });
 
-          // Mock system info (in real implementation, these would come from API)
-          const cpuUsage = this.getRandomInt(15, 45);
-          const memUsage = this.getRandomInt(40, 65);
-          const uptime = this.formatUptime(now);
+          // Get cached weather data
+          const weatherInfo = this.getWeatherInfo();
 
-          // Build marquee content with mock data
-          marqueeContent.innerHTML = `
+          // Build marquee content
+          let html = `
             <span class="marquee-item">
               <span class="marquee-label">Date:</span>
               <span class="marquee-value">${dateStr}</span>
@@ -1032,15 +1046,80 @@
               <span class="marquee-label">Time:</span>
               <span class="marquee-value">${timeStr}</span>
             </span>
-            <span class="marquee-item">
-              <span class="marquee-label">CPU:</span>
-              <span class="marquee-value">${cpuUsage}%</span>
-            </span>
-            <span class="marquee-item">
-              <span class="marquee-label">MEM:</span>
-              <span class="marquee-value">${memUsage}%</span>
-            </span>
           `;
+
+          // Add weather info if available
+          if (weatherInfo) {
+            html += `
+              <span class="marquee-item">
+                <span class="marquee-label">Weather:</span>
+                <span class="marquee-value">${weatherInfo.icon} ${weatherInfo.city} ${weatherInfo.condition} ${weatherInfo.temp}</span>
+              </span>
+            `;
+          }
+
+          marqueeContent.innerHTML = html;
+        }
+
+        /**
+         * Get weather info from cache for marquee display
+         */
+        getWeatherInfo() {
+          const cachedData = localStorage.getItem('gotty_weather_data');
+          const cachedTime = localStorage.getItem('gotty_weather_time');
+
+          if (!cachedData || !cachedTime) return null;
+
+          const age = Date.now() - parseInt(cachedTime);
+          // Cache valid for 30 minutes
+          if (age >= 30 * 60 * 1000) return null;
+
+          try {
+            const weatherData = JSON.parse(cachedData);
+            if (!weatherData || !weatherData.data || !weatherData.cityInfo) return null;
+
+            const today = weatherData.data.forecast[0];
+            const city = weatherData.cityInfo.city || 'Unknown';
+            const condition = today.type || '-';
+            const temp = `${today.low} ~ ${today.high}`;
+
+            // Add weather icon based on condition
+            const icon = this.getWeatherIcon(condition);
+
+            return { city, condition, temp, icon };
+          } catch (e) {
+            return null;
+          }
+        }
+
+        /**
+         * Get weather icon based on condition
+         */
+        getWeatherIcon(condition) {
+          const c = condition.toLowerCase();
+          if (c.includes('晴')) return '☀️';
+          if (c.includes('云')) return '☁️';
+          if (c.includes('阴')) return '☁️';
+          if (c.includes('雨')) return '🌧️';
+          if (c.includes('雪')) return '❄️';
+          if (c.includes('雾')) return '🌫️';
+          if (c.includes('风')) return '💨';
+          return '🌤️';
+        }
+
+        /**
+         * Load weather data for marquee (silent refresh)
+         */
+        loadWeatherForMarquee() {
+          const cityCode = localStorage.getItem('gotty_city_code') || '101020100';
+          this.fetchWeatherData(cityCode).then(weatherData => {
+            if (weatherData && weatherData.data) {
+              localStorage.setItem('gotty_weather_data', JSON.stringify(weatherData));
+              localStorage.setItem('gotty_weather_time', Date.now().toString());
+              // Update marquee if visible
+              this.updateMarquee();
+            }
+          });
         }
 
         getRandomInt(min, max) {
@@ -2450,6 +2529,17 @@
           if (cityCodeInput) cityCodeInput.value = savedCityCode;
           if (weatherBgCheckbox) weatherBgCheckbox.checked = weatherBgEnabled;
 
+          // Load banner position setting
+          const bannerPositionTop = document.getElementById('banner-position-top');
+          const bannerPositionBottom = document.getElementById('banner-position-bottom');
+          const savedBannerPosition = localStorage.getItem('gotty_banner_position') || 'top';
+
+          if (bannerPositionTop) bannerPositionTop.checked = savedBannerPosition === 'top';
+          if (bannerPositionBottom) bannerPositionBottom.checked = savedBannerPosition === 'bottom';
+
+          // Apply banner position
+          this.applyBannerPosition(savedBannerPosition);
+
           // Load and display weather info
           this.loadWeatherDisplay();
 
@@ -2534,6 +2624,14 @@
           } else {
             this.clearDynamicBackground();
           }
+
+          // Save banner position setting
+          const bannerPositionTop = document.getElementById('banner-position-top');
+          const bannerPosition = bannerPositionTop?.checked ? 'top' : 'bottom';
+          localStorage.setItem('gotty_banner_position', bannerPosition);
+
+          // Apply banner position
+          this.applyBannerPosition(bannerPosition);
 
           this.hideSettingsModal();
         }
@@ -2788,9 +2886,172 @@
               header.classList.add('weather-rainy');
             }
 
+            // Update sky elements (sun, moon, stars, clouds)
+            this.updateSkyElements(weatherData);
+
             // Store current theme for periodic updates
             localStorage.setItem('gotty_current_theme', timePeriod);
           });
+        }
+
+        /**
+         * Update sky elements (sun, moon, stars, clouds) based on time and weather
+         */
+        updateSkyElements(weatherData) {
+          if (!weatherData || !weatherData.data) return;
+
+          const today = weatherData.data.forecast[0];
+          const weatherType = (today.type || '').toLowerCase();
+          const timePeriod = this.getTimePeriod(today.sunrise, today.sunset);
+
+          const sun = document.getElementById('sky-sun');
+          const moon = document.getElementById('sky-moon');
+          const stars = document.getElementById('sky-stars');
+          const clouds = document.getElementById('sky-clouds');
+          const seasonOverlay = document.getElementById('season-overlay');
+
+          if (!sun || !moon || !stars || !clouds || !seasonOverlay) return;
+
+          // Show/hide celestial bodies based on time
+          sun.classList.remove('visible');
+          moon.classList.remove('visible');
+          stars.classList.remove('visible');
+
+          if (timePeriod === 'night') {
+            moon.classList.add('visible');
+            stars.classList.add('visible');
+            this.generateStars(stars);
+          } else if (timePeriod === 'morning') {
+            sun.classList.add('visible');
+            this.setSunPosition(sun, 'sunrise');
+          } else if (timePeriod === 'noon') {
+            sun.classList.add('visible');
+            this.setSunPosition(sun, 'noon');
+          } else if (timePeriod === 'dusk') {
+            sun.classList.add('visible');
+            this.setSunPosition(sun, 'sunset');
+          }
+
+          // Show clouds based on weather
+          clouds.classList.remove('visible');
+          if (weatherType.includes('云') || weatherType.includes('阴')) {
+            clouds.classList.add('visible');
+            this.generateClouds(clouds, 'light');
+          } else if (weatherType.includes('雨') || weatherType.includes('雪') || weatherType.includes('雾')) {
+            clouds.classList.add('visible');
+            this.generateClouds(clouds, 'heavy');
+          }
+
+          // Set season overlay based on current month
+          this.setSeasonOverlay(seasonOverlay);
+        }
+
+        /**
+         * Generate random stars for night sky
+         */
+        generateStars(container) {
+          // Only regenerate if no stars exist
+          if (container.querySelectorAll('.star').length > 0) return;
+
+          const numStars = 30;
+          for (let i = 0; i < numStars; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.left = `${Math.random() * 100}%`;
+            star.style.top = `${Math.random() * 100}%`;
+            star.style.animationDelay = `${Math.random() * 2}s`;
+            star.style.opacity = `${0.3 + Math.random() * 0.7}`;
+            container.appendChild(star);
+          }
+        }
+
+        /**
+         * Set sun position based on time of day
+         */
+        setSunPosition(sun, position) {
+          // Position in the sky container (percentage based)
+          if (position === 'sunrise') {
+            // Left side, lower position (rising)
+            sun.style.left = '15%';
+            sun.style.bottom = '20%';
+          } else if (position === 'noon') {
+            // Center, top position
+            sun.style.left = '50%';
+            sun.style.top = '15%';
+            sun.style.bottom = 'auto';
+          } else if (position === 'sunset') {
+            // Right side, lower position (setting)
+            sun.style.left = '85%';
+            sun.style.bottom = '20%';
+          }
+        }
+
+        /**
+         * Generate clouds based on weather intensity
+         */
+        generateClouds(container, intensity = 'light') {
+          // Clear existing clouds
+          container.querySelectorAll('.cloud').forEach(c => c.remove());
+
+          const numClouds = intensity === 'light' ? 3 : 5;
+          const cloudHeights = intensity === 'light' ? [10, 25, 40] : [5, 15, 25, 40, 55];
+
+          cloudHeights.forEach((top, index) => {
+            if (index >= numClouds) return;
+            const cloud = document.createElement('div');
+            cloud.className = 'cloud';
+
+            // Random size
+            const width = 60 + Math.random() * 80;
+            const height = 20 + Math.random() * 30;
+
+            cloud.style.width = `${width}px`;
+            cloud.style.height = `${height}px`;
+            cloud.style.top = `${top}%`;
+            cloud.style.left = `${-20 - Math.random() * 20}%`;
+            cloud.style.animationDuration = `${20 + Math.random() * 20}s`;
+            cloud.style.animationDelay = `${index * 3}s`;
+
+            // Pseudo-element sizes for cloud puffs
+            const style = document.createElement('style');
+            style.textContent = `
+              .cloud:nth-child(${index + 1})::before {
+                width: ${height * 0.8}px;
+                height: ${height * 0.8}px;
+                top: -${height * 0.4}px;
+                left: ${width * 0.2}px;
+              }
+              .cloud:nth-child(${index + 1})::after {
+                width: ${height * 0.6}px;
+                height: ${height * 0.6}px;
+                top: -${height * 0.3}px;
+                right: ${width * 0.2}px;
+              }
+            `;
+            container.appendChild(style);
+            container.appendChild(cloud);
+          });
+        }
+
+        /**
+         * Set season overlay based on current month
+         */
+        setSeasonOverlay(container) {
+          const month = new Date().getMonth(); // 0-11
+
+          // Remove existing season classes
+          container.classList.remove('spring', 'summer', 'autumn', 'winter');
+
+          // Northern hemisphere seasons (can be adjusted for southern)
+          if (month >= 2 && month <= 4) { // March-May
+            container.classList.add('spring');
+          } else if (month >= 5 && month <= 7) { // June-August
+            container.classList.add('summer');
+          } else if (month >= 8 && month <= 10) { // September-November
+            container.classList.add('autumn');
+          } else { // December-February
+            container.classList.add('winter');
+          }
         }
 
         /**
@@ -2816,6 +3077,20 @@
 
             // Update every 10 minutes to catch time period changes
             setInterval(() => this.updateDynamicBackground(), 10 * 60 * 1000);
+          }
+        }
+
+        /**
+         * Apply banner position setting
+         */
+        applyBannerPosition(position) {
+          const main = document.getElementById('main');
+          if (!main) return;
+
+          if (position === 'bottom') {
+            main.classList.add('banner-at-bottom');
+          } else {
+            main.classList.remove('banner-at-bottom');
           }
         }
 
@@ -2903,7 +3178,7 @@
         // Check if password manager auth is required
         const authType = (typeof gotty_auth_type !== 'undefined') ? gotty_auth_type : 'none';
 
-        if (authType === 'bitwarden' || authType === 'pwmanager') {
+        if (authType === 'bitwarden' || authType === 'pwmanager' || authType === 'keepassxc') {
           // Password manager auth required - wait for authentication
           // The main.ts will handle the auth UI and set gotty_auth_token
           const checkAuthAndInit = () => {

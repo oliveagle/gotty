@@ -1,7 +1,15 @@
 package server
 
 import (
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/pem"
+	"os"
+	"strings"
+
 	"github.com/pkg/errors"
+
+	"github.com/oliveagle/gotty/pkg/homedir"
 )
 
 type Options struct {
@@ -47,6 +55,16 @@ type Options struct {
 	// Host display options
 	HostName string `hcl:"host_name" flagName:"host-name" flagDescribe:"Custom host name displayed in sidebar and browser tab (empty to use URL host)" default:""`
 
+	// Public key authentication options
+	PublicKeyFile string `hcl:"public_key_file" flagName:"public-key-file" flagDescribe:"Path to Ed25519 public key file for challenge-response authentication (required for keepassxc auth type)" default:"~/.gotty.pub"`
+
+	// WebAuthn/Passkeys options
+	WebAuthnDisplayName string `hcl:"webauthn_display_name" flagName:"webauthn-display-name" flagDescribe:"Display name for WebAuthn relying party" default:"GoTTY"`
+	WebAuthnDataDir     string `hcl:"webauthn_data_dir" flagName:"webauthn-data-dir" flagDescribe:"Directory to store WebAuthn credentials" default:"~/.config/gotty/webauthn"`
+
+	// Loaded public key (populated at runtime)
+	PublicKey string
+
 	TitleVariables map[string]interface{}
 }
 
@@ -74,10 +92,20 @@ func (options *Options) Validate() error {
 		if options.Credential == "" {
 			return errors.New("credential is required for basic authentication")
 		}
-	case "bitwarden":
-		// Bitwarden auth doesn't require any server-side configuration
-		// The client will handle authentication using their master password
+	case "bitwarden", "pwmanager":
+		// Password manager auth doesn't require any server-side configuration
+		// The client will handle authentication using their password manager
 		break
+	case "keepassxc":
+		// KeePassXC requires public key file for challenge-response authentication
+		if options.PublicKeyFile == "" {
+			return errors.New("public_key_file is required for keepassxc authentication")
+		}
+		// Check if file exists (will be expanded and loaded at runtime)
+		keyPath := homedir.Expand(options.PublicKeyFile)
+		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+			return errors.New("public key file not found: " + keyPath)
+		}
 	default:
 		return errors.New("invalid auth type: " + options.AuthType)
 	}
@@ -85,6 +113,93 @@ func (options *Options) Validate() error {
 	if options.EnableTLSClientAuth && !options.EnableTLS {
 		return errors.New("TLS client authentication is enabled, but TLS is not enabled")
 	}
+	return nil
+}
+
+// LoadPublicKey loads the Ed25519 public key from file
+// Supports: PEM format, raw base64, and SSH public key format (ssh-ed25519)
+func (options *Options) LoadPublicKey() error {
+	if options.PublicKeyFile == "" {
+		return nil
+	}
+
+	keyPath := homedir.Expand(options.PublicKeyFile)
+	data, err := os.ReadFile(keyPath)
+	if err != nil {
+		return errors.Wrapf(err, "failed to read public key file: %s", keyPath)
+	}
+
+	content := strings.TrimSpace(string(data))
+
+	// Try PEM format first
+	if strings.HasPrefix(content, "-----BEGIN") {
+		block, _ := pem.Decode(data)
+		if block == nil {
+			return errors.New("failed to parse PEM block from public key file")
+		}
+		// Extract DER bytes and encode to base64
+		options.PublicKey = base64.StdEncoding.EncodeToString(block.Bytes)
+		return nil
+	}
+
+	// Try SSH public key format (ssh-ed25519 AAAA... or ssh-rsa AAAA...)
+	if strings.HasPrefix(content, "ssh-") {
+		parts := strings.Fields(content)
+		if len(parts) < 2 {
+			return errors.New("invalid SSH public key format")
+		}
+
+		keyType := parts[0]
+		keyData := parts[1]
+
+		// Decode the base64 key data
+		decoded, err := base64.StdEncoding.DecodeString(keyData)
+		if err != nil {
+			return errors.Wrap(err, "failed to decode SSH public key")
+		}
+
+		switch keyType {
+		case "ssh-ed25519":
+			// SSH Ed25519 public key format:
+			// 4 bytes: length of "ssh-ed25519"
+			// "ssh-ed25519"
+			// 4 bytes: length of public key (32)
+			// 32 bytes: public key
+			if len(decoded) < 8 {
+				return errors.New("SSH Ed25519 public key too short")
+			}
+			// Skip the key type prefix
+			keyTypeLen := int(binary.BigEndian.Uint32(decoded[0:4]))
+			if len(decoded) < 4+keyTypeLen+4 {
+				return errors.New("malformed SSH Ed25519 public key")
+			}
+			pubKeyLen := int(binary.BigEndian.Uint32(decoded[4+keyTypeLen : 4+keyTypeLen+4]))
+			pubKeyStart := 4 + keyTypeLen + 4
+			pubKeyEnd := pubKeyStart + pubKeyLen
+			if len(decoded) < pubKeyEnd {
+				return errors.New("malformed SSH Ed25519 public key")
+			}
+			pubKey := decoded[pubKeyStart:pubKeyEnd]
+			options.PublicKey = base64.StdEncoding.EncodeToString(pubKey)
+
+		case "ssh-rsa":
+			// For RSA, we don't support it in Ed25519 signature verification
+			// But let's provide a clear error message
+			return errors.New("RSA keys are not supported for challenge-response authentication, please use Ed25519 key (ssh-keygen -t ed25519)")
+
+		default:
+			return errors.New("unsupported SSH key type: " + keyType + " (only ssh-ed25519 is supported)")
+		}
+		return nil
+	}
+
+	// Assume raw base64 format
+	// Validate it's valid base64
+	if _, err := base64.StdEncoding.DecodeString(content); err != nil {
+		return errors.New("public key file is neither valid PEM, SSH public key, nor base64 format")
+	}
+	options.PublicKey = content
+
 	return nil
 }
 
@@ -151,8 +266,13 @@ func (options *Options) GetAuthKeysList() []string {
 		return []string{"Basic Authentication"}
 	}
 
-	if options.AuthType == "bitwarden" {
+	switch options.AuthType {
+	case "bitwarden":
 		return []string{"Bitwarden E2E Encryption"}
+	case "pwmanager":
+		return []string{"Password Manager Auth"}
+	case "keepassxc":
+		return []string{"KeePassXC Auth"}
 	}
 
 	return []string{"No authentication"}
