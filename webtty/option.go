@@ -77,3 +77,13 @@ func WithActivityCallback(callback func()) Option {
 		return nil
 	}
 }
+
+// WithMaxMessageSize sets the maximum message size in bytes.
+// A value of 0 means unlimited. Default is 1MB.
+// This helps prevent memory exhaustion attacks via large messages.
+func WithMaxMessageSize(size int) Option {
+	return func(wt *WebTTY) error {
+		wt.maxMessageSize = size
+		return nil
+	}
+}

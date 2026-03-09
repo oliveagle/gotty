@@ -71,12 +71,13 @@ func NewSessionManager() *SessionManager {
 	homeDir, _ := os.UserHomeDir()
 	metadataFile := filepath.Join(homeDir, ".config", "gotty", "sessions.json")
 
-	// Ensure directory exists
+	// Ensure directory exists with secure permissions (0700 = owner only)
 	dir := filepath.Dir(metadataFile)
-	if err := os.MkdirAll(dir, 0755); err == nil {
+	if err := os.MkdirAll(dir, 0700); err == nil {
 		// Ensure file exists with empty array if not present
+		// Use 0600 for secure file permissions (owner read/write only)
 		if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
-			os.WriteFile(metadataFile, []byte("[]"), 0644)
+			os.WriteFile(metadataFile, []byte("[]"), 0600)
 		}
 	}
 
@@ -98,9 +99,9 @@ func (sm *SessionManager) saveMetadata() {
 		return
 	}
 
-	// Create directory if needed
+	// Create directory if needed with secure permissions
 	dir := filepath.Dir(sm.metadataFile)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return
 	}
 
@@ -120,12 +121,12 @@ func (sm *SessionManager) saveMetadata() {
 		})
 	}
 
-	// Write to file
+	// Write to file with secure permissions (0600 = owner read/write only)
 	data, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
 		return
 	}
-	os.WriteFile(sm.metadataFile, data, 0644)
+	os.WriteFile(sm.metadataFile, data, 0600)
 }
 
 // loadMetadata loads session metadata from file

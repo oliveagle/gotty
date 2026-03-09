@@ -865,3 +865,16 @@ func (server *Server) handleWeatherPreview(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(data)
 }
+
+// handleSettings serves the settings page
+func (server *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	// Read the settings.html from embedded assets
+	data, err := Asset("resources/settings.html")
+	if err != nil {
+		http.Error(w, "Settings page not found", 404)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(data)
+}

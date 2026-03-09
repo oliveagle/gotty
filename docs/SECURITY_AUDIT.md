@@ -203,11 +203,52 @@ id := randomstring.Generate(8)  // 8 字符约 48 位熵
 
 | 漏洞 | 修复方案 | 状态 |
 |------|----------|------|
-| 参数注入 | 添加参数白名单验证 | 待修复 |
-| Token 时序攻击 | 使用 `crypto/subtle.ConstantTimeCompare` | 待修复 |
-| WebSocket 消息大小 | 添加最大消息大小限制 | 待修复 |
-| 会话元数据权限 | 改为 `0600` | 待修复 |
-| 错误信息泄露 | 返回通用错误消息 | 待修复 |
+| 参数注入 | 1. `PermitArguments` 默认值改为 false<br>2. 添加 `validateArg()` 和 `sanitizeArgs()` 过滤危险字符 | ✅ 已修复 |
+| Token 时序攻击 | 使用 `crypto/subtle.ConstantTimeCompare` | ✅ 已修复 |
+| WebSocket 消息大小 | 添加 `maxMessageSize` 限制 (默认 1MB) | ✅ 已修复 |
+| 会话元数据权限 | 目录权限 `0700`，文件权限 `0600` | ✅ 已修复 |
+| 错误信息泄露 | 返回通用错误消息，详情仅记录日志 | ✅ 已修复 |
+
+### 修复详情
+
+#### 1. 参数注入修复
+
+**文件**: `backend/localcommand/factory.go`
+
+- 添加 `validateArg()` 验证单个参数
+- 添加 `sanitizeArgs()` 批量验证
+- 阻止危险前缀 (`-e`, `-c`, `--execute`, `--command`, `--`)
+- 阻止危险字符 (`;`, `|`, `&`, `$`, `` ` ``, `(`, `)`, `<`, `>`, `\n`, `\r`)
+
+#### 2. Token 时序攻击修复
+
+**文件**: `server/webauthn.go`
+
+```go
+// 使用常量时间比较
+return subtle.ConstantTimeCompare([]byte(m.registerToken), []byte(token)) == 1
+```
+
+#### 3. WebSocket 消息大小限制
+
+**文件**: `webtty/webtty.go`, `webtty/option.go`
+
+- 默认限制 1MB
+- 可通过 `WithMaxMessageSize()` 配置
+
+#### 4. 会话元数据权限修复
+
+**文件**: `server/session_manager.go`
+
+- 目录权限: `0755` → `0700`
+- 文件权限: `0644` → `0600`
+
+#### 5. 错误信息泄露修复
+
+**文件**: `server/webauthn_handlers.go`
+
+- 移除 `err.Error()` 返回给客户端
+- 错误详情仅记录到服务端日志
 
 ---
 

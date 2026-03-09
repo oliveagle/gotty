@@ -384,6 +384,9 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	// Weather preview debug page (protected)
 	siteMux.HandleFunc(pathPrefix+"weather-preview.html", authMiddleware.Wrap(server.handleWeatherPreview))
 
+	// Settings page (protected)
+	siteMux.HandleFunc(pathPrefix+"settings.html", authMiddleware.Wrap(server.handleSettings))
+
 	// WebAuthn/Passkeys API (public - used for authentication flow)
 	siteMux.HandleFunc(pathPrefix+"api/webauthn/status", server.handleWebAuthnStatus)
 	siteMux.HandleFunc(pathPrefix+"api/webauthn/register/begin", server.handleWebAuthnRegisterBegin)

@@ -19,12 +19,13 @@ type WebTTY struct {
 	// PTY Slave
 	slave Slave
 
-	windowTitle []byte
-	permitWrite bool
-	columns     int
-	rows        int
-	reconnect   int // in seconds
-	masterPrefs []byte
+	windowTitle     []byte
+	permitWrite     bool
+	columns         int
+	rows            int
+	reconnect       int // in seconds
+	masterPrefs     []byte
+	maxMessageSize  int // Maximum message size in bytes (0 = unlimited)
 
 	bufferSize int
 	writeMutex sync.Mutex
@@ -45,9 +46,10 @@ func New(masterConn Master, slave Slave, options ...Option) (*WebTTY, error) {
 		masterConn: masterConn,
 		slave:      slave,
 
-		permitWrite: false,
-		columns:     0,
-		rows:        0,
+		permitWrite:    false,
+		columns:        0,
+		rows:           0,
+		maxMessageSize: 1024 * 1024, // Default 1MB max message size
 
 		bufferSize: 1024,
 	}
@@ -192,6 +194,11 @@ func (wt *WebTTY) masterWrite(data []byte) error {
 func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 	if len(data) == 0 {
 		return errors.New("unexpected zero length read from master")
+	}
+
+	// Check message size limit
+	if wt.maxMessageSize > 0 && len(data) > wt.maxMessageSize {
+		return errors.Errorf("message size %d exceeds maximum allowed %d bytes", len(data), wt.maxMessageSize)
 	}
 
 	switch data[0] {

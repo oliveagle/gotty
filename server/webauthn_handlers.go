@@ -135,14 +135,14 @@ func (server *Server) handleWebAuthnRegisterFinish(w http.ResponseWriter, r *htt
 	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(bytes.NewReader(req.Response))
 	if err != nil {
 		log.Printf("[WebAuthn] Parse credential error: %v", err)
-		jsonError(w, "Failed to parse credential: "+err.Error(), http.StatusBadRequest)
+		jsonError(w, "Failed to parse credential response", http.StatusBadRequest)
 		return
 	}
 
 	// Finish registration
 	if err := server.webAuthnManager.FinishRegistration(parsedResponse, sessionData); err != nil {
 		log.Printf("[WebAuthn] Registration finish error: %v", err)
-		jsonError(w, "Failed to complete registration: "+err.Error(), http.StatusBadRequest)
+		jsonError(w, "Failed to complete registration", http.StatusBadRequest)
 		return
 	}
 
@@ -220,7 +220,7 @@ func (server *Server) handleWebAuthnLoginFinish(w http.ResponseWriter, r *http.R
 	parsedResponse, err := protocol.ParseCredentialRequestResponseBytes(req.Response)
 	if err != nil {
 		log.Printf("[WebAuthn] Parse assertion error: %v", err)
-		jsonError(w, "Failed to parse assertion: "+err.Error(), http.StatusBadRequest)
+		jsonError(w, "Failed to parse assertion response", http.StatusBadRequest)
 		return
 	}
 

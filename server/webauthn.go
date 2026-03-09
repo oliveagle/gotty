@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -233,11 +234,13 @@ func (m *WebAuthnManager) CanRegister() bool {
 }
 
 // ValidateRegisterToken validates the registration token
+// Uses constant-time comparison to prevent timing attacks
 func (m *WebAuthnManager) ValidateRegisterToken(token string) bool {
 	if m.registerToken == "" {
 		return false // No token configured, registration not allowed after first credential
 	}
-	return m.registerToken == token
+	// Use constant-time comparison to prevent timing attacks
+	return subtle.ConstantTimeCompare([]byte(m.registerToken), []byte(token)) == 1
 }
 
 // GetRegisterToken returns the configured register token (for checking if token-based registration is enabled)
