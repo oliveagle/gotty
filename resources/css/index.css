@@ -244,7 +244,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: #2d2d2d;
     transition: background 0.5s ease;
     position: relative;
-    overflow: hidden;
+    overflow: visible;  /* Changed to visible to allow dropdown to escape */
 }
 
 /* ============================================
@@ -357,7 +357,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: rgba(255, 255, 255, 0.8);
     border-radius: 50%;
     filter: blur(8px);
-    animation: cloud-float 60s linear infinite;
+    animation: cloud-float 180s linear infinite;
 }
 
 .cloud::before,

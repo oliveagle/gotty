@@ -526,7 +526,10 @@
           const selector = document.getElementById('workspace-selector');
           const dropdown = document.getElementById('workspace-dropdown');
 
-          if (!selector || !dropdown) return;
+          if (!selector || !dropdown) {
+            console.error('Workspace selector or dropdown not found');
+            return;
+          }
 
           // Toggle dropdown on click
           selector.addEventListener('click', (e) => {
@@ -540,11 +543,21 @@
             } else {
               // Open - calculate position
               const sidebar = document.getElementById('sidebar');
+              if (!sidebar) return;
+
               const sidebarRect = sidebar.getBoundingClientRect();
+              console.log('Workspace dropdown position:', {
+                left: sidebarRect.left,
+                top: sidebarRect.top,
+                bottom: sidebarRect.bottom,
+                width: sidebarRect.width,
+                height: sidebarRect.height
+              });
 
               // Position dropdown at bottom of sidebar
               dropdown.style.left = sidebarRect.left + 'px';
               dropdown.style.top = sidebarRect.bottom + 'px';
+              console.log('Dropdown styles set:', dropdown.style.cssText);
 
               selector.classList.add('open');
               dropdown.classList.add('visible');
@@ -3025,16 +3038,16 @@
             const cloud = document.createElement('div');
             cloud.className = 'cloud';
 
-            // Random size
-            const width = 60 + Math.random() * 80;
-            const height = 20 + Math.random() * 30;
+            // Smaller cloud size
+            const width = 40 + Math.random() * 50;
+            const height = 12 + Math.random() * 18;
 
             cloud.style.width = `${width}px`;
             cloud.style.height = `${height}px`;
             cloud.style.top = `${top}%`;
             cloud.style.left = `${-20 - Math.random() * 20}%`;
-            cloud.style.animationDuration = `${20 + Math.random() * 20}s`;
-            cloud.style.animationDelay = `${index * 3}s`;
+            cloud.style.animationDuration = `${180 + Math.random() * 60}s`;
+            cloud.style.animationDelay = `${index * 10}s`;
 
             // Pseudo-element sizes for cloud puffs
             const style = document.createElement('style');
