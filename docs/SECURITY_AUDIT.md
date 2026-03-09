@@ -347,20 +347,72 @@ func validateSessionName(name string) error {
 - 添加 `sanitizeArgs()` 批量验证
 - 阻止危险字符 (`;`, `|`, `&`, `$`, `` ` ``, `(`, `)`, `<`, `>`, `\n`, `\r`)
 
+### 2026-03-09 安全加固 (第四轮)
+
+| 漏洞 | 严重程度 | 修复方案 | 状态 |
+|------|----------|----------|------|
+| 剪贴板无大小限制 | 中 | 添加 `MaxClipboardSize` 限制 (1MB) | ✅ 已修复 |
+| 加密使用固定 IV | 高 | 改用 AES-256-GCM 认证加密 | ✅ 已修复 |
+| VerifyToken 时序攻击 | 中 | 使用 `crypto/subtle.ConstantTimeCompare` | ✅ 已修复 |
+
+#### 11. 剪贴板大小限制
+
+**文件**: `server/clipboard.go`
+
+```go
+const MaxClipboardSize = 1 * 1024 * 1024 // 1MB
+
+func (cm *ClipboardManager) GetClipboardContent() string {
+    // ...
+    if len(content) > MaxClipboardSize {
+        content = content[:MaxClipboardSize]
+    }
+    // ...
+}
+```
+
+#### 12. 加密实现修复
+
+**文件**: `server/crypto.go`
+
+原代码使用固定 IV，存在严重安全风险：
+
+```go
+// 危险代码
+iv := make([]byte, aes.BlockSize)
+for i := range iv {
+    iv[i] = byte(i)  // 固定 IV！
+}
+```
+
+修复后使用 AES-256-GCM：
+
+```go
+// 使用 GCM 模式进行认证加密
+gcm, err := cipher.NewGCM(block)
+nonce := make([]byte, gcm.NonceSize())
+io.ReadFull(rand.Reader, nonce)  // 随机 nonce
+ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
+```
+
 ---
 
 ## 剩余风险
 
-### Token 通过 URL 传递 (中风险)
+### Token 通过 URL 传递 (中风险) - 已缓解
 
-Token 目前通过 URL query 参数传递，可能被日志记录。建议后续改为：
-- 使用 Authorization header
-- 使用 HttpOnly Cookie
+Token 支持多种传递方式：
+- ✅ Authorization header (推荐)
+- ✅ Cookie
+- ⚠️ URL query parameter (仍有日志风险)
+
+建议生产环境使用 Authorization header 或 HttpOnly Cookie。
 
 ---
 
 ## 更新日志
 
+- 2026-03-09: 第四轮安全加固 - 修复剪贴板大小限制、加密实现、VerifyToken 时序攻击
 - 2026-03-09: 第三轮安全加固 - 修复 zellij 会话名称验证、参数验证
 - 2026-03-09: 第二轮安全加固 - 修复 IRC CSWSH、XSS、添加安全头
 - 2026-03-09: 添加漏洞分析章节，记录安全审计发现

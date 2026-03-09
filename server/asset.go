@@ -266,7 +266,7 @@ func resourcesJsGottyBundleJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "resources/js/gotty-bundle.js", size: 699409, mode: os.FileMode(420), modTime: time.Unix(1773070026, 0)}
+	info := bindataFileInfo{name: "resources/js/gotty-bundle.js", size: 699409, mode: os.FileMode(420), modTime: time.Unix(1773070323, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }

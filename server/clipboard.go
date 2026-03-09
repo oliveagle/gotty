@@ -9,6 +9,11 @@ import (
 	"sync"
 )
 
+const (
+	// MaxClipboardSize is the maximum allowed clipboard content size (1MB)
+	MaxClipboardSize = 1 * 1024 * 1024
+)
+
 // ClipboardManager handles clipboard operations
 type ClipboardManager struct {
 	lastContent string
@@ -22,6 +27,7 @@ func NewClipboardManager() *ClipboardManager {
 
 // GetClipboardContent returns the current system clipboard content
 // Tries both clipboard and primary selection (for X11)
+// Returns content limited to MaxClipboardSize bytes
 func (cm *ClipboardManager) GetClipboardContent() string {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
@@ -30,6 +36,11 @@ func (cm *ClipboardManager) GetClipboardContent() string {
 	// First try clipboard selection
 	content, err := exec.Command("xclip", "-selection", "clipboard", "-o").Output()
 	if err == nil && len(content) > 0 {
+		// Security: Limit content size to prevent memory exhaustion
+		if len(content) > MaxClipboardSize {
+			log.Printf("[clipboard] Content truncated from %d to %d bytes", len(content), MaxClipboardSize)
+			content = content[:MaxClipboardSize]
+		}
 		log.Printf("[clipboard] Got content from xclip clipboard: %d bytes", len(content))
 		return string(content)
 	}
@@ -37,6 +48,9 @@ func (cm *ClipboardManager) GetClipboardContent() string {
 	// Try primary selection (mouse selection)
 	content, err = exec.Command("xclip", "-selection", "primary", "-o").Output()
 	if err == nil && len(content) > 0 {
+		if len(content) > MaxClipboardSize {
+			content = content[:MaxClipboardSize]
+		}
 		log.Printf("[clipboard] Got content from xclip primary: %d bytes", len(content))
 		return string(content)
 	}
@@ -44,6 +58,9 @@ func (cm *ClipboardManager) GetClipboardContent() string {
 	// Try xsel as fallback - clipboard
 	content, err = exec.Command("xsel", "--clipboard", "--output").Output()
 	if err == nil && len(content) > 0 {
+		if len(content) > MaxClipboardSize {
+			content = content[:MaxClipboardSize]
+		}
 		log.Printf("[clipboard] Got content from xsel clipboard: %d bytes", len(content))
 		return string(content)
 	}
@@ -51,6 +68,9 @@ func (cm *ClipboardManager) GetClipboardContent() string {
 	// Try xsel - primary
 	content, err = exec.Command("xsel", "--primary", "--output").Output()
 	if err == nil && len(content) > 0 {
+		if len(content) > MaxClipboardSize {
+			content = content[:MaxClipboardSize]
+		}
 		log.Printf("[clipboard] Got content from xsel primary: %d bytes", len(content))
 		return string(content)
 	}
@@ -58,6 +78,9 @@ func (cm *ClipboardManager) GetClipboardContent() string {
 	// Try pbpaste on macOS
 	content, err = exec.Command("pbpaste").Output()
 	if err == nil {
+		if len(content) > MaxClipboardSize {
+			content = content[:MaxClipboardSize]
+		}
 		log.Printf("[clipboard] Got content from pbpaste: %d bytes", len(content))
 		return string(content)
 	}
@@ -65,6 +88,9 @@ func (cm *ClipboardManager) GetClipboardContent() string {
 	// Try wl-paste on Wayland
 	content, err = exec.Command("wl-paste").Output()
 	if err == nil {
+		if len(content) > MaxClipboardSize {
+			content = content[:MaxClipboardSize]
+		}
 		log.Printf("[clipboard] Got content from wl-paste: %d bytes", len(content))
 		return string(content)
 	}
@@ -74,7 +100,13 @@ func (cm *ClipboardManager) GetClipboardContent() string {
 }
 
 // SetClipboardContent sets the system clipboard content
+// Content is limited to MaxClipboardSize bytes
 func (cm *ClipboardManager) SetClipboardContent(content string) error {
+	// Security: Limit content size to prevent memory exhaustion
+	if len(content) > MaxClipboardSize {
+		content = content[:MaxClipboardSize]
+	}
+
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 

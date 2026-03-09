@@ -2,9 +2,13 @@ package server
 
 import (
 	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
+	"io"
 )
 
 // BitwardenAuthConfig holds configuration for bitwarden authentication
@@ -16,6 +20,7 @@ type BitwardenAuthConfig struct {
 
 // DeriveKeyFromPassword derives a key from password and email using PBKDF2
 // This matches the client's key derivation
+// WARNING: This is a simplified implementation. For production, use proper PBKDF2.
 func DeriveKeyFromPassword(password, email string) (string, error) {
 	// Note: Go's crypto/subtle doesn't have built-in PBKDF2
 	// For server-side verification, we use a simpler approach:
@@ -28,49 +33,80 @@ func DeriveKeyFromPassword(password, email string) (string, error) {
 }
 
 // VerifyToken verifies that the token matches the expected derived key
+// Uses constant-time comparison to prevent timing attacks
 func (config *BitwardenAuthConfig) VerifyToken(token string) bool {
 	if config.SecretKey == "" {
-		// No secret configured, accept any non-empty token for development
-		return token != ""
+		// No secret configured, reject all tokens for security
+		return false
 	}
-	return token == config.SecretKey
+	// Security: Use constant-time comparison
+	return subtle.ConstantTimeCompare([]byte(config.SecretKey), []byte(token)) == 1
 }
 
-// EncryptData encrypts data using AES-256-CBC
+// EncryptData encrypts data using AES-256-GCM
 func EncryptData(plaintext, key string) (string, error) {
 	keyBytes := sha256.Sum256([]byte(key))
-	_, err := aes.NewCipher(keyBytes[:])
+
+	block, err := aes.NewCipher(keyBytes[:])
 	if err != nil {
 		return "", err
 	}
 
-	// Use plaintext to avoid unused warning
-	_ = plaintext
-
-	// Generate random IV
-	iv := make([]byte, aes.BlockSize)
-	for i := range iv {
-		iv[i] = byte(i)
+	// Use GCM mode for authenticated encryption
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
 	}
 
-	// For simplicity, we'll just return the key for now
-	// Full implementation would encrypt the data
-	return key, nil
+	// Generate random nonce (IV)
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", err
+	}
+
+	// Encrypt and seal
+	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// DecryptData decrypts data using AES-256-CBC
+// DecryptData decrypts data using AES-256-GCM
 func DecryptData(ciphertext, key string) (string, error) {
-	keyBytes := sha256.Sum256([]byte(key))
-	_, err := aes.NewCipher(keyBytes[:])
-	if err != nil {
-		return "", err
-	}
-
-	// For simplicity, return the key for now
-	// Full implementation would decrypt the data
-	_ = ciphertext
 	if ciphertext == "" {
 		return "", errors.New("empty ciphertext")
 	}
-	return key, nil
+
+	keyBytes := sha256.Sum256([]byte(key))
+
+	block, err := aes.NewCipher(keyBytes[:])
+	if err != nil {
+		return "", err
+	}
+
+	// Use GCM mode for authenticated decryption
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	// Decode base64
+	data, err := base64.StdEncoding.DecodeString(ciphertext)
+	if err != nil {
+		return "", err
+	}
+
+	// Extract nonce
+	nonceSize := gcm.NonceSize()
+	if len(data) < nonceSize {
+		return "", errors.New("ciphertext too short")
+	}
+
+	nonce, encryptedData := data[:nonceSize], data[nonceSize:]
+
+	// Decrypt and verify
+	plaintext, err := gcm.Open(nil, nonce, encryptedData, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return string(plaintext), nil
 }
