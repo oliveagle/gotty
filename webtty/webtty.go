@@ -211,6 +211,14 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 			return nil
 		}
 
+		// SECURITY: Limit single input size to prevent memory exhaustion
+		// Maximum single input: 64KB (larger inputs are chunked by client)
+		const maxInputSize = 64 * 1024
+		if len(data) > maxInputSize {
+			// Truncate to prevent memory issues
+			data = data[:maxInputSize]
+		}
+
 		// Capture input for summary context
 		if wt.summaryService != nil {
 			wt.summaryService.CaptureInput(data[1:])
@@ -246,14 +254,28 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 		if err != nil {
 			return errors.Wrapf(err, "received malformed data for terminal resize")
 		}
+
+		// SECURITY: Validate terminal dimensions to prevent overflow/DoS
+		const maxTerminalSize = 10000 // Reasonable maximum
 		rows := wt.rows
 		if rows == 0 {
 			rows = int(args.Rows)
 		}
-
 		columns := wt.columns
 		if columns == 0 {
 			columns = int(args.Columns)
+		}
+
+		// Clamp to reasonable bounds
+		if rows < 1 {
+			rows = 24 // Default
+		} else if rows > maxTerminalSize {
+			rows = maxTerminalSize
+		}
+		if columns < 1 {
+			columns = 80 // Default
+		} else if columns > maxTerminalSize {
+			columns = maxTerminalSize
 		}
 
 		wt.slave.ResizeTerminal(columns, rows)

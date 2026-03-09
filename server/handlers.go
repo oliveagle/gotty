@@ -880,11 +880,31 @@ func (server *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleBuildInfo returns build information (version, commit, build time)
+// SECURITY: Only returns major version, hides detailed commit and build time
+// to prevent attackers from targeting specific vulnerable versions
 func (server *Server) handleBuildInfo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	// Extract major version only (e.g., "1.0.0" from "1.0.0-dev+abc123")
+	majorVersion := BuildVersion
+	if idx := findVersionSeparator(majorVersion); idx > 0 {
+		majorVersion = majorVersion[:idx]
+	}
+
+	// Don't expose exact commit - could help attackers target specific vulnerabilities
+	// Don't expose exact build time - could help timing attacks
 	json.NewEncoder(w).Encode(map[string]string{
-		"version": BuildVersion,
-		"commit":  BuildCommit,
-		"buildAt": BuildTime,
+		"version": majorVersion,
+		// Omit commit and buildAt for security
 	})
+}
+
+// findVersionSeparator finds the first separator character in a version string
+func findVersionSeparator(v string) int {
+	for i, c := range v {
+		if c == '-' || c == '+' || c == '_' {
+			return i
+		}
+	}
+	return -1
 }

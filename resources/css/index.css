@@ -251,6 +251,29 @@ body.sidebar-auto-hide #sidebar-trigger {
    Sky Container - Weather & Time Visualization
    ============================================ */
 
+/* Dark overlay for text readability on sky background */
+.sidebar-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Stronger dark overlay for night sky readability */
+.sidebar-header.theme-night::before {
+    background: rgba(0, 0, 0, 0.65);
+}
+
+/* Moderate overlay for bright daytime skies */
+.sidebar-header.theme-noon::before {
+    background: rgba(0, 0, 0, 0.4);
+}
+
 .sky-container {
     position: absolute;
     top: 0;
@@ -529,13 +552,14 @@ body.sidebar-auto-hide #sidebar-trigger {
 
 .sidebar-header h3 {
     margin: 0;
-    color: #e0e0e0;
+    color: #ffffff;
     font-size: 14px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     position: relative;
     z-index: 10;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 1px rgba(0, 0, 0, 0.9);
 }
 
 .header-title {
@@ -546,7 +570,7 @@ body.sidebar-auto-hide #sidebar-trigger {
 }
 
 .header-host {
-    color: #888;
+    color: #e0e0e0;
     font-size: 11px;
     font-family: monospace;
     text-align: center;
@@ -554,6 +578,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     margin: 0;
     position: relative;
     z-index: 10;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 1px rgba(0, 0, 0, 0.9);
 }
 
 .header-buttons {
@@ -695,14 +720,19 @@ body.sidebar-auto-hide #sidebar-trigger {
 }
 
 .header-host-name {
-    color: #aaa;
+    color: #f0f0f0;
     font-size: 12px;
+    font-weight: 500;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 1px rgba(0, 0, 0, 0.9);
 }
 
 .header-host-time {
-    color: #888;
-    font-size: 16px;
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 600;
     margin-top: 2px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 1px rgba(0, 0, 0, 0.9);
+    letter-spacing: 0.5px;
 }
 
 .session-subtitle {

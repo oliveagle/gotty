@@ -395,6 +395,185 @@ io.ReadFull(rand.Reader, nonce)  // 随机 nonce
 ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
 ```
 
+### 2026-03-09 安全加固 (第五轮)
+
+| 漏洞 | 严重程度 | 修复方案 | 状态 |
+|------|----------|----------|------|
+| WebSocket Origin 验证缺失 | 严重 | 默认拒绝非同源请求，防止 CSWSH 攻击 | ✅ 已修复 |
+| 随机 URL 熵值不足 | 高 | 默认长度从 8 增加到 16，强制最小 16 | ✅ 已修复 |
+| 缺少速率限制 | 中 | 添加 IP 级别速率限制中间件 | ✅ 已修复 |
+
+#### 13. WebSocket Origin 验证 (严重)
+
+**文件**: `server/server.go`
+
+原代码在 `WSOrigin` 未配置时，允许所有 Origin，存在跨站 WebSocket 劫持风险：
+
+```go
+// 危险代码 - originChecker 为 nil 时默认允许所有 Origin
+var originChecker func(r *http.Request) bool
+if options.WSOrigin != "" {
+    originChecker = func(r *http.Request) bool {
+        return matcher.MatchString(r.Header.Get("Origin"))
+    }
+}
+// 当 WSOrigin 为空时，originChecker 为 nil，允许所有请求
+```
+
+修复后默认拒绝非同源请求：
+
+```go
+} else {
+    // SECURITY: Default to same-origin only when WSOrigin is not configured
+    originChecker = func(r *http.Request) bool {
+        origin := r.Header.Get("Origin")
+        if origin == "" {
+            return true // 允许无 Origin 请求（CLI 工具）
+        }
+        host := r.Host
+        // 允许同源请求
+        if strings.HasPrefix(origin, "http://"+host) || strings.HasPrefix(origin, "https://"+host) {
+            return true
+        }
+        // 允许 localhost 开发
+        if strings.HasPrefix(origin, "http://localhost") ||
+            strings.HasPrefix(origin, "https://localhost") {
+            return true
+        }
+        // 拒绝其他来源
+        log.Printf("[SECURITY] Rejected WebSocket connection from non-allowed origin: %s", origin)
+        return false
+    }
+}
+```
+
+#### 14. 随机 URL 熵值修复 (高)
+
+**文件**: `server/options.go`, `server/server.go`
+
+原代码默认 8 字符长度，可被暴力枚举：
+
+```
+36^8 = 2,821,109,907,456 (约 28 亿种组合)
+```
+
+修复后默认 16 字符，并强制最小值：
+
+```
+36^16 ≈ 7.96 × 10^24 种组合
+```
+
+```go
+// options.go - 增加默认值
+RandomUrlLength int `hcl:"random_url_length" flagName:"random-url-length"
+    flagDescribe:"Random URL length (minimum 16 for security)" default:"16"`
+
+// server.go - 强制最小值
+urlLength := server.options.RandomUrlLength
+if urlLength < 16 {
+    log.Printf("[SECURITY] Warning: RandomUrlLength %d is too short, using minimum 16", urlLength)
+    urlLength = 16
+}
+```
+
+#### 15. 速率限制中间件 (中)
+
+**文件**: `server/rate_limit.go`
+
+新增速率限制中间件，防止暴力攻击和 DoS：
+
+```go
+// 不同端点的速率限制
+- API 端点: 100 请求/分钟
+- 认证端点 (WebAuthn): 10 请求/分钟 (更严格)
+- WebSocket 连接: 10 连接/分钟
+- 静态资源: 无限制
+```
+
+特性：
+- 基于 IP 的速率限制
+- 支持 X-Forwarded-For 头（反向代理）
+- 自动清理过期条目
+- 超限返回 HTTP 429 错误
+
+### 2026-03-09 安全加固 (第六轮)
+
+| 漏洞 | 严重程度 | 修复方案 | 状态 |
+|------|----------|----------|------|
+| 构建信息泄露 | 低 | 仅返回主版本号，隐藏 commit 和 buildAt | ✅ 已修复 |
+| Session ID 熵值不足 | 中 | ID 长度从 8 增加到 16 | ✅ 已修复 |
+| Token URL 传递风险 | 中 | 添加安全警告日志，推荐使用 Header/Cookie | ✅ 已缓解 |
+
+#### 16. 构建信息脱敏 (低)
+
+**文件**: `server/handlers.go`
+
+原代码泄露完整的 commit hash 和构建时间：
+
+```go
+json.NewEncoder(w).Encode(map[string]string{
+    "version": BuildVersion,
+    "commit":  BuildCommit,  // 泄露具体版本
+    "buildAt": BuildTime,    // 泄露构建时间
+})
+```
+
+修复后仅返回主版本号：
+
+```go
+// Extract major version only
+majorVersion := BuildVersion
+if idx := findVersionSeparator(majorVersion); idx > 0 {
+    majorVersion = majorVersion[:idx]
+}
+json.NewEncoder(w).Encode(map[string]string{
+    "version": majorVersion,
+    // Omit commit and buildAt for security
+})
+```
+
+#### 17. Session ID 熵值增强 (中)
+
+**文件**: `server/session_manager.go`, `server/workspace_manager.go`
+
+原代码使用 8 字符 ID，可被暴力枚举：
+
+```
+36^8 = 2,821,109,907,456 (约 28 亿种组合)
+```
+
+修复后使用 16 字符 ID：
+
+```
+36^16 ≈ 7.96 × 10^24 种组合
+```
+
+影响范围：
+- `SessionManager.Create()` - Session 创建
+- `SessionManager.CreateChild()` - 子 Session 创建
+- `SessionManager.CreateFolder()` - 文件夹创建
+- `SessionManager.CreateWithID()` - 带 ID 创建
+- `WorkspaceManager.Create()` - Workspace 创建
+
+#### 18. Token URL 传递安全警告 (中)
+
+**文件**: `server/auth_middleware.go`
+
+添加安全警告日志，当检测到 Token 通过 URL 传递时记录：
+
+```go
+token := r.URL.Query().Get("token")
+if token != "" {
+    log.Printf("[SECURITY] Warning: Token passed via URL query parameter - may be logged. Path: %s", r.URL.Path)
+    return token
+}
+```
+
+同时调整 Token 提取优先级：
+1. **Authorization header** - 推荐
+2. **Cookie** - 推荐（HttpOnly）
+3. **Query parameter** - 不推荐（会记录在日志中）
+
 ---
 
 ## 剩余风险
@@ -412,6 +591,8 @@ Token 支持多种传递方式：
 
 ## 更新日志
 
+- 2026-03-09: 第六轮安全加固 - 构建信息脱敏、Session ID 熵值增强、Token URL 安全警告
+- 2026-03-09: 第五轮安全加固 - 修复 WebSocket Origin 验证、随机 URL 熵值、添加速率限制
 - 2026-03-09: 第四轮安全加固 - 修复剪贴板大小限制、加密实现、VerifyToken 时序攻击
 - 2026-03-09: 第三轮安全加固 - 修复 zellij 会话名称验证、参数验证
 - 2026-03-09: 第二轮安全加固 - 修复 IRC CSWSH、XSS、添加安全头

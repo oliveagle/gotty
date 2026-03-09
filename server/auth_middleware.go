@@ -74,8 +74,16 @@ func (m *AuthMiddleware) WrapWS(next http.HandlerFunc) http.HandlerFunc {
 
 // extractToken extracts auth token from request
 // Supports: Authorization header, query parameter, cookie
+//
+// SECURITY WARNING: Token passed via URL query parameter may be logged in:
+// - Server access logs (nginx, apache, etc.)
+// - Browser history
+// - Referer headers when navigating to external sites
+//
+// RECOMMENDED: Use Authorization header or HttpOnly Cookie for production.
+// Query parameter support is provided for compatibility only.
 func (m *AuthMiddleware) extractToken(r *http.Request) string {
-	// 1. Check Authorization header (Bearer token)
+	// 1. Check Authorization header (Bearer token) - RECOMMENDED
 	authHeader := r.Header.Get("Authorization")
 	if authHeader != "" {
 		if strings.HasPrefix(authHeader, "Bearer ") {
@@ -84,16 +92,18 @@ func (m *AuthMiddleware) extractToken(r *http.Request) string {
 		return authHeader
 	}
 
-	// 2. Check query parameter
-	token := r.URL.Query().Get("token")
-	if token != "" {
-		return token
-	}
-
-	// 3. Check cookie
+	// 2. Check cookie - RECOMMENDED (HttpOnly)
 	cookie, err := r.Cookie("gotty_auth_token")
 	if err == nil && cookie.Value != "" {
 		return cookie.Value
+	}
+
+	// 3. Check query parameter - NOT RECOMMENDED (logged in URLs)
+	// SECURITY: Log warning when token is passed via URL
+	token := r.URL.Query().Get("token")
+	if token != "" {
+		log.Printf("[SECURITY] Warning: Token passed via URL query parameter - may be logged. Path: %s", r.URL.Path)
+		return token
 	}
 
 	return ""

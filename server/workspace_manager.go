@@ -154,7 +154,8 @@ func (wm *WorkspaceManager) Create(name string, colorTheme string, icon string) 
 	wm.mu.Lock()
 	defer wm.mu.Unlock()
 
-	id := randomstring.Generate(8)
+	// SECURITY: Use 16 character ID for better entropy
+	id := randomstring.Generate(16)
 	order := wm.nextOrder
 	wm.nextOrder++
 

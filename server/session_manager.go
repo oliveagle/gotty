@@ -259,7 +259,9 @@ func (sm *SessionManager) Create(title string, slave Slave) *Session {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	id := randomstring.Generate(8)
+	// SECURITY: Use 16 character session ID for better entropy
+	// 36^16 ≈ 7.96 × 10^24 combinations
+	id := randomstring.Generate(16)
 	order := sm.nextOrder
 	sm.nextOrder++
 	now := time.Now()
@@ -283,7 +285,8 @@ func (sm *SessionManager) CreateChild(title string, parentID string, slave Slave
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	id := randomstring.Generate(8)
+	// SECURITY: Use 16 character session ID for better entropy
+	id := randomstring.Generate(16)
 	order := sm.nextOrder
 	sm.nextOrder++
 	now := time.Now()
@@ -308,7 +311,8 @@ func (sm *SessionManager) CreateFolder(title string, parentID string) *Session {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	id := randomstring.Generate(8)
+	// SECURITY: Use 16 character session ID for better entropy
+	id := randomstring.Generate(16)
 	order := sm.nextOrder
 	sm.nextOrder++
 
@@ -463,7 +467,8 @@ func (sm *SessionManager) CreateWithID(title string, params map[string][]string)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	id := randomstring.Generate(8)
+	// SECURITY: Use 16 character session ID for better entropy
+	id := randomstring.Generate(16)
 	order := sm.nextOrder
 	sm.nextOrder++
 	now := time.Now()

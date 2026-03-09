@@ -84,6 +84,33 @@ func New(factory Factory, options *Options) (*Server, error) {
 		originChekcer = func(r *http.Request) bool {
 			return matcher.MatchString(r.Header.Get("Origin"))
 		}
+	} else {
+		// SECURITY: Default to same-origin only when WSOrigin is not configured
+		// This prevents Cross-Site WebSocket Hijacking (CSWSH) attacks
+		originChekcer = func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			// Allow requests without Origin header (e.g., CLI tools, same-origin browsers)
+			if origin == "" {
+				return true
+			}
+			// Parse origin and check if it matches the request host
+			// Allow both http and https for localhost development
+			host := r.Host
+			// Same-origin check
+			if strings.HasPrefix(origin, "http://"+host) || strings.HasPrefix(origin, "https://"+host) {
+				return true
+			}
+			// Allow localhost for development (both http and https)
+			if strings.HasPrefix(origin, "http://localhost") ||
+				strings.HasPrefix(origin, "https://localhost") ||
+				strings.HasPrefix(origin, "http://127.0.0.1") ||
+				strings.HasPrefix(origin, "https://127.0.0.1") {
+				return true
+			}
+			// Reject all other origins
+			log.Printf("[SECURITY] Rejected WebSocket connection from non-allowed origin: %s", origin)
+			return false
+		}
 	}
 
 	sm := NewSessionManager()
@@ -234,7 +261,13 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 
 	path := "/"
 	if server.options.EnableRandomUrl {
-		path = "/" + randomstring.Generate(server.options.RandomUrlLength) + "/"
+		// SECURITY: Enforce minimum random URL length to prevent brute-force attacks
+		urlLength := server.options.RandomUrlLength
+		if urlLength < 16 {
+			log.Printf("[SECURITY] Warning: RandomUrlLength %d is too short, using minimum 16", urlLength)
+			urlLength = 16
+		}
+		path = "/" + randomstring.Generate(urlLength) + "/"
 	}
 
 	handlers := server.setupHandlers(cctx, cancel, path, counter)
@@ -419,6 +452,9 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 		log.Printf("Using WebAuthn/Passkeys Authentication")
 		// WebAuthn authentication is handled via API endpoints, no HTTP auth wrapper needed
 	}
+
+	// Apply rate limiting middleware for security
+	siteHandler = server.RateLimitMiddleware(siteHandler)
 
 	withGz := gziphandler.GzipHandler(server.wrapHeaders(siteHandler))
 	siteHandler = server.wrapLogger(withGz)
