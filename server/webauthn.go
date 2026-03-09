@@ -254,13 +254,7 @@ func (m *WebAuthnManager) BeginRegistration() (*protocol.CredentialCreation, *we
 	user := m.user
 	m.mu.RUnlock()
 
-	// Configure authenticator selection to support both platform and cross-platform authenticators
-	// Empty AuthenticatorAttachment allows both platform (Touch ID, Windows Hello) and cross-platform (KeePassXC, YubiKey)
-	return m.webauthn.BeginRegistration(user,
-		webauthn.WithAuthenticatorSelection(protocol.AuthenticatorSelection{
-			ResidentKey: protocol.ResidentKeyRequirementDiscouraged,
-		}),
-	)
+	return m.webauthn.BeginRegistration(user)
 }
 
 // FinishRegistration completes the WebAuthn registration process
