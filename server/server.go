@@ -362,8 +362,6 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 
 	siteMux.HandleFunc(pathPrefix+"auth_token.js", server.handleAuthToken)
 	siteMux.HandleFunc(pathPrefix+"config.js", server.handleConfig)
-	siteMux.Handle(pathPrefix+"settings.html", http.StripPrefix(pathPrefix, staticFileHandler))
-	siteMux.Handle(pathPrefix+"weather-preview.html", http.StripPrefix(pathPrefix, staticFileHandler))
 
 	// Create auth middleware
 	authMiddleware := NewAuthMiddleware(server)
