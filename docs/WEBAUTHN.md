@@ -66,6 +66,175 @@ ws://host/irc/ws?token=xxx
   --webauthn-session-ttl 168
 ```
 
+## HTTPS/TLS 要求
+
+### WebAuthn 必须使用 HTTPS
+
+WebAuthn 安全要求必须在 HTTPS 环境下运行，例外情况：
+
+| 访问方式 | WebAuthn 支持 |
+|----------|---------------|
+| `https://domain:port` | ✅ 支持 |
+| `https://localhost` | ✅ 支持 |
+| `http://localhost` | ✅ 支持（开发用） |
+| `http://192.168.x.x` | ❌ 不支持 |
+| `https://192.168.x.x` | ⚠️ 需要有效证书 |
+
+### 内网环境配置
+
+#### 方案 1：自定义域名 + 自签名 CA（推荐）
+
+1. **生成 CA 证书和服务器证书**：
+
+```bash
+# 创建 CA 配置
+cat > /tmp/ca.cnf << 'EOF'
+[req]
+default_bits = 4096
+prompt = no
+distinguished_name = dn
+x509_extensions = v3_ca
+
+[dn]
+CN = myhome.local CA
+
+[v3_ca]
+basicConstraints = critical, CA:TRUE
+keyUsage = critical, keyCertSign, cRLSign
+EOF
+
+# 生成 CA 密钥和证书
+openssl genrsa -out ca.key 4096
+openssl req -x509 -new -nodes -key ca.key -sha256 -days 3650 -out ca.crt -config /tmp/ca.cnf -extensions v3_ca
+
+# 创建服务器证书配置（通配符域名）
+cat > /tmp/server.cnf << 'EOF'
+[req]
+default_bits = 2048
+prompt = no
+distinguished_name = dn
+req_extensions = req_ext
+
+[dn]
+CN = *.myhome.local
+
+[req_ext]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = *.myhome.local
+DNS.2 = myhome.local
+DNS.3 = localhost
+IP.1 = 192.168.1.100
+EOF
+
+# 生成服务器密钥和 CSR
+openssl genrsa -out server.key 2048
+openssl req -new -key server.key -out server.csr -config /tmp/server.cnf
+
+# 用 CA 签名
+cat > /tmp/server_ext.cnf << 'EOF'
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = *.myhome.local
+DNS.2 = myhome.local
+DNS.3 = localhost
+IP.1 = 192.168.1.100
+EOF
+
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 365 -sha256 -extfile /tmp/server_ext.cnf
+```
+
+2. **配置 gotty**：
+
+```jsonc
+// ~/.config/gotty/config.jsonc
+{
+  "enable_auth": true,
+  "host_name": "myserver.myhome.local",
+  "enable_tls": true,
+  "tls_crt_file": "/path/to/server.crt",
+  "tls_key_file": "/path/to/server.key"
+}
+```
+
+3. **客户端配置**：
+
+```bash
+# macOS - 导入 CA 证书到系统信任库
+sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ca.crt
+
+# Windows (管理员 PowerShell)
+certutil -addstore "Root" ca.crt
+
+# Linux (Debian/Ubuntu)
+sudo cp ca.crt /usr/local/share/ca-certificates/
+sudo update-ca-certificates
+```
+
+4. **客户端 hosts 文件**：
+
+```bash
+# /etc/hosts (macOS/Linux)
+# C:\Windows\System32\drivers\etc\hosts (Windows)
+192.168.1.100 myserver.myhome.local
+```
+
+5. **访问**：`https://myserver.myhome.local:13782/`
+
+#### 方案 2：仅本地访问
+
+如果只需在本机访问，使用 `localhost` 即可：
+
+```bash
+./gotty -A
+# 访问 http://localhost:13782/
+```
+
+### 域名配置选项
+
+| 选项 | 说明 |
+|------|------|
+| `--host-name` | 自定义域名，用于 WebAuthn RP ID |
+| `--tls` / `-t` | 启用 TLS |
+| `--tls-crt` | TLS 证书文件路径 |
+| `--tls-key` | TLS 私钥文件路径 |
+
+```bash
+# 使用自定义域名
+./gotty -A -t --tls-crt ~/.config/gotty/certs/server.crt --tls-key ~/.config/gotty/certs/server.key --host-name myserver.myhome.local
+```
+
+### 常见问题
+
+#### 证书错误 "This is an invalid domain"
+
+**原因**：自签名证书未导入客户端信任库
+
+**解决**：导入 CA 证书到客户端系统信任库
+
+#### WebAuthn is not supported on sites with TLS certificate errors
+
+**原因**：浏览器不信任证书
+
+**解决**：
+1. 确保已导入 CA 证书
+2. 完全退出浏览器（Cmd+Q）后重新打开
+3. 检查浏览器地址栏是否显示安全锁图标
+
+#### Failed to complete registration: Error validating origin
+
+**原因**：访问的 URL 与配置的 `host_name` 不匹配
+
+**解决**：
+1. 确保使用域名访问，不是 IP 地址
+2. 确保客户端 hosts 文件配置正确
+3. 检查 gotty 配置中的 `host_name` 是否正确
+
 ## 默认行为
 
 | 模式 | 写入权限 | 说明 |
