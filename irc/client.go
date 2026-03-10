@@ -5,25 +5,36 @@ import (
 	"time"
 )
 
-// Client 表示一个 IRC 客户端连接
+// Client represents an IRC client connection
 type Client struct {
-	ID        string
-	Nick      string
-	User      string
-	RealName  string
-	Connected time.Time
-	Channels  map[string]bool
-	mu        sync.RWMutex
+	ID          string            // Unique client ID
+	Nick        string            // Nickname
+	User        string            // Username
+	RealName    string            // Real name
+	WorkspaceID string            // Workspace this client belongs to
+	Connected   time.Time         // Connection time
+	Channels    map[string]bool   // Set of channel keys (workspace-scoped)
+	mu          sync.RWMutex
 }
 
-// NewClient 创建一个新的客户端
+// NewClient creates a new client
 func NewClient(id, nick string) *Client {
 	return &Client{
-		ID:        id,
-		Nick:      nick,
-		Connected: time.Now(),
-		Channels:  make(map[string]bool),
+		ID:          id,
+		Nick:        nick,
+		WorkspaceID: "default",
+		Connected:   time.Now(),
+		Channels:    make(map[string]bool),
 	}
+}
+
+// NewClientWithWorkspace creates a new client with workspace context
+func NewClientWithWorkspace(id, nick, workspaceID string) *Client {
+	c := NewClient(id, nick)
+	if workspaceID != "" {
+		c.WorkspaceID = workspaceID
+	}
+	return c
 }
 
 // SetNick 设置客户端昵称

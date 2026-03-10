@@ -12,15 +12,16 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// IRCSession 表示一个 IRC WebSocket 会话
+// IRCSession represents an IRC WebSocket session
 type IRCSession struct {
-	conn      *websocket.Conn
-	client    *Client
-	server    *Server
-	handler   *IRCHandler
-	sendChan  chan *WSMessage
-	mu        sync.Mutex
-	closed    bool
+	conn        *websocket.Conn
+	client      *Client
+	server      *Server
+	handler     *IRCHandler
+	workspaceID string            // Workspace ID for this session
+	sendChan    chan *WSMessage
+	mu          sync.Mutex
+	closed      bool
 }
 
 // IRCHandler 处理 IRC WebSocket 连接
@@ -79,7 +80,7 @@ func (h *IRCHandler) SetAllowedOrigins(origins []string) {
 	h.allowOrigins = origins
 }
 
-// HandleWS 处理 WebSocket 连接
+// HandleWS handles WebSocket connections with workspace context
 func (h *IRCHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -87,28 +88,35 @@ func (h *IRCHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 创建新会话
-	session := &IRCSession{
-		conn:     conn,
-		server:   h.server,
-		handler:  h,
-		sendChan: make(chan *WSMessage, 256),
+	// Extract workspace_id from query params
+	workspaceID := r.URL.Query().Get("workspace_id")
+	if workspaceID == "" {
+		workspaceID = "default"
 	}
 
-	// 创建客户端 - 先用临时昵称，等待客户端发送 nick
+	// Create new session
+	session := &IRCSession{
+		conn:        conn,
+		server:      h.server,
+		handler:     h,
+		workspaceID: workspaceID,
+		sendChan:    make(chan *WSMessage, 256),
+	}
+
+	// Create client with workspace context - use temporary nick, wait for client to send nick
 	tempNick := h.server.GenerateNick()
-	session.client = NewClient(fmt.Sprintf("%p", conn), tempNick)
+	session.client = NewClientWithWorkspace(fmt.Sprintf("%p", conn), tempNick, workspaceID)
 	h.server.AddClient(session.client)
 
-	// 注册会话
+	// Register session
 	h.mu.Lock()
 	h.sessions[session] = true
 	h.mu.Unlock()
 
-	// 发送欢迎消息
-	session.Send(NewSysMessage(fmt.Sprintf("Welcome to %s!", h.server.networkName)))
+	// Send welcome message
+	session.Send(NewSysMessage(fmt.Sprintf("Welcome to %s! (Workspace: %s)", h.server.networkName, workspaceID)))
 
-	// 启动读写 goroutine (先不加入频道，等待 nick 设置)
+	// Start read/write goroutines (don't join channel yet, wait for nick)
 	go session.readLoop()
 	go session.writeLoop()
 }
@@ -122,13 +130,15 @@ func (h *IRCHandler) RemoveSession(session *IRCSession) {
 	h.server.RemoveClient(session.client)
 }
 
-// BroadcastToChannel 向频道中的所有用户发送消息
-func (h *IRCHandler) BroadcastToChannel(channelName string, msg *WSMessage, exclude *IRCSession) {
+// BroadcastToChannel broadcasts a message to all users in a workspace-scoped channel
+func (h *IRCHandler) BroadcastToChannel(workspaceID, channelName string, msg *WSMessage, exclude *IRCSession) {
+	channelKey := ChannelKey(workspaceID, channelName)
+
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
 	for session := range h.sessions {
-		if session.client.IsInChannel(channelName) {
+		if session.client.IsInChannel(channelKey) {
 			if exclude != nil && session == exclude {
 				continue
 			}
@@ -218,7 +228,7 @@ func (s *IRCSession) writeLoop() {
 	}
 }
 
-// Close 关闭会话
+// Close closes the session
 func (s *IRCSession) Close() {
 	s.mu.Lock()
 	if s.closed {
@@ -228,17 +238,18 @@ func (s *IRCSession) Close() {
 	s.closed = true
 	s.mu.Unlock()
 
-	// 通知频道中的其他用户
-	for channel := range s.client.Channels {
-		ch := s.server.GetChannel(channel)
+	// Notify other users in channels
+	for channelKey := range s.client.Channels {
+		workspaceID, channelName := ParseChannelKey(channelKey)
+		ch := s.server.GetChannel(workspaceID, channelName)
 		if ch != nil {
 			ch.RemoveUser(s.client)
-			partMsg := NewIRCOutMessage("PART", s.client.GetNick(), []string{channel}, fmt.Sprintf("%s left the channel", s.client.GetNick()))
-			s.handler.BroadcastToChannel(channel, partMsg, nil)
+			partMsg := NewIRCOutMessage("PART", s.client.GetNick(), []string{channelName}, fmt.Sprintf("%s left the channel", s.client.GetNick()))
+			s.handler.BroadcastToChannel(workspaceID, channelName, partMsg, nil)
 		}
 	}
 
-	// 从处理器移除
+	// Remove from handler
 	s.handler.RemoveSession(s)
 }
 
@@ -309,15 +320,15 @@ func (s *IRCSession) handleIRCIn(data string) {
 	}
 }
 
-// handleNick 处理昵称更改
+// handleNick handles nickname changes
 func (s *IRCSession) handleNick(newNick string) {
 	if !s.server.ValidateNick(newNick) {
 		s.Send(NewSysMessage("Invalid nickname. Use letters, numbers, underscore, and hyphen."))
 		return
 	}
 
-	// 检查昵称是否已被使用
-	if s.server.GetClientByNick(newNick) != nil && s.client.GetNick() != newNick {
+	// Check if nickname is already in use within the same workspace
+	if s.server.GetClientByNick(newNick, s.workspaceID) != nil && s.client.GetNick() != newNick {
 		s.Send(NewSysMessage("Nickname already in use"))
 		return
 	}
@@ -326,54 +337,56 @@ func (s *IRCSession) handleNick(newNick string) {
 	s.client.SetNick(newNick)
 	s.Send(NewSysMessage(fmt.Sprintf("Your nickname is %s", newNick)))
 
-	// 如果是第一次设置昵称（从 guest_ 改为真实昵称），自动加入默认频道
+	// If this is the first nick change (from guest_ to real nick), auto-join default channel
 	if strings.HasPrefix(oldNick, "guest_") && len(s.client.Channels) == 0 {
 		s.Send(NewSysMessage(fmt.Sprintf("Joining default channel %s", s.server.config.DefaultChannel)))
 		s.handleJoin(s.server.config.DefaultChannel)
-		return // 不需要广播昵称更改
+		return // No need to broadcast nick change
 	}
 
-	// 通知频道中的其他用户
-	for channel := range s.client.Channels {
+	// Notify other users in channels
+	for channelKey := range s.client.Channels {
+		workspaceID, channelName := ParseChannelKey(channelKey)
 		joinMsg := NewIRCOutMessage("NICK", oldNick, []string{newNick}, fmt.Sprintf("%s is now known as %s", oldNick, newNick))
-		s.handler.BroadcastToChannel(channel, joinMsg, nil)
+		s.handler.BroadcastToChannel(workspaceID, channelName, joinMsg, nil)
 	}
 }
 
-// handleJoin 处理加入频道
+// handleJoin handles joining a channel
 func (s *IRCSession) handleJoin(channel string) {
-	// 验证频道名称
+	// Validate channel name
 	if !strings.HasPrefix(channel, "#") {
 		channel = "#" + channel
 	}
 
-	ch := s.server.GetOrCreateChannel(channel)
+	// Get or create workspace-scoped channel
+	ch := s.server.GetOrCreateChannel(s.workspaceID, channel)
 	ch.AddUser(s.client)
 
-	// 发送加入确认
+	// Send join confirmation
 	s.Send(NewSysMessage(fmt.Sprintf("Joined channel %s", channel)))
 	if topic := ch.GetTopic(); topic != "" {
 		s.Send(NewSysMessage(fmt.Sprintf("Topic: %s", topic)))
 	}
 
-	// 通知频道中的其他用户
+	// Notify other users in the channel
 	nick := s.client.GetNick()
 	joinMsg := NewIRCOutMessage("JOIN", nick, []string{channel}, fmt.Sprintf("%s joined the channel", nick))
-	s.handler.BroadcastToChannel(channel, joinMsg, s)
+	s.handler.BroadcastToChannel(s.workspaceID, channel, joinMsg, s)
 
-	// 发送频道中的用户列表
-	users := s.server.GetNickList(channel)
+	// Send user list in the channel
+	users := s.server.GetNickList(s.workspaceID, channel)
 	s.Send(NewSysMessage(fmt.Sprintf("Users in %s: %s", channel, strings.Join(users, ", "))))
 
-	// 发送历史消息
+	// Send message history
 	for _, msg := range ch.GetMessages() {
 		s.Send(NewIRCOutMessage(msg.Command, msg.Prefix, msg.Params, msg.Data))
 	}
 }
 
-// handlePart 处理离开频道
+// handlePart handles leaving a channel
 func (s *IRCSession) handlePart(channel string) {
-	ch := s.server.GetChannel(channel)
+	ch := s.server.GetChannel(s.workspaceID, channel)
 	if ch == nil {
 		s.Send(NewSysMessage("Not in channel " + channel))
 		return
@@ -381,19 +394,19 @@ func (s *IRCSession) handlePart(channel string) {
 
 	ch.RemoveUser(s.client)
 
-	// 发送离开确认
+	// Send part confirmation
 	s.Send(NewSysMessage(fmt.Sprintf("Left channel %s", channel)))
 
-	// 通知频道中的其他用户
+	// Notify other users in the channel
 	partMsg := NewIRCOutMessage("PART", s.client.GetNick(), []string{channel}, fmt.Sprintf("%s left the channel", s.client.GetNick()))
-	s.handler.BroadcastToChannel(channel, partMsg, nil)
+	s.handler.BroadcastToChannel(s.workspaceID, channel, partMsg, nil)
 }
 
-// handlePrivmsg 处理私信/频道消息
+// handlePrivmsg handles private messages and channel messages
 func (s *IRCSession) handlePrivmsg(target, message string) {
 	if strings.HasPrefix(target, "#") {
-		// 频道消息
-		ch := s.server.GetChannel(target)
+		// Channel message
+		ch := s.server.GetChannel(s.workspaceID, target)
 		if ch == nil {
 			s.Send(NewSysMessage("Not in channel " + target))
 			return
@@ -402,7 +415,7 @@ func (s *IRCSession) handlePrivmsg(target, message string) {
 		nick := s.client.GetNick()
 		msg := NewIRCOutMessage("PRIVMSG", nick, []string{target}, message)
 
-		// 添加到历史记录
+		// Add to history
 		ch.AddMessage(Message{
 			Prefix:    nick,
 			Command:   "PRIVMSG",
@@ -411,23 +424,28 @@ func (s *IRCSession) handlePrivmsg(target, message string) {
 			Timestamp: time.Now(),
 		}, s.server.historyLimit)
 
-		s.handler.BroadcastToChannel(target, msg, nil)
+		// Save to disk (async)
+		if s.server.dataDir != "" {
+			go ch.SaveMessages(s.server.dataDir)
+		}
+
+		s.handler.BroadcastToChannel(s.workspaceID, target, msg, nil)
 	} else {
-		// 私聊消息
-		targetClient := s.server.GetClientByNick(target)
+		// Private message
+		targetClient := s.server.GetClientByNick(target, s.workspaceID)
 		if targetClient == nil {
 			s.Send(NewSysMessage("User not found: " + target))
 			return
 		}
 
 		s.Send(NewSysMessage(fmt.Sprintf("Message to %s: %s", target, message)))
-		// TODO: 发送私聊消息到目标用户
+		// TODO: Send private message to target user
 	}
 }
 
-// handleTopic 处理频道主题
+// handleTopic handles channel topic changes
 func (s *IRCSession) handleTopic(channel, topic string) {
-	ch := s.server.GetChannel(channel)
+	ch := s.server.GetChannel(s.workspaceID, channel)
 	if ch == nil {
 		s.Send(NewSysMessage("Not in channel " + channel))
 		return
@@ -436,14 +454,14 @@ func (s *IRCSession) handleTopic(channel, topic string) {
 	ch.SetTopic(topic)
 	s.Send(NewSysMessage(fmt.Sprintf("Topic set to: %s", topic)))
 
-	// 通知频道中的其他用户
+	// Notify other users in the channel
 	topicMsg := NewIRCOutMessage("TOPIC", s.client.GetNick(), []string{channel}, topic)
-	s.handler.BroadcastToChannel(channel, topicMsg, nil)
+	s.handler.BroadcastToChannel(s.workspaceID, channel, topicMsg, nil)
 }
 
-// handleList 处理频道列表
+// handleList handles channel list request
 func (s *IRCSession) handleList() {
-	channels := s.server.GetChannels()
+	channels := s.server.GetChannelsByWorkspace(s.workspaceID)
 	var list []string
 	for _, ch := range channels {
 		users := len(ch.GetUsers())
@@ -452,9 +470,9 @@ func (s *IRCSession) handleList() {
 	s.Send(NewSysMessage("Channel list: " + strings.Join(list, ", ")))
 }
 
-// handleWhois 处理 WHOIS 查询
+// handleWhois handles WHOIS query
 func (s *IRCSession) handleWhois(nick string) {
-	client := s.server.GetClientByNick(nick)
+	client := s.server.GetClientByNick(nick, s.workspaceID)
 	if client == nil {
 		s.Send(NewSysMessage("User not found: " + nick))
 		return

@@ -3,6 +3,7 @@ import { Xterm } from "./xterm";
 import { Terminal, WebTTY, protocols } from "./webtty";
 import { ConnectionFactory } from "./websocket";
 import { WebAuthnAuth, isWebAuthnAuthRequired, initWebAuthnAuth } from "./webauthn-auth";
+import { AGUIClient } from "./agui";
 
 // Export classes to global scope for use in inline scripts
 (window as any).Hterm = Hterm;
@@ -12,6 +13,7 @@ import { WebAuthnAuth, isWebAuthnAuthRequired, initWebAuthnAuth } from "./webaut
 (window as any).protocols = protocols;
 (window as any).WebAuthnAuth = WebAuthnAuth;
 (window as any).isWebAuthnAuthRequired = isWebAuthnAuthRequired;
+(window as any).AGUIClient = AGUIClient;
 
 // Global variables from server
 declare var gotty_auth_token: string;

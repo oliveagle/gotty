@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 
@@ -907,4 +908,195 @@ func findVersionSeparator(v string) int {
 		}
 	}
 	return -1
+}
+
+// handlePreviewFile handles file preview requests
+func (server *Server) handlePreviewFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	filePath := r.URL.Query().Get("path")
+	if filePath == "" {
+		http.Error(w, "Missing path parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Security: Prevent path traversal attacks
+	cleanPath := filePath
+
+	// Check if path contains traversal patterns
+	if strings.Contains(filePath, "..") || strings.Contains(filePath, "~") {
+		// If contains ~ or .., resolve it
+		if strings.HasPrefix(filePath, "~/") {
+			// Replace ~ with home directory
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				http.Error(w, "Cannot determine home directory", http.StatusInternalServerError)
+				return
+			}
+			cleanPath = filepath.Join(homeDir, filePath[2:])
+		} else {
+			// Resolve relative path components
+			cleanPath = filepath.Clean(filePath)
+		}
+	} else if !filepath.IsAbs(cleanPath) {
+		// For relative paths, first try current working directory
+		// This allows paths like "examples/sample.txt" relative to gotty binary location
+		cwd, err := os.Getwd()
+		if err == nil {
+			cleanPath = filepath.Join(cwd, filePath)
+		} else {
+			// Fallback to home directory if can't get cwd
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				http.Error(w, "Cannot determine home directory", http.StatusInternalServerError)
+				return
+			}
+			cleanPath = filepath.Join(homeDir, filePath)
+		}
+	}
+
+	// Resolve any relative components
+	cleanPath = filepath.Clean(cleanPath)
+
+	// Security check: Ensure the path doesn't try to escape allowed directories
+	// Allow: home directory, current working directory, and /tmp
+	homeDir, _ := os.UserHomeDir()
+	cwd, _ := os.Getwd()
+	isInHome := strings.HasPrefix(cleanPath, homeDir)
+	isInTmp := strings.HasPrefix(cleanPath, "/tmp")
+	isInCwd := cwd != "" && strings.HasPrefix(cleanPath, cwd)
+
+	if !isInHome && !isInTmp && !isInCwd {
+		http.Error(w, "Access denied: path outside allowed directories", http.StatusForbidden)
+		return
+	}
+
+	// Check if file exists
+	fileInfo, err := os.Stat(cleanPath)
+	if os.IsNotExist(err) {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error accessing file: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Check if it's a regular file
+	if fileInfo.IsDir() {
+		http.Error(w, "Cannot preview directories", http.StatusBadRequest)
+		return
+	}
+
+	// Check file size (limit to 1MB for preview)
+	const maxPreviewSize = 1 * 1024 * 1024 // 1MB
+	if fileInfo.Size() > maxPreviewSize {
+		http.Error(w, "File too large for preview (max 1MB)", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	// Read file content
+	content, err := os.ReadFile(cleanPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error reading file: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Check if file is binary
+	if isBinary(content) {
+		http.Error(w, "Cannot preview binary files", http.StatusBadRequest)
+		return
+	}
+
+	// Return JSON response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"path":    cleanPath,
+		"content": string(content),
+		"size":    fmt.Sprintf("%d bytes", fileInfo.Size()),
+	})
+}
+
+// isBinary checks if content appears to be binary
+func isBinary(content []byte) bool {
+	if len(content) == 0 {
+		return false
+	}
+	// Check first 1024 bytes for null bytes (common indicator of binary)
+	checkLen := 1024
+	if len(content) < checkLen {
+		checkLen = len(content)
+	}
+	for i := 0; i < checkLen; i++ {
+		if content[i] == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// handleRightPanelDebug handles debug info from right panel
+func (server *Server) handleRightPanelDebug(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var debugInfo map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&debugInfo); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to decode debug info: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Log debug info to server console
+	log.Printf("[RightPanel Debug] Received debug info:")
+	log.Printf("  Timestamp: %v", debugInfo["timestamp"])
+	log.Printf("  Panel Visible: %v", debugInfo["panelVisible"])
+	log.Printf("  Active Tab: %v", debugInfo["activeTab"])
+	log.Printf("  Panel Width: %v", debugInfo["panelWidth"])
+	log.Printf("  File Path: %v", debugInfo["filePath"])
+	log.Printf("  HTTP URL: %v", debugInfo["httpUrl"])
+	log.Printf("  File Content HTML (first 500): %v", debugInfo["fileContentHtml"])
+	log.Printf("  HTTP Content Has Iframe: %v", debugInfo["httpContentHasIframe"])
+	log.Printf("  Iframe Src: %v", debugInfo["iframeSrc"])
+
+	// Also save to a debug log file
+	debugFile := "/tmp/right-panel-debug.log"
+	f, err := os.OpenFile(debugFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err == nil {
+		defer f.Close()
+		jsonBytes, _ := json.MarshalIndent(debugInfo, "", "  ")
+		f.WriteString(fmt.Sprintf("[%s] %s\n", debugInfo["timestamp"], string(jsonBytes)))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// handleRightPanelDom handles DOM manipulation requests for right panel
+func (server *Server) handleRightPanelDom(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var operation map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&operation); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to decode operation: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Log the operation to server console
+	log.Printf("[RightPanel DOM Op] Received operation: %v", operation)
+
+	// For now, we just acknowledge the operation
+	// The actual DOM manipulation happens on the client side
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":    "ok",
+		"operation": operation["type"],
+	})
 }

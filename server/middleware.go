@@ -132,11 +132,12 @@ func (server *Server) wrapHeaders(handler http.Handler) http.Handler {
 		// Content-Security-Policy - relaxed for xterm.js and inline styles
 		// Note: 'unsafe-inline' for style is needed for xterm.js dynamic styling
 		csp := "default-src 'self'; " +
-			"script-src 'self' 'unsafe-inline'; " +
+			"script-src 'self' 'unsafe-inline' https://html2canvas.hertzen.com; " +
 			"style-src 'self' 'unsafe-inline'; " +
-			"img-src 'self' data:; " +
+			"img-src 'self' data: blob:; " +
 			"font-src 'self' data:; " +
 			"connect-src 'self' ws: wss:; " +
+			"frame-src * data: blob:; " +
 			"frame-ancestors 'self'; " +
 			"form-action 'self'; " +
 			"base-uri 'self'"

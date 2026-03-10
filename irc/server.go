@@ -12,6 +12,7 @@ type Server struct {
 	config       *Config
 	name         string
 	networkName  string
+	dataDir      string            // Directory for message persistence
 	clients      map[string]*Client
 	channels     map[string]*Channel
 	clientMutex  sync.RWMutex
@@ -25,6 +26,7 @@ func NewServer(config *Config) *Server {
 		config:       config,
 		name:         config.ServerName,
 		networkName:  config.NetworkName,
+		dataDir:      config.DataDir,
 		clients:      make(map[string]*Client),
 		channels:     make(map[string]*Channel),
 		historyLimit: config.HistoryLimit,
@@ -54,14 +56,16 @@ func (s *Server) AddClient(client *Client) {
 	s.clients[client.ID] = client
 }
 
-// RemoveClient 从服务器移除客户端
+// RemoveClient removes a client from the server
 func (s *Server) RemoveClient(client *Client) {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
 
-	// 离开所有频道
-	for channel := range client.Channels {
-		s.GetOrCreateChannel(channel).RemoveUser(client)
+	// Leave all channels (channels are stored with workspace-scoped keys)
+	for channelKey := range client.Channels {
+		if ch := s.getChannelByKey(channelKey); ch != nil {
+			ch.RemoveUser(client)
+		}
 	}
 
 	delete(s.clients, client.ID)
@@ -74,59 +78,92 @@ func (s *Server) GetClient(id string) *Client {
 	return s.clients[id]
 }
 
-// GetClientByNick 通过昵称获取客户端
-func (s *Server) GetClientByNick(nick string) *Client {
+// GetClientByNick gets a client by nickname within a workspace
+// If workspaceID is empty, searches globally (for backward compatibility)
+func (s *Server) GetClientByNick(nick string, workspaceID string) *Client {
 	s.clientMutex.RLock()
 	defer s.clientMutex.RUnlock()
 	for _, client := range s.clients {
 		if client.GetNick() == nick {
+			// If workspaceID specified, check workspace match
+			if workspaceID != "" && client.WorkspaceID != workspaceID {
+				continue
+			}
 			return client
 		}
 	}
 	return nil
 }
 
-// GetOrCreateChannel 获取或创建频道
-func (s *Server) GetOrCreateChannel(name string) *Channel {
+// GetClientByNickGlobal gets a client by nickname globally (legacy method)
+func (s *Server) GetClientByNickGlobal(nick string) *Client {
+	return s.GetClientByNick(nick, "")
+}
+
+// getChannelByKey gets a channel by its internal key (workspace-scoped)
+func (s *Server) getChannelByKey(key string) *Channel {
+	s.channelMutex.RLock()
+	defer s.channelMutex.RUnlock()
+	return s.channels[key]
+}
+
+// GetOrCreateChannel gets or creates a workspace-scoped channel
+func (s *Server) GetOrCreateChannel(workspaceID, channelName string) *Channel {
+	key := ChannelKey(workspaceID, channelName)
+
 	s.channelMutex.Lock()
 	defer s.channelMutex.Unlock()
 
-	if ch, ok := s.channels[name]; ok {
+	if ch, ok := s.channels[key]; ok {
 		return ch
 	}
 
-	ch := NewChannel(name)
-	s.channels[name] = ch
+	ch := NewChannelWithWorkspace(channelName, workspaceID)
+
+	// Load message history if dataDir is set
+	if s.dataDir != "" {
+		ch.LoadMessages(s.dataDir, s.historyLimit)
+	}
+
+	s.channels[key] = ch
 	return ch
 }
 
-// GetChannel 获取频道
-func (s *Server) GetChannel(name string) *Channel {
-	s.channelMutex.RLock()
-	defer s.channelMutex.RUnlock()
-	return s.channels[name]
+// GetChannel gets a workspace-scoped channel
+func (s *Server) GetChannel(workspaceID, channelName string) *Channel {
+	key := ChannelKey(workspaceID, channelName)
+	return s.getChannelByKey(key)
 }
 
-// GetChannels 获取所有频道
-func (s *Server) GetChannels() []*Channel {
+// GetChannelsByWorkspace gets all channels for a workspace
+func (s *Server) GetChannelsByWorkspace(workspaceID string) []*Channel {
 	s.channelMutex.RLock()
 	defer s.channelMutex.RUnlock()
 
-	channels := make([]*Channel, 0, len(s.channels))
-	for _, ch := range s.channels {
-		channels = append(channels, ch)
+	var channels []*Channel
+	for key, ch := range s.channels {
+		wsID, _ := ParseChannelKey(key)
+		if wsID == workspaceID || (workspaceID == "default" && wsID == "") {
+			channels = append(channels, ch)
+		}
 	}
 	return channels
 }
 
-// RemoveChannel 删除频道
-func (s *Server) RemoveChannel(name string) {
-	s.channelMutex.Lock()
-	defer s.channelMutex.Unlock()
-	delete(s.channels, name)
+// GetChannels gets all channels (for backward compatibility, returns default workspace channels)
+func (s *Server) GetChannels() []*Channel {
+	return s.GetChannelsByWorkspace("default")
 }
 
-// Broadcast 向所有客户端广播消息
+// RemoveChannel removes a workspace-scoped channel
+func (s *Server) RemoveChannel(workspaceID, channelName string) {
+	key := ChannelKey(workspaceID, channelName)
+	s.channelMutex.Lock()
+	defer s.channelMutex.Unlock()
+	delete(s.channels, key)
+}
+
+// Broadcast broadcasts a message to all clients
 func (s *Server) Broadcast(msg Message) {
 	s.clientMutex.RLock()
 	defer s.clientMutex.RUnlock()
@@ -137,26 +174,31 @@ func (s *Server) Broadcast(msg Message) {
 	}
 }
 
-// BroadcastToChannel 向频道广播消息
-func (s *Server) BroadcastToChannel(channelName string, msg Message) {
-	ch := s.GetChannel(channelName)
+// BroadcastToChannel broadcasts a message to a workspace-scoped channel
+func (s *Server) BroadcastToChannel(workspaceID, channelName string, msg Message) {
+	ch := s.GetChannel(workspaceID, channelName)
 	if ch == nil {
 		return
 	}
 
-	// 添加消息到频道历史
+	// Add message to channel history
 	ch.AddMessage(msg, s.historyLimit)
 
-	// 发送给频道中的所有用户
+	// Save message to disk (async)
+	if s.dataDir != "" {
+		go ch.SaveMessages(s.dataDir)
+	}
+
+	// Send to all users in the channel
 	for _, user := range ch.GetUsers() {
 		// TODO: 发送消息到用户
 		_ = user
 	}
 }
 
-// GetNickList 获取频道中的用户列表
-func (s *Server) GetNickList(channelName string) []string {
-	ch := s.GetChannel(channelName)
+// GetNickList gets the list of nicknames in a workspace-scoped channel
+func (s *Server) GetNickList(workspaceID, channelName string) []string {
+	ch := s.GetChannel(workspaceID, channelName)
 	if ch == nil {
 		return nil
 	}

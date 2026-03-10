@@ -72,3 +72,46 @@ private copyToClipboardFallback(text: string): boolean {
     return success;
 }
 ```
+
+## 页面交互规范
+
+**所有页面（除了验证页面）必须使用相同的标准和交互逻辑。**
+
+### 页面类型
+
+| 页面 | 说明 | 显示方式 |
+|------|------|----------|
+| Landing Page | 登录后默认显示，展示欢迎信息和快捷操作 | 右侧区域覆盖显示 |
+| Settings Page | 用户设置页面 | 右侧区域覆盖显示 |
+| Terminal | 终端会话页面 | 右侧区域显示 |
+| IRC Chat | IRC 聊天室 | 右侧区域覆盖显示 |
+
+### 交互规则
+
+1. **页面切换**: 点击任意页面按钮时，隐藏其他所有页面，只显示目标页面
+2. **Home 按钮**: sidebar 工具栏的 🏠 按钮返回 Landing Page
+3. **Settings 按钮**: 点击 ⚙️ 显示 Settings Page
+4. **Session 点击**: 点击 session 进入 Terminal 页面
+5. **IRC 点击**: 点击 IRC 频道进入 IRC Chat 页面
+
+### 配色规范
+
+所有页面使用统一的 CSS 变量：
+
+```css
+--page-bg: #1a1a2e;           /* 页面背景色 */
+--page-bg-secondary: #2d2d44; /* 次级背景色 */
+--page-border: #3a3a5a;       /* 边框颜色 */
+--page-text: #e0e0e0;         /* 文字颜色 */
+--page-text-muted: #888;      /* 次级文字颜色 */
+--page-primary: #4a9eff;      /* 主色调 */
+--page-primary-light: #6ab7ff; /* 主色调亮色 */
+```
+
+### 用户设置持久化
+
+用户设置保存在服务器端：
+- 存储位置: `~/.config/gotty/user_settings.json`
+- API 端点: `GET/POST /api/user-settings`
+- 同时同步到 localStorage 保持向后兼容
+

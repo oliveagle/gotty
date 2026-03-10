@@ -34,7 +34,7 @@ class SettingsApp {
         document.getElementById('setting-weather-bg').checked = localStorage.getItem('gotty_weather_bg') === 'true';
 
         // Banner position
-        const bannerPos = localStorage.getItem('gotty_banner_position') || 'top';
+        const bannerPos = localStorage.getItem('gotty_banner_position') || 'bottom';
         document.getElementById('banner-position-' + bannerPos).checked = true;
 
         // IRC settings

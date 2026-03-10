@@ -386,9 +386,16 @@ export class Xterm {
             this.lastHeight = height;
             this.fitAddon.fit();
             // Only scroll if terminal is fully initialized
-            if (this.term.rows > 0 && this.term.cols > 0) {
-                this.term.scrollToBottom();
-            }
+            // Delay scrollToBottom to ensure terminal is fully rendered
+            setTimeout(() => {
+                if (this.term.rows > 0 && this.term.cols > 0) {
+                    try {
+                        this.term.scrollToBottom();
+                    } catch (e) {
+                        // Ignore scrollToBottom errors during initialization
+                    }
+                }
+            }, 50);
             // Resize debug log disabled
         }, 250);
     }
@@ -405,9 +412,16 @@ export class Xterm {
             this.lastHeight = currentHeight;
             this.fitAddon.fit();
             // Only scroll if terminal is fully initialized
-            if (this.term.rows > 0 && this.term.cols > 0) {
-                this.term.scrollToBottom();
-            }
+            // Delay scrollToBottom to ensure terminal is fully rendered
+            setTimeout(() => {
+                if (this.term.rows > 0 && this.term.cols > 0) {
+                    try {
+                        this.term.scrollToBottom();
+                    } catch (e) {
+                        // Ignore scrollToBottom errors during initialization
+                    }
+                }
+            }, 50);
             // Resize debug log disabled
         }
     }

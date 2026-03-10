@@ -418,7 +418,16 @@ func NewAuthSessionManager(dataDir string, ttlHours int) *AuthSessionManager {
 	}
 
 	// Load existing sessions
-	mgr.loadSessions()
+	if err := mgr.loadSessions(); err != nil {
+		if os.IsNotExist(err) {
+			log.Printf("[AuthSession] No existing session file, starting fresh")
+		} else {
+			log.Printf("[AuthSession] Failed to load sessions: %v", err)
+		}
+	} else {
+		log.Printf("[AuthSession] Loaded %d sessions from %s", len(mgr.sessions), dataFile)
+	}
+
 	go mgr.cleanupExpired()
 
 	return mgr
@@ -433,7 +442,7 @@ func (m *AuthSessionManager) loadSessions() error {
 
 	var sessions map[string]*AuthSession
 	if err := json.Unmarshal(data, &sessions); err != nil {
-		return err
+		return fmt.Errorf("failed to parse session file: %w", err)
 	}
 
 	m.mu.Lock()
@@ -441,12 +450,19 @@ func (m *AuthSessionManager) loadSessions() error {
 
 	// Only load non-expired sessions
 	now := time.Now()
+	loaded := 0
+	skipped := 0
 	for id, session := range sessions {
 		if now.Before(session.ExpiresAt) {
 			m.sessions[id] = session
+			loaded++
+		} else {
+			skipped++
+			log.Printf("[AuthSession] Skipping expired session: %s", id)
 		}
 	}
 
+	log.Printf("[AuthSession] Parsed %d sessions from file, loaded %d, skipped %d expired", len(sessions), loaded, skipped)
 	return nil
 }
 

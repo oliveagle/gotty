@@ -6,16 +6,17 @@ import (
 	"time"
 )
 
-// WSMessage 表示 WebSocket 消息格式
+// WSMessage represents a WebSocket message format
 type WSMessage struct {
-	Type      string            `json:"type"`  // irc_in, irc_out, sys, nick, join, part, msg, topic
-	Command   string            `json:"command,omitempty"`
-	Params    []string          `json:"params,omitempty"`
-	Tags      map[string]string `json:"tags,omitempty"`
-	Data      string            `json:"data,omitempty"`
-	Channel   string            `json:"channel,omitempty"`
-	Nick      string            `json:"nick,omitempty"`
-	Timestamp int64             `json:"timestamp"`
+	Type        string            `json:"type"`                  // irc_in, irc_out, sys, nick, join, part, msg, topic
+	Command     string            `json:"command,omitempty"`
+	Params      []string          `json:"params,omitempty"`
+	Tags        map[string]string `json:"tags,omitempty"`
+	Data        string            `json:"data,omitempty"`
+	Channel     string            `json:"channel,omitempty"`
+	Nick        string            `json:"nick,omitempty"`
+	WorkspaceID string            `json:"workspace_id,omitempty"` // Workspace context for this message
+	Timestamp   int64             `json:"timestamp"`
 }
 
 // NewWSMessage 创建一个新的 WebSocket 消息

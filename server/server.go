@@ -183,6 +183,9 @@ func New(factory Factory, options *Options) (*Server, error) {
 	// SECURITY: Initialize IP filter
 	ipFilter := NewIPFilter()
 
+	// Initialize user settings manager
+	InitUserSettings()
+
 	return &Server{
 		factory:          factory,
 		options:          options,
@@ -431,6 +434,18 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 
 	// Build info API (protected)
 	siteMux.HandleFunc(pathPrefix+"api/build-info", authMiddleware.Wrap(server.handleBuildInfo))
+
+	// User settings API (protected)
+	siteMux.HandleFunc(pathPrefix+"api/user-settings", authMiddleware.Wrap(server.handleUserSettings))
+
+	// File preview API (protected)
+	siteMux.HandleFunc(pathPrefix+"api/preview/file", authMiddleware.Wrap(server.handlePreviewFile))
+
+	// Right panel debug API (protected)
+	siteMux.HandleFunc(pathPrefix+"api/right-panel-debug", authMiddleware.Wrap(server.handleRightPanelDebug))
+
+	// Right panel DOM operation API (protected)
+	siteMux.HandleFunc(pathPrefix+"api/right-panel-dom", authMiddleware.Wrap(server.handleRightPanelDom))
 
 	// Weather preview debug page (protected)
 	siteMux.HandleFunc(pathPrefix+"weather-preview.html", authMiddleware.Wrap(server.handleWeatherPreview))

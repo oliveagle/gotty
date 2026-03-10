@@ -25,6 +25,9 @@ type Config struct {
 
 	// 启用调试日志
 	Debug bool `json:"debug"`
+
+	// 数据目录（用于消息持久化）
+	DataDir string `json:"data_dir"`
 }
 
 // DefaultConfig 返回默认配置
@@ -38,5 +41,6 @@ func DefaultConfig() *Config {
 		NickLen:        30,
 		HistoryLimit:   100,
 		Debug:          false,
+		DataDir:        "",
 	}
 }
