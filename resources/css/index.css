@@ -862,9 +862,19 @@ body.sidebar-auto-hide #sidebar-trigger {
 #terminal .xterm-canvas-layer,
 #terminal .xterm-text-layer,
 #terminal .xterm-cursor-layer,
-#terminal .xterm-selection-layer {
+#terminal .xterm-selection-layer,
+#terminal .xterm-link-layer {
     width: 100% !important;
     height: 100% !important;
+}
+
+/* Force canvas elements to stretch to container width */
+#terminal .xterm-screen canvas,
+#terminal .xterm-link-layer canvas {
+    width: 100% !important;
+    height: 100% !important;
+    /* Override any inline width/height attributes */
+    max-width: none !important;
 }
 
 /* IRC Chat Container - mutually exclusive with terminal */

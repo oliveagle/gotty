@@ -1934,16 +1934,95 @@
           }
         }
 
-        loadRightPanelHttpUrl(url) {
+        async loadRightPanelHttpUrl(url) {
           console.log('[RightPanel] Loading HTTP URL:', url);
           const contentDiv = document.getElementById('right-panel-http-content');
           const urlInput = document.getElementById('right-panel-http-url');
 
           if (urlInput) urlInput.value = url;
 
-          // Use iframe to preview HTTP service
-          contentDiv.innerHTML = `<iframe class="right-panel-iframe" src="${url}" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>`;
-          console.log('[RightPanel] Iframe created for URL:', url);
+          // Show loading state
+          contentDiv.innerHTML = '<div class="right-panel-loading">Loading...</div>';
+
+          try {
+            // Fetch the URL content
+            const response = await fetch(url, {
+              mode: 'cors',
+              credentials: 'omit'
+            });
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const html = await response.text();
+            console.log('[RightPanel] Fetched HTML, length:', html.length);
+
+            // Create a container div with Shadow DOM for style isolation
+            const container = document.createElement('div');
+            container.className = 'http-preview-container';
+            container.style.cssText = 'width: 100%; height: 100%; overflow: auto; background: #fff;';
+
+            // Open shadow DOM
+            const shadow = container.attachShadow({ mode: 'open' });
+
+            // Parse the fetched HTML
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            // Extract and inject styles
+            const styles = Array.from(doc.querySelectorAll('style'));
+            styles.forEach(style => {
+              shadow.appendChild(style.cloneNode(true));
+            });
+
+            // Extract base URL for resolving relative paths
+            const baseURL = new URL(url);
+            const base = doc.querySelector('base');
+            if (base) {
+              baseURL = new URL(base.href, url);
+            }
+
+            // Fix relative URLs in the fetched content
+            const elements = shadow.createElement('div');
+            elements.innerHTML = doc.body.innerHTML;
+
+            // Fix image src
+            elements.querySelectorAll('img').forEach(img => {
+              const src = img.getAttribute('src');
+              if (src && !src.startsWith('http') && !src.startsWith('data:')) {
+                img.src = new URL(src, baseURL).href;
+              }
+            });
+
+            // Fix link href (for stylesheets)
+            elements.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
+              const href = link.getAttribute('href');
+              if (href && !href.startsWith('http')) {
+                link.href = new URL(href, baseURL).href;
+              }
+            });
+
+            // Append content to shadow DOM
+            shadow.appendChild(elements);
+
+            // Clear loading and show content
+            contentDiv.innerHTML = '';
+            contentDiv.appendChild(container);
+
+            console.log('[RightPanel] HTTP content loaded via Shadow DOM:', url);
+
+          } catch (error) {
+            console.error('[RightPanel] Failed to load HTTP content:', error);
+            contentDiv.innerHTML = `
+              <div class="right-panel-error">
+                <div class="error-icon">⚠️</div>
+                <div class="error-title">Failed to load content</div>
+                <div class="error-message">${this.escapeHtml(error.message)}</div>
+                <div class="error-hint">Make sure the URL is accessible and allows CORS</div>
+              </div>
+            `;
+          }
         }
 
         escapeHtml(text) {
@@ -1970,167 +2049,40 @@
          * Capture screenshot of right panel content and save to file
          */
         async captureRightPanelScreenshot() {
-          console.log('[RightPanel Debug] Capturing screenshot...');
-          console.log('[RightPanel Debug] window.html2canvas =', window.html2canvas);
+          console.log('[RightPanel] Capturing screenshot...');
 
           // Wait a bit for DOM to be ready
           await new Promise(resolve => setTimeout(resolve, 300));
 
           // Capture the entire right panel
           const rightPanel = document.getElementById('right-panel');
-          const contentDiv = document.getElementById('right-panel-content');
-          const httpContent = document.getElementById('right-panel-http-content');
 
           if (!rightPanel) {
-            console.error('[RightPanel Debug] Right panel element not found');
+            console.error('[RightPanel] Right panel element not found');
             return;
           }
 
-          console.log('[RightPanel Debug] Right panel found, classes:', rightPanel.className);
-          console.log('[RightPanel Debug] Right panel rect:', rightPanel.getBoundingClientRect());
-
-          // Detect iframes before capturing (html2canvas cannot render iframe content)
-          // Make sure we're on the HTTP tab to capture the iframe
-          const activeTab = this.rightPanelActiveTab;
-          console.log('[RightPanel Debug] Active tab:', activeTab);
-
-          const iframes = httpContent?.querySelectorAll('iframe') || [];
-          const iframeInfos = [];
-          console.log('[RightPanel Debug] Found', iframes.length, 'iframe(s) in httpContent');
-
-          iframes.forEach((iframe, index) => {
-            const rect = iframe.getBoundingClientRect();
-            const panelRect = rightPanel.getBoundingClientRect();
-            // Calculate position relative to right panel
-            console.log('[RightPanel Debug] iframe rect:', rect, 'panel rect:', panelRect);
-            iframeInfos.push({
-              url: iframe.src || 'about:blank',
-              x: rect.left - panelRect.left,
-              y: rect.top - panelRect.top,
-              width: rect.width,
-              height: rect.height
-            });
-            console.log('[RightPanel Debug] iframe', index, ':', iframe.src, 'calculated pos:', iframeInfos[index]);
-          });
-
           try {
-            // Use html2canvas if available
-            if (window.html2canvas) {
-              console.log('[RightPanel Debug] html2canvas is available, capturing...');
-              console.log('[RightPanel Debug] Found', iframes.length, 'iframe(s)');
+            // Use html2canvas to capture the panel
+            const canvas = await window.html2canvas(rightPanel, {
+              backgroundColor: '#1e1e2e',
+              scale: 1,
+              logging: false,
+              useCORS: true,
+              allowTaint: true
+            });
 
-              // Use ignoreElements to skip iframes (they will be drawn as placeholders)
-              console.log('[RightPanel Debug] Calling html2canvas...');
-              const canvas = await window.html2canvas(rightPanel, {
-                backgroundColor: '#1e1e2e',
-                scale: 1,
-                logging: false,
-                useCORS: true,
-                allowTaint: true,
-                ignoreElements: (el) => {
-                  const isIframe = el.tagName === 'IFRAME';
-                  if (isIframe) console.log('[RightPanel Debug] Ignoring iframe element:', el);
-                  return isIframe;
-                }
-              });
-              console.log('[RightPanel Debug] html2canvas completed, canvas:', canvas);
+            console.log('[RightPanel] Screenshot captured, canvas size:', canvas.width, 'x', canvas.height);
 
-              console.log('[RightPanel Debug] Canvas size:', canvas.width, 'x', canvas.height);
-              console.log('[RightPanel Debug] iframeInfos:', iframeInfos);
+            const dataUrl = canvas.toDataURL('image/png');
 
-              // Create overlay canvas to draw placeholders
-              // This is needed because drawing directly on html2canvas output doesn't work
-              console.log('[RightPanel Debug] Creating overlay canvas...');
-              const overlayCanvas = document.createElement('canvas');
-              overlayCanvas.width = canvas.width;
-              overlayCanvas.height = canvas.height;
-              const overlayCtx = overlayCanvas.getContext('2d');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace(/T/, '_');
+            const screenshotFilename = `right-panel-screenshot_${timestamp}.png`;
+            this.downloadRightPanelData(screenshotFilename, dataUrl);
+            console.log('[RightPanel] Screenshot downloaded:', screenshotFilename);
 
-              // Step 1: Draw html2canvas output onto overlay canvas
-              console.log('[RightPanel Debug] Drawing html2canvas output onto overlay...');
-              overlayCtx.drawImage(canvas, 0, 0);
-
-              // Step 2: Draw placeholder rectangles for each iframe
-              // Note: html2canvas cannot render iframe content due to browser security (same-origin policy)
-              // We draw a placeholder to indicate the iframe position
-              console.log('[RightPanel Debug] Drawing', iframeInfos.length, 'iframe placeholder(s)...');
-              iframeInfos.forEach((info, index) => {
-                console.log('[RightPanel Debug] Drawing iframe placeholder', index, ':', info);
-
-                // Draw dashed border to indicate iframe boundary
-                overlayCtx.strokeStyle = '#4a9eff';
-                overlayCtx.lineWidth = 2;
-                overlayCtx.setLineDash([10, 5]);  // Dashed line
-                overlayCtx.strokeRect(info.x, info.y, info.width, info.height);
-                overlayCtx.setLineDash([]);  // Reset to solid
-
-                // Draw URL text background (for readability)
-                const urlText = info.url.length > 70 ? info.url.substring(0, 67) + '...' : info.url;
-                overlayCtx.font = 'bold 12px Monaco, Menlo, monospace';
-                const textMetrics = overlayCtx.measureText(urlText);
-                const textX = info.x + 10;
-                const textY = info.y + 10;
-                const textHeight = 20;
-
-                // Draw semi-transparent background for text
-                overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                overlayCtx.fillRect(textX - 5, textY - 5, textMetrics.width + 10, textHeight + 5);
-
-                // Draw URL text
-                overlayCtx.fillStyle = '#ffffff';
-                overlayCtx.textBaseline = 'top';
-                overlayCtx.fillText(urlText, textX, textY);
-
-                // Draw iframe icon
-                overlayCtx.font = '18px Arial';
-                overlayCtx.fillText('🌐', info.x + info.width - 35, info.y + 8);
-
-                // Draw "Content not captured" hint in center
-                overlayCtx.font = '14px Arial';
-                overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-                overlayCtx.textAlign = 'center';
-                overlayCtx.fillText('iframe 内容无法捕获', info.x + info.width / 2, info.y + info.height / 2);
-                overlayCtx.font = '12px Arial';
-                overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-                overlayCtx.fillText('(浏览器安全限制)', info.x + info.width / 2, info.y + info.height / 2 + 20);
-                overlayCtx.textAlign = 'left';  // Reset alignment
-
-                console.log('[RightPanel Debug] iframe placeholder', index, 'drawn');
-              });
-
-              // Verify overlay canvas has blue pixels
-              if (iframeInfos.length > 0) {
-                const info = iframeInfos[0];
-                const imageData = overlayCtx.getImageData(info.x + 10, info.y + 10, 1, 1);
-                console.log('[RightPanel Debug] VERIFIED: Overlay pixel is blue: R=' + imageData.data[0] + ' G=' + imageData.data[1] + ' B=' + imageData.data[2]);
-              }
-
-              // Use overlay canvas for export
-              const dataUrl = overlayCanvas.toDataURL('image/png');
-              console.log('[RightPanel Debug] dataURL length:', dataUrl.length);
-              console.log('[RightPanel Debug] dataURL preview:', dataUrl.substring(0, 100));
-
-              const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace(/T/, '_');
-              const screenshotFilename = `right-panel-screenshot_${timestamp}.png`;
-              this.downloadRightPanelData(screenshotFilename, dataUrl);
-              console.log('[RightPanel Debug] Screenshot captured and downloaded');
-
-              // Also send debug info to server
-              this.sendDebugToLog();
-            } else {
-              console.log('[RightPanel Debug] html2canvas not available, using fallback');
-              // Fallback: capture visible content as text
-              const debugInfo = this.getRightPanelDebugInfo();
-              const blob = new Blob([JSON.stringify(debugInfo, null, 2)], { type: 'application/json' });
-              const dataUrl = URL.createObjectURL(blob);
-              this.downloadRightPanelData('right-panel-debug.json', dataUrl);
-              console.log('[RightPanel Debug] Debug info exported (html2canvas not available)');
-
-              // Also send debug info to server
-              this.sendDebugToLog();
-            }
           } catch (error) {
-            console.error('[RightPanel Debug] Screenshot failed:', error);
+            console.error('[RightPanel] Screenshot failed:', error);
             // Fallback to text export
             this.exportRightPanelContent();
           }

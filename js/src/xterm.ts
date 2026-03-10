@@ -414,6 +414,11 @@ export class Xterm {
             // Resize debug log disabled
             this.lastWidth = currentWidth;
             this.lastHeight = currentHeight;
+
+            // Force container dimensions before fit
+            this.elem.style.width = `${currentWidth}px`;
+            this.elem.style.height = `${currentHeight}px`;
+
             this.fitAddon.fit();
 
             // Force all xterm layers to match container dimensions exactly
@@ -437,6 +442,12 @@ export class Xterm {
                 const el = layer as HTMLElement;
                 el.style.width = '100%';
                 el.style.height = '100%';
+                // Also update canvas attributes for proper scaling
+                if (el instanceof HTMLCanvasElement) {
+                    const dpr = window.devicePixelRatio || 1;
+                    el.width = currentWidth * dpr;
+                    el.height = currentHeight * dpr;
+                }
             });
 
             // Only scroll if terminal is fully initialized
