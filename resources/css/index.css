@@ -833,21 +833,19 @@ body.sidebar-auto-hide #sidebar-trigger {
 #terminal .xterm {
     padding: 0 !important;
     margin: 0 !important;
-    width: 100% !important;
     height: 100% !important;
 }
 
 #terminal .xterm-viewport {
     padding: 0 !important;
     margin: 0 !important;
-    width: 100% !important;
+    /* Use left/right for width, not explicit width */
     height: 100% !important;
 }
 
 #terminal .xterm-screen {
     padding: 0 !important;
     margin: 0 !important;
-    width: 100% !important;
     height: 100% !important;
 }
 
