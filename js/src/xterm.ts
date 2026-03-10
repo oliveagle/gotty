@@ -421,6 +421,14 @@ export class Xterm {
 
             this.fitAddon.fit();
 
+            // Force WebGL to update canvas size (if WebGL is being used)
+            // This needs to be done AFTER fitAddon.fit()
+            if (this.webglAddon) {
+                // Force WebGL to recalculate by temporarily clearing and re-rendering
+                // This ensures the WebGL canvas matches the new dimensions
+                this.webglAddon.clear();
+            }
+
             // Force all xterm layers to match container dimensions exactly
             const viewport = this.elem.querySelector('.xterm-viewport') as HTMLElement;
             if (viewport) {
