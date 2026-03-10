@@ -416,12 +416,28 @@ export class Xterm {
             this.lastHeight = currentHeight;
             this.fitAddon.fit();
 
-            // Force viewport to match container width exactly
+            // Force all xterm layers to match container dimensions exactly
             const viewport = this.elem.querySelector('.xterm-viewport') as HTMLElement;
             if (viewport) {
                 viewport.style.width = '100%';
                 viewport.style.right = '0';
+                viewport.style.bottom = '0';
             }
+
+            // Force screen and all layers to exact container size
+            const screen = this.elem.querySelector('.xterm-screen') as HTMLElement;
+            if (screen) {
+                screen.style.width = `${currentWidth}px`;
+                screen.style.height = `${currentHeight}px`;
+            }
+
+            // Force all layer canvases to match screen size
+            const layers = this.elem.querySelectorAll('.xterm-screen canvas, .xterm-link-layer, .xterm-text-layer, .xterm-cursor-layer, .xterm-selection-layer');
+            layers.forEach((layer) => {
+                const el = layer as HTMLElement;
+                el.style.width = '100%';
+                el.style.height = '100%';
+            });
 
             // Only scroll if terminal is fully initialized
             // Delay scrollToBottom to ensure terminal is fully rendered

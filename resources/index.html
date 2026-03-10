@@ -2057,30 +2057,44 @@
               iframeInfos.forEach((info, index) => {
                 console.log('[RightPanel Debug] Drawing iframe placeholder', index, ':', info);
 
-                // Draw semi-transparent blue rectangle to cover iframe area
-                // This indicates that iframe content cannot be captured
-                overlayCtx.fillStyle = 'rgba(74, 158, 255, 0.4)';
-                overlayCtx.fillRect(info.x, info.y, info.width, info.height);
-
-                // Draw white border
-                overlayCtx.strokeStyle = '#ffffff';
-                overlayCtx.lineWidth = 3;
+                // Draw dashed border to indicate iframe boundary
+                overlayCtx.strokeStyle = '#4a9eff';
+                overlayCtx.lineWidth = 2;
+                overlayCtx.setLineDash([10, 5]);  // Dashed line
                 overlayCtx.strokeRect(info.x, info.y, info.width, info.height);
+                overlayCtx.setLineDash([]);  // Reset to solid
 
-                // Draw URL text (truncate if too long)
-                let urlText = info.url;
-                if (urlText.length > 60) {
-                  urlText = urlText.substring(0, 57) + '...';
-                }
+                // Draw URL text background (for readability)
+                const urlText = info.url.length > 70 ? info.url.substring(0, 67) + '...' : info.url;
+                overlayCtx.font = 'bold 12px Monaco, Menlo, monospace';
+                const textMetrics = overlayCtx.measureText(urlText);
+                const textX = info.x + 10;
+                const textY = info.y + 10;
+                const textHeight = 20;
 
+                // Draw semi-transparent background for text
+                overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                overlayCtx.fillRect(textX - 5, textY - 5, textMetrics.width + 10, textHeight + 5);
+
+                // Draw URL text
                 overlayCtx.fillStyle = '#ffffff';
-                overlayCtx.font = 'bold 14px Monaco, Menlo, monospace';
                 overlayCtx.textBaseline = 'top';
-                overlayCtx.fillText(urlText, info.x + 10, info.y + 10);
+                overlayCtx.fillText(urlText, textX, textY);
 
                 // Draw iframe icon
-                overlayCtx.font = '20px Arial';
-                overlayCtx.fillText('🌐', info.x + info.width - 40, info.y + 8);
+                overlayCtx.font = '18px Arial';
+                overlayCtx.fillText('🌐', info.x + info.width - 35, info.y + 8);
+
+                // Draw "Content not captured" hint in center
+                overlayCtx.font = '14px Arial';
+                overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                overlayCtx.textAlign = 'center';
+                overlayCtx.fillText('iframe 内容无法捕获', info.x + info.width / 2, info.y + info.height / 2);
+                overlayCtx.font = '12px Arial';
+                overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                overlayCtx.fillText('(浏览器安全限制)', info.x + info.width / 2, info.y + info.height / 2 + 20);
+                overlayCtx.textAlign = 'left';  // Reset alignment
+
                 console.log('[RightPanel Debug] iframe placeholder', index, 'drawn');
               });
 
