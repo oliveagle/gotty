@@ -2050,18 +2050,17 @@
               console.log('[RightPanel Debug] Drawing html2canvas output onto overlay...');
               overlayCtx.drawImage(canvas, 0, 0);
 
-              // Step 2: Draw blue placeholder rectangles for each iframe
+              // Step 2: Draw placeholder rectangles for each iframe
+              // Note: html2canvas cannot render iframe content due to browser security (same-origin policy)
+              // We draw a placeholder to indicate the iframe position
               console.log('[RightPanel Debug] Drawing', iframeInfos.length, 'iframe placeholder(s)...');
               iframeInfos.forEach((info, index) => {
                 console.log('[RightPanel Debug] Drawing iframe placeholder', index, ':', info);
 
-                // Draw solid blue rectangle
-                overlayCtx.fillStyle = '#4a9eff';
+                // Draw semi-transparent blue rectangle to cover iframe area
+                // This indicates that iframe content cannot be captured
+                overlayCtx.fillStyle = 'rgba(74, 158, 255, 0.4)';
                 overlayCtx.fillRect(info.x, info.y, info.width, info.height);
-
-                // Verify pixel was drawn
-                const checkPixel = overlayCtx.getImageData(info.x + 10, info.y + 10, 1, 1);
-                console.log('[RightPanel Debug] Overlay pixel after fillRect: R=' + checkPixel.data[0] + ' G=' + checkPixel.data[1] + ' B=' + checkPixel.data[2] + ' A=' + checkPixel.data[3]);
 
                 // Draw white border
                 overlayCtx.strokeStyle = '#ffffff';

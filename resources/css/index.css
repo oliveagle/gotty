@@ -823,10 +823,11 @@ body.sidebar-auto-hide #sidebar-trigger {
     position: absolute;
     top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
+    /* Don't set right/bottom - let width/height handle it */
     padding: 0;
     margin: 0;
+    /* Force no scrollbar */
+    overflow: hidden !important;
 }
 
 /* Override xterm.js default padding */

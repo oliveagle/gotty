@@ -415,6 +415,14 @@ export class Xterm {
             this.lastWidth = currentWidth;
             this.lastHeight = currentHeight;
             this.fitAddon.fit();
+
+            // Force viewport to match container width exactly
+            const viewport = this.elem.querySelector('.xterm-viewport') as HTMLElement;
+            if (viewport) {
+                viewport.style.width = '100%';
+                viewport.style.right = '0';
+            }
+
             // Only scroll if terminal is fully initialized
             // Delay scrollToBottom to ensure terminal is fully rendered
             setTimeout(() => {
