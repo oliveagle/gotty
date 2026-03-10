@@ -368,15 +368,19 @@ export class Xterm {
     }
 
     /**
-     * Fit terminal after sidebar toggle.
-     * Waits for CSS transition (200ms) to complete before fitting.
+     * Fit terminal after sidebar/right panel toggle.
+     * Waits for CSS transitions to complete before fitting.
      *
      * @param sidebarCollapsed - Whether sidebar is collapsed (hidden)
+     * @param rightPanelVisible - Whether right panel is visible (for extended delay)
      */
-    fitWithSidebarState(sidebarCollapsed: boolean): void {
+    fitWithSidebarState(sidebarCollapsed: boolean, rightPanelVisible: boolean = false): void {
         // Resize debug log disabled
 
-        // Wait for CSS transition to complete (200ms transition + buffer)
+        // Use longer delay if right panel is visible (300ms transition + buffer)
+        const delay = rightPanelVisible ? 350 : 250;
+
+        // Wait for CSS transitions to complete
         setTimeout(() => {
             const width = Math.round(this.elem.clientWidth);
             const height = Math.round(this.elem.clientHeight);
@@ -397,7 +401,7 @@ export class Xterm {
                 }
             }, 50);
             // Resize debug log disabled
-        }, 250);
+        }, delay);
     }
 
     private doFit(reason: string): void {

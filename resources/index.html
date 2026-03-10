@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="./css/xterm.css" />
     <link rel="stylesheet" href="./css/xterm_customize.css" />
     <!-- html2canvas for screenshot capture -->
-    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script src="./js/html2canvas.min.js"></script>
   </head>
   <body>
     <!-- WebAuthn/Passkeys Authentication Overlay -->
@@ -577,83 +577,79 @@
             <button id="irc-send-btn" class="btn-irc-send">Send</button>
           </div>
         </div>
+      </div>
 
-        <!-- Right Panel - Right side operation area for file/HTTP preview and more -->
-        <div id="right-panel" class="right-panel">
-          <div class="right-panel-header">
-            <div class="right-panel-title">
-              <span class="right-panel-icon">📋</span>
-              <span class="right-panel-title-text">Right Panel</span>
-            </div>
-            <div class="right-panel-actions">
-              <button class="btn-right-panel-action" id="right-panel-screenshot-btn" title="Screenshot (let AI see)">📷</button>
-              <button class="btn-right-panel-action" id="right-panel-refresh-btn" title="Refresh">🔄</button>
-              <button class="btn-right-panel-action" id="right-panel-close-btn" title="Close">✕</button>
-            </div>
-          </div>
-          <div class="right-panel-tabs">
-            <button class="right-panel-tab active" data-tab="agui">AG UI</button>
-            <button class="right-panel-tab" data-tab="file">File</button>
-            <button class="right-panel-tab" data-tab="http">HTTP</button>
-          </div>
-          <div class="right-panel-content">
-            <!-- AG UI Tab - Agent UI Interaction -->
-            <div class="right-panel-tab-content active" id="right-panel-tab-agui">
-              <div class="agui-toolbar">
-                <input type="text" class="agui-endpoint-url" id="agui-endpoint-url" placeholder="AG UI endpoint (e.g., /api/agui)" value="/api/agui">
-                <button class="btn-agui-tool" id="agui-connect-btn" title="Connect">🔌</button>
-                <button class="btn-agui-tool" id="agui-clear-btn" title="Clear Chat">🗑</button>
-              </div>
-              <div class="agui-status-bar" id="agui-status-bar">
-                <span class="agui-status-indicator" id="agui-status-indicator"></span>
-                <span class="agui-status-text" id="agui-status-text">Disconnected</span>
-              </div>
-              <div class="agui-messages-container" id="agui-messages-container">
-                <div class="right-panel-empty-state">
-                  <div class="empty-icon">🤖</div>
-                  <div class="empty-text">AG UI Not Connected</div>
-                  <div class="empty-hint">Enter an endpoint and click 🔌 to connect</div>
-                </div>
-              </div>
-              <div class="agui-input-container">
-                <textarea class="agui-input" id="agui-input" placeholder="Type a message to the agent..." rows="3"></textarea>
-                <button class="agui-send-btn" id="agui-send-btn">Send</button>
-              </div>
-            </div>
-            <!-- File Preview Tab -->
-            <div class="right-panel-tab-content" id="right-panel-tab-file">
-              <div class="right-panel-toolbar">
-                <input type="text" class="right-panel-file-path" id="right-panel-file-path" placeholder="Enter file path..." readonly>
-                <button class="btn-right-panel-tool" id="right-panel-file-btn" title="Open File">📂</button>
-              </div>
-              <div class="right-panel-file-content" id="right-panel-file-content">
-                <div class="right-panel-empty-state">
-                  <div class="empty-icon">📄</div>
-                  <div class="empty-text">No file previewing</div>
-                  <div class="empty-hint">Click a file or enter a path to preview</div>
-                </div>
-              </div>
-            </div>
-            <!-- HTTP Preview Tab -->
-            <div class="right-panel-tab-content" id="right-panel-tab-http">
-              <div class="right-panel-toolbar">
-                <input type="text" class="right-panel-http-url" id="right-panel-http-url" placeholder="http://localhost:8080">
-                <button class="btn-right-panel-tool" id="right-panel-http-go-btn" title="Load URL">🔗</button>
-              </div>
-              <div class="right-panel-http-content" id="right-panel-http-content">
-                <div class="right-panel-empty-state">
-                  <div class="empty-icon">🌐</div>
-                  <div class="empty-text">No HTTP service previewing</div>
-                  <div class="empty-hint">Enter a URL to preview the web page</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- Resize handle -->
-          <div class="right-panel-resize-handle" id="right-panel-resize-handle"></div>
+      <!-- Right Panel - sibling of #sidebar and #main inside #app -->
+      <div id="right-panel" class="right-panel">
+      <div class="right-panel-header">
+        <div class="right-panel-title">
+          <span class="right-panel-icon">📋</span>
+          <span class="right-panel-title-text">Right Panel</span>
+        </div>
+        <div class="right-panel-actions">
+          <button class="btn-right-panel-action" id="right-panel-pin-btn" title="Pin Panel">📌</button>
+          <button class="btn-right-panel-action" id="right-panel-screenshot-btn" title="Screenshot (let AI see)">📷</button>
+          <button class="btn-right-panel-action" id="right-panel-refresh-btn" title="Refresh">🔄</button>
+          <button class="btn-right-panel-action" id="right-panel-close-btn" title="Close">✕</button>
         </div>
       </div>
+      <div class="right-panel-tabs">
+        <button class="right-panel-tab active" data-tab="agui">AG UI</button>
+        <button class="right-panel-tab" data-tab="file">File</button>
+        <button class="right-panel-tab" data-tab="http">HTTP</button>
+      </div>
+      <div class="right-panel-content">
+        <!-- AG UI Tab - Agent UI Interaction -->
+        <div class="right-panel-tab-content active" id="right-panel-tab-agui">
+          <div class="agui-toolbar">
+            <input type="text" class="agui-endpoint-url" id="agui-endpoint-url" placeholder="AG UI endpoint (e.g., /api/agui)" value="/api/agui">
+            <button class="btn-right-panel-tool" id="agui-connect-btn" title="Connect">🔌</button>
+          </div>
+          <div class="agui-status-bar">
+            <div class="agui-status-indicator disconnected" id="agui-status-indicator"></div>
+            <span class="agui-status-text" id="agui-status-text">Disconnected</span>
+          </div>
+          <div class="right-panel-file-content agui-messages-container" id="agui-messages-container">
+            <div class="right-panel-empty-state">
+              <div class="empty-icon">🤖</div>
+              <div class="empty-text">No AG UI connection</div>
+              <div class="empty-hint">Enter endpoint URL and click Connect</div>
+            </div>
+          </div>
+        </div>
+        <!-- File Preview Tab -->
+        <div class="right-panel-tab-content" id="right-panel-tab-file">
+          <div class="right-panel-toolbar">
+            <input type="text" class="right-panel-file-path" id="right-panel-file-path" placeholder="/path/to/file">
+            <button class="btn-right-panel-tool" id="right-panel-file-go-btn" title="Load File">📂</button>
+          </div>
+          <div class="right-panel-file-content" id="right-panel-file-content">
+            <div class="right-panel-empty-state">
+              <div class="empty-icon">📄</div>
+              <div class="empty-text">No file previewing</div>
+              <div class="empty-hint">Click a file or enter a path to preview</div>
+            </div>
+          </div>
+        </div>
+        <!-- HTTP Preview Tab -->
+        <div class="right-panel-tab-content" id="right-panel-tab-http">
+          <div class="right-panel-toolbar">
+            <input type="text" class="right-panel-http-url" id="right-panel-http-url" placeholder="http://localhost:8080">
+            <button class="btn-right-panel-tool" id="right-panel-http-go-btn" title="Load URL">🔗</button>
+          </div>
+          <div class="right-panel-http-content" id="right-panel-http-content">
+            <div class="right-panel-empty-state">
+              <div class="empty-icon">🌐</div>
+              <div class="empty-text">No HTTP service previewing</div>
+              <div class="empty-hint">Enter a URL to preview the web page</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Resize handle -->
+      <div class="right-panel-resize-handle" id="right-panel-resize-handle-outside"></div>
     </div>
+    <!-- Close #app -->
 
     <script src="./auth_token.js"></script>
     <script src="./config.js"></script>
@@ -693,7 +689,8 @@
           this.sessionNotes = {}; // Store notes per session: { [sessionId]: string }
           // Right panel state
           this.rightPanelVisible = false;
-          this.rightPanelWidth = 400;
+          this.rightPanelPinned = false;
+          this.rightPanelWidth = 320;
           this.rightPanelActiveTab = 'agui';
           // AG UI state
           this.aguiClient = null;
@@ -1054,6 +1051,16 @@
               // Clear active session when switching workspace
               this.disconnectTerminal();
               this.activeSessionId = null;
+
+              // Reconnect IRC to new workspace if IRC is enabled
+              if (this.irc && this.irc.ws) {
+                this.irc.ws.close();
+              }
+              if (typeof window.enableIRC !== 'undefined' && window.enableIRC) {
+                const defaultChannel = typeof window.ircChannel !== 'undefined' ? window.ircChannel : '#general';
+                const networkName = typeof window.ircNetworkName !== 'undefined' ? window.ircNetworkName : 'GoTTY Network';
+                this.initIRCClient(defaultChannel, networkName, id);
+              }
             }
           } catch (error) {
             console.error('Failed to switch workspace:', error);
@@ -1230,9 +1237,20 @@
             rightPanel.style.width = savedWidth + 'px';
           }
 
-          const savedVisible = localStorage.getItem('right_panel_visible') === 'true';
-          if (savedVisible) {
+          const savedPinned = localStorage.getItem('right_panel_pinned') === 'true';
+          if (savedPinned) {
+            this.rightPanelPinned = true;
+            const pinBtn = document.getElementById('right-panel-pin-btn');
+            if (pinBtn) {
+              pinBtn.classList.add('pinned');
+            }
+            // When pinned, force show the panel regardless of saved visible state
             this.showRightPanel();
+          } else {
+            const savedVisible = localStorage.getItem('right_panel_visible') === 'true';
+            if (savedVisible) {
+              this.showRightPanel();
+            }
           }
         }
 
@@ -1282,6 +1300,14 @@
           if (screenshotBtn) {
             screenshotBtn.addEventListener('click', () => {
               this.captureRightPanelScreenshot();
+            });
+          }
+
+          // Pin button
+          const pinBtn = document.getElementById('right-panel-pin-btn');
+          if (pinBtn) {
+            pinBtn.addEventListener('click', () => {
+              this.toggleRightPanelPin();
             });
           }
 
@@ -1362,9 +1388,10 @@
           const bannerRightPanelBtn = document.getElementById('banner-right-panel-btn');
           if (!rightPanel) return;
 
-          // Click outside to hide
+          // Click outside to hide (only if not pinned)
           document.addEventListener('click', (e) => {
             if (!this.rightPanelVisible) return;
+            if (this.rightPanelPinned) return;
 
             // Check if click is inside right panel
             if (rightPanel.contains(e.target)) {
@@ -1382,6 +1409,29 @@
             // Hide the panel
             this.hideRightPanel();
           });
+        }
+
+        toggleRightPanelPin() {
+          this.rightPanelPinned = !this.rightPanelPinned;
+
+          // Update button visual state
+          const pinBtn = document.getElementById('right-panel-pin-btn');
+          if (pinBtn) {
+            pinBtn.classList.toggle('pinned', this.rightPanelPinned);
+          }
+
+          // Persist to localStorage
+          localStorage.setItem('right_panel_pinned', this.rightPanelPinned.toString());
+
+          console.log('[Right Panel] Pin state:', this.rightPanelPinned ? 'pinned' : 'unpinned');
+
+          // When pinning, show the panel if not already visible
+          if (this.rightPanelPinned && !this.rightPanelVisible) {
+            this.showRightPanel();
+          }
+
+          // Resize terminal to fit new layout
+          this.fitTerminal();
         }
 
         // ==================== AG UI Methods ====================
@@ -1768,11 +1818,9 @@
 
         showRightPanel() {
           const rightPanel = document.getElementById('right-panel');
-          const main = document.getElementById('main');
           if (!rightPanel) return;
 
           rightPanel.classList.add('visible');
-          main.classList.add('has-right-panel');
           this.rightPanelVisible = true;
           localStorage.setItem('right_panel_visible', 'true');
 
@@ -1784,12 +1832,16 @@
         }
 
         hideRightPanel() {
+          // Don't hide if pinned
+          if (this.rightPanelPinned) {
+            console.log('[Right Panel] Panel is pinned, not hiding');
+            return;
+          }
+
           const rightPanel = document.getElementById('right-panel');
-          const main = document.getElementById('main');
           if (!rightPanel) return;
 
           rightPanel.classList.remove('visible');
-          main.classList.remove('has-right-panel');
           this.rightPanelVisible = false;
           localStorage.setItem('right_panel_visible', 'false');
 
@@ -1901,14 +1953,14 @@
         }
 
         fitTerminal() {
-          // Fit terminal considering right panel state
+          // Fit terminal considering sidebar and right panel state
           if (this.term && this.term.fitWithSidebarState) {
             const sidebar = document.getElementById('sidebar');
             const isSidebarCollapsed = sidebar && (
               sidebar.classList.contains('collapsed') ||
               sidebar.classList.contains('auto-hide')
             );
-            this.term.fitWithSidebarState(isSidebarCollapsed);
+            this.term.fitWithSidebarState(isSidebarCollapsed, this.rightPanelVisible);
           }
         }
 
@@ -1919,9 +1971,10 @@
          */
         async captureRightPanelScreenshot() {
           console.log('[RightPanel Debug] Capturing screenshot...');
+          console.log('[RightPanel Debug] window.html2canvas =', window.html2canvas);
 
           // Wait a bit for DOM to be ready
-          await new Promise(resolve => setTimeout(resolve, 150));
+          await new Promise(resolve => setTimeout(resolve, 300));
 
           // Capture the entire right panel
           const rightPanel = document.getElementById('right-panel');
@@ -1933,13 +1986,23 @@
             return;
           }
 
+          console.log('[RightPanel Debug] Right panel found, classes:', rightPanel.className);
+          console.log('[RightPanel Debug] Right panel rect:', rightPanel.getBoundingClientRect());
+
           // Detect iframes before capturing (html2canvas cannot render iframe content)
+          // Make sure we're on the HTTP tab to capture the iframe
+          const activeTab = this.rightPanelActiveTab;
+          console.log('[RightPanel Debug] Active tab:', activeTab);
+
           const iframes = httpContent?.querySelectorAll('iframe') || [];
           const iframeInfos = [];
+          console.log('[RightPanel Debug] Found', iframes.length, 'iframe(s) in httpContent');
+
           iframes.forEach((iframe, index) => {
             const rect = iframe.getBoundingClientRect();
             const panelRect = rightPanel.getBoundingClientRect();
             // Calculate position relative to right panel
+            console.log('[RightPanel Debug] iframe rect:', rect, 'panel rect:', panelRect);
             iframeInfos.push({
               url: iframe.src || 'about:blank',
               x: rect.left - panelRect.left,
@@ -1947,6 +2010,7 @@
               width: rect.width,
               height: rect.height
             });
+            console.log('[RightPanel Debug] iframe', index, ':', iframe.src, 'calculated pos:', iframeInfos[index]);
           });
 
           try {
@@ -1956,47 +2020,86 @@
               console.log('[RightPanel Debug] Found', iframes.length, 'iframe(s)');
 
               // Use ignoreElements to skip iframes (they will be drawn as placeholders)
+              console.log('[RightPanel Debug] Calling html2canvas...');
               const canvas = await window.html2canvas(rightPanel, {
                 backgroundColor: '#1e1e2e',
                 scale: 1,
                 logging: false,
                 useCORS: true,
                 allowTaint: true,
-                ignoreElements: (el) => el.tagName === 'IFRAME'
+                ignoreElements: (el) => {
+                  const isIframe = el.tagName === 'IFRAME';
+                  if (isIframe) console.log('[RightPanel Debug] Ignoring iframe element:', el);
+                  return isIframe;
+                }
               });
+              console.log('[RightPanel Debug] html2canvas completed, canvas:', canvas);
 
-              const ctx = canvas.getContext('2d');
+              console.log('[RightPanel Debug] Canvas size:', canvas.width, 'x', canvas.height);
+              console.log('[RightPanel Debug] iframeInfos:', iframeInfos);
 
-              // Draw blue placeholder rectangles for each iframe
+              // Create overlay canvas to draw placeholders
+              // This is needed because drawing directly on html2canvas output doesn't work
+              console.log('[RightPanel Debug] Creating overlay canvas...');
+              const overlayCanvas = document.createElement('canvas');
+              overlayCanvas.width = canvas.width;
+              overlayCanvas.height = canvas.height;
+              const overlayCtx = overlayCanvas.getContext('2d');
+
+              // Step 1: Draw html2canvas output onto overlay canvas
+              console.log('[RightPanel Debug] Drawing html2canvas output onto overlay...');
+              overlayCtx.drawImage(canvas, 0, 0);
+
+              // Step 2: Draw blue placeholder rectangles for each iframe
+              console.log('[RightPanel Debug] Drawing', iframeInfos.length, 'iframe placeholder(s)...');
               iframeInfos.forEach((info, index) => {
-                // Draw semi-transparent blue rectangle
-                ctx.fillStyle = 'rgba(74, 158, 255, 0.3)';
-                ctx.fillRect(info.x, info.y, info.width, info.height);
+                console.log('[RightPanel Debug] Drawing iframe placeholder', index, ':', info);
 
-                // Draw border
-                ctx.strokeStyle = '#4a9eff';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(info.x, info.y, info.width, info.height);
+                // Draw solid blue rectangle
+                overlayCtx.fillStyle = '#4a9eff';
+                overlayCtx.fillRect(info.x, info.y, info.width, info.height);
+
+                // Verify pixel was drawn
+                const checkPixel = overlayCtx.getImageData(info.x + 10, info.y + 10, 1, 1);
+                console.log('[RightPanel Debug] Overlay pixel after fillRect: R=' + checkPixel.data[0] + ' G=' + checkPixel.data[1] + ' B=' + checkPixel.data[2] + ' A=' + checkPixel.data[3]);
+
+                // Draw white border
+                overlayCtx.strokeStyle = '#ffffff';
+                overlayCtx.lineWidth = 3;
+                overlayCtx.strokeRect(info.x, info.y, info.width, info.height);
 
                 // Draw URL text (truncate if too long)
-                const maxTextWidth = info.width - 20;
                 let urlText = info.url;
                 if (urlText.length > 60) {
                   urlText = urlText.substring(0, 57) + '...';
                 }
 
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 12px Monaco, Menlo, monospace';
-                ctx.textBaseline = 'top';
-                ctx.fillText(urlText, info.x + 10, info.y + 8);
+                overlayCtx.fillStyle = '#ffffff';
+                overlayCtx.font = 'bold 14px Monaco, Menlo, monospace';
+                overlayCtx.textBaseline = 'top';
+                overlayCtx.fillText(urlText, info.x + 10, info.y + 10);
 
                 // Draw iframe icon
-                ctx.font = '14px Arial';
-                ctx.fillText('🌐', info.x + info.width - 30, info.y + 6);
+                overlayCtx.font = '20px Arial';
+                overlayCtx.fillText('🌐', info.x + info.width - 40, info.y + 8);
+                console.log('[RightPanel Debug] iframe placeholder', index, 'drawn');
               });
 
-              const dataUrl = canvas.toDataURL('image/png');
-              this.downloadRightPanelData('right-panel-screenshot.png', dataUrl);
+              // Verify overlay canvas has blue pixels
+              if (iframeInfos.length > 0) {
+                const info = iframeInfos[0];
+                const imageData = overlayCtx.getImageData(info.x + 10, info.y + 10, 1, 1);
+                console.log('[RightPanel Debug] VERIFIED: Overlay pixel is blue: R=' + imageData.data[0] + ' G=' + imageData.data[1] + ' B=' + imageData.data[2]);
+              }
+
+              // Use overlay canvas for export
+              const dataUrl = overlayCanvas.toDataURL('image/png');
+              console.log('[RightPanel Debug] dataURL length:', dataUrl.length);
+              console.log('[RightPanel Debug] dataURL preview:', dataUrl.substring(0, 100));
+
+              const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace(/T/, '_');
+              const screenshotFilename = `right-panel-screenshot_${timestamp}.png`;
+              this.downloadRightPanelData(screenshotFilename, dataUrl);
               console.log('[RightPanel Debug] Screenshot captured and downloaded');
 
               // Also send debug info to server
@@ -2693,13 +2796,16 @@
 
             if (showIRC) {
               ircSectionElem.style.display = 'block';
-              // Initialize IRC client
-              this.initIRCClient(defaultChannel, networkName);
+              // Initialize IRC client with current workspace
+              this.initIRCClient(defaultChannel, networkName, this.activeWorkspaceId || 'default');
             }
           }
         }
 
-        initIRCClient(defaultChannel, networkName) {
+        initIRCClient(defaultChannel, networkName, workspaceID) {
+          // Default workspaceID to 'default' if not provided
+          workspaceID = workspaceID || 'default';
+
           // IRC client state - use saved nick or default to "user" (admin)
           const savedNick = localStorage.getItem('gotty_irc_nick') || 'user';
           this.irc = {
@@ -2709,7 +2815,8 @@
             channels: new Set([defaultChannel]),
             connected: false,
             messages: [],
-            isAdmin: savedNick === 'user' // "user" is always admin
+            isAdmin: savedNick === 'user', // "user" is always admin
+            workspaceID: workspaceID
           };
 
           // Update nick display
@@ -2718,29 +2825,36 @@
             nickDisplay.textContent = savedNick + (savedNick === 'user' ? ' ⭐' : '');
           }
 
-          // Setup WebSocket connection with auth token
+          // Setup WebSocket connection with auth token and workspace_id
           const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           let wsUrl = wsProtocol + '//' + window.location.host + '/irc/ws';
+
+          // Build query params
+          const params = new URLSearchParams();
+          params.set('workspace_id', workspaceID);
+
           // Add auth token if available
           const authToken = window.gotty_auth_token || localStorage.getItem('gotty_auth_token');
           if (authToken) {
-            wsUrl += '?token=' + encodeURIComponent(authToken);
+            params.set('token', authToken);
           }
+
+          wsUrl += '?' + params.toString();
           this.irc.ws = new WebSocket(wsUrl);
 
           const self = this;
 
           this.irc.ws.onopen = function() {
             self.irc.connected = true;
-            self.addSystemMessage('已连接到 ' + networkName);
+            self.addSystemMessage('已连接到 ' + networkName + ' (Workspace: ' + workspaceID + ')');
             // Send nick first, server will auto-join default channel after nick is set
-            self.sendIRC({ type: 'nick', nick: self.irc.nick, timestamp: Date.now() });
+            self.sendIRC({ type: 'nick', nick: self.irc.nick, workspace_id: workspaceID, timestamp: Date.now() });
           };
 
           this.irc.ws.onclose = function() {
             self.irc.connected = false;
             self.addSystemMessage('已断开连接，3 秒后重连...');
-            setTimeout(() => self.initIRCClient(defaultChannel, networkName), 3000);
+            setTimeout(() => self.initIRCClient(defaultChannel, networkName, self.irc.workspaceID), 3000);
           };
 
           this.irc.ws.onerror = function(error) {

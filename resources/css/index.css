@@ -104,6 +104,7 @@ html, body {
     transition: width 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     position: relative;
     flex-shrink: 0;
+    order: 0;
 }
 
 /* Auto-hide mode for sidebar (Mac Dock style) */
@@ -800,6 +801,10 @@ body.sidebar-auto-hide #sidebar-trigger {
     display: flex;
     flex-direction: column;
     background: black;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    order: 1;
 }
 
 #terminal-wrapper {
@@ -807,6 +812,9 @@ body.sidebar-auto-hide #sidebar-trigger {
     width: 100%;
     height: 100%;
     position: relative;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
 }
 
 #terminal {
@@ -817,6 +825,24 @@ body.sidebar-auto-hide #sidebar-trigger {
     left: 0;
     right: 0;
     bottom: 0;
+    padding: 0;
+    margin: 0;
+}
+
+/* Override xterm.js default padding */
+#terminal .xterm {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+#terminal .xterm-viewport {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+#terminal .xterm-screen {
+    padding: 0 !important;
+    margin: 0 !important;
 }
 
 /* IRC Chat Container - mutually exclusive with terminal */
@@ -3115,26 +3141,29 @@ body.sidebar-auto-hide #sidebar-trigger {
    Right Panel - Right side operation area
    ============================================ */
 
-/* Right panel container - fixed on right side */
+/* Right panel container - use flex layout instead of fixed positioning */
 .right-panel {
-    position: fixed;
-    right: 0;
-    top: 0;
-    height: 100vh;
-    width: 400px;
-    min-width: 300px;
-    max-width: 800px;
+    width: 320px;
+    min-width: 280px;
+    max-width: 600px;
     background: #1e1e2e;
     border-left: 1px solid #3a3a5a;
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
+    order: 2;
+    position: relative;
     z-index: 200;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
+    transition: width 0.3s ease, min-width 0.3s ease, max-width 0.3s ease;
+    overflow: hidden;
 }
 
-.right-panel.visible {
-    transform: translateX(0);
+/* Hidden state - collapsed to zero width */
+.right-panel:not(.visible) {
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    border-left: none;
 }
 
 /* Right panel header */
@@ -3183,6 +3212,11 @@ body.sidebar-auto-hide #sidebar-trigger {
 .btn-right-panel-action:hover {
     background: #3a3a5a;
     color: #fff;
+}
+
+.btn-right-panel-action.pinned {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.15);
 }
 
 #right-panel-close-btn:hover {
@@ -3369,9 +3403,20 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: #4a9eff;
 }
 
-/* Adjust main content when right panel is visible */
-#main.has-right-panel {
-    margin-right: 400px;
+/* Resize handle */
+.right-panel-resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    cursor: col-resize;
+    z-index: 201;
+    transition: background 0.2s;
+}
+
+.right-panel-resize-handle:hover {
+    background: #4a9eff;
 }
 
 /* Responsive: collapse right panel on small screens */
@@ -3379,10 +3424,6 @@ body.sidebar-auto-hide #sidebar-trigger {
     .right-panel {
         width: 100%;
         max-width: none;
-    }
-
-    #main.has-right-panel {
-        margin-right: 0;
     }
 }
 
