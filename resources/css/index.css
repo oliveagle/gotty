@@ -833,16 +833,31 @@ body.sidebar-auto-hide #sidebar-trigger {
 #terminal .xterm {
     padding: 0 !important;
     margin: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 #terminal .xterm-viewport {
     padding: 0 !important;
     margin: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 #terminal .xterm-screen {
     padding: 0 !important;
     margin: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Force xterm canvas/textarea to fill container */
+#terminal .xterm-canvas-layer,
+#terminal .xterm-text-layer,
+#terminal .xterm-cursor-layer,
+#terminal .xterm-selection-layer {
+    width: 100% !important;
+    height: 100% !important;
 }
 
 /* IRC Chat Container - mutually exclusive with terminal */
