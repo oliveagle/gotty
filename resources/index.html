@@ -2,10 +2,12 @@
 <html>
   <head>
     <title>{{ .title }}</title>
-    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="icon" type="image/jpeg" href="./icon.jpeg">
     <link rel="stylesheet" href="./css/index.css" />
     <link rel="stylesheet" href="./css/xterm.css" />
     <link rel="stylesheet" href="./css/xterm_customize.css" />
+    <!-- html2canvas for screenshot capture -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   </head>
   <body>
     <!-- WebAuthn/Passkeys Authentication Overlay -->
@@ -78,10 +80,12 @@
           </div>
         </div>
         <div class="sidebar-toolbar">
-          <button id="new-folder-btn" class="btn-toolbar btn-folder" title="New Folder">📁</button>
+          <button id="home-btn" class="btn-toolbar btn-home" title="Home" onclick="sessionManager.showLandingPage()">🏠</button>
+          <button id="new-folder-btn" class="btn-toolbar btn-folder" title="New Folder">🗂</button>
           <button id="new-session-btn" class="btn-toolbar btn-new" title="New Session">+</button>
+          <button id="right-panel-btn" class="btn-toolbar btn-right-panel" title="Right Panel" onclick="sessionManager.toggleRightPanel()">📋</button>
           <button id="fullscreen-btn" class="btn-toolbar btn-fullscreen" title="Toggle Fullscreen (F11)">⛶</button>
-          <a href="settings.html" id="settings-btn" class="btn-toolbar btn-settings" title="Settings">⚙️</a>
+          <button id="settings-btn" class="btn-toolbar btn-settings" title="Settings" onclick="sessionManager.showSettingsPage()">⛭</button>
         </div>
         <div class="sidebar-footer">{{ .commit }} · {{ .buildAt }}</div>
         <button class="sidebar-toggle" title="Toggle Sidebar">◀</button>
@@ -97,6 +101,10 @@
 
       <!-- Context menu for sessions -->
       <div id="context-menu" class="context-menu">
+        <div class="context-menu-item" data-action="pin">
+          <span class="menu-icon">📌</span> Pin/Unpin
+        </div>
+        <div class="context-menu-divider"></div>
         <div class="context-menu-item" data-action="kill">
           <span class="menu-icon">💀</span> Kill Session (Delete zellij)
         </div>
@@ -274,8 +282,8 @@
               <span id="marquee-content" class="marquee-content"></span>
             </div>
           </div>
-          <!-- Settings button - link to settings page -->
-          <a href="settings.html" id="banner-settings-btn" class="banner-settings-btn" title="Settings">⚙️</a>
+          <button id="banner-right-panel-btn" class="banner-right-panel-btn" title="Right Panel" onclick="sessionManager.toggleRightPanel()">📋</button>
+          <button id="banner-settings-btn" class="banner-settings-btn" title="Settings" onclick="sessionManager.showSettingsPage()">⚙️</button>
         </div>
 
         <!-- Banner context menu -->
@@ -314,6 +322,249 @@
         <div id="terminal-wrapper">
           <div id="terminal"></div>
         </div>
+
+        <!-- Landing Page - shown after login, before selecting session -->
+        <div id="landing-page">
+          <div class="landing-content">
+            <!-- Welcome Section -->
+            <div class="landing-welcome">
+              <div class="welcome-time" id="landing-time"></div>
+              <div class="welcome-greeting" id="landing-greeting"></div>
+              <div class="welcome-date" id="landing-date"></div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="landing-section">
+              <div class="section-title">Quick Actions</div>
+              <div class="quick-actions">
+                <div class="action-card" onclick="sessionManager.createSession()">
+                  <div class="action-icon">➕</div>
+                  <div class="action-label">New Session</div>
+                </div>
+                <div class="action-card" onclick="sessionManager.showSettingsPage()">
+                  <div class="action-icon">⚙️</div>
+                  <div class="action-label">Settings</div>
+                </div>
+                <div class="action-card" onclick="sessionManager.toggleRightPanel()">
+                  <div class="action-icon">📋</div>
+                  <div class="action-label">Right Panel</div>
+                </div>
+                <div class="action-card" onclick="sessionManager.showIRCChat('#general')">
+                  <div class="action-icon">💬</div>
+                  <div class="action-label">IRC Chat</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent Sessions -->
+            <div class="landing-section">
+              <div class="section-title">Recent Sessions</div>
+              <div class="recent-sessions" id="landing-recent-sessions">
+                <div class="loading-text">Loading...</div>
+              </div>
+            </div>
+
+            <!-- System Info -->
+            <div class="landing-footer">
+              <div class="system-info">
+                <span class="version">{{ .commit }}</span>
+                <span class="separator">·</span>
+                <span class="build-time">{{ .buildAt }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings Page - embedded settings -->
+        <div id="settings-page">
+          <div class="settings-container">
+            <!-- Header -->
+            <div class="settings-header">
+                <div class="header-content">
+                  <h1 class="header-title">⚙️ Settings</h1>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="settings-content">
+              <!-- Display Module -->
+              <div class="settings-module">
+                <div class="module-header">
+                  <span class="module-icon">🖥️</span>
+                  <h2 class="module-title">Display</h2>
+                </div>
+                <div class="module-body">
+                  <div class="settings-grid">
+                    <div class="setting-item">
+                      <label class="setting-label">Host Name</label>
+                      <input type="text" class="setting-input" id="setting-host-name" placeholder="Custom display name">
+                    </div>
+                    <div class="setting-item">
+                      <label class="setting-label">City Code</label>
+                      <input type="text" class="setting-input" id="setting-city-code" placeholder="Auto-detect from IP">
+                    </div>
+                    <div class="setting-item">
+                      <label class="setting-label">
+                        <input type="checkbox" id="setting-autohide" class="setting-checkbox">
+                        Auto-hide Sidebar
+                      </label>
+                    </div>
+                    <div class="setting-item">
+                      <label class="setting-label">Banner Position</label>
+                      <div class="radio-group">
+                        <label class="radio-label">
+                          <input type="radio" name="banner-position" value="top" id="banner-position-top">
+                          <span>Top</span>
+                        </label>
+                        <label class="radio-label">
+                          <input type="radio" name="banner-position" value="bottom" id="banner-position-bottom">
+                          <span>Bottom</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div class="setting-item" id="setting-irc-item" style="display: none;">
+                      <label class="setting-label">
+                        <input type="checkbox" id="setting-show-irc" class="setting-checkbox">
+                        Show IRC Chat
+                      </label>
+                    </div>
+                    <div class="setting-item">
+                      <label class="setting-label">
+                        <input type="checkbox" id="setting-weather-bg" class="setting-checkbox">
+                        Dynamic Background
+                      </label>
+                      <div class="setting-hint">Weather & sunrise/sunset effects</div>
+                    </div>
+                    <div class="setting-item" id="setting-irc-nick-item" style="display: none;">
+                      <label class="setting-label">IRC Nickname</label>
+                      <input type="text" class="setting-input" id="setting-irc-nick" placeholder="Your nickname">
+                      <div class="setting-hint">Default: user (admin)</div>
+                    </div>
+                  </div>
+                  <button class="btn-secondary" id="setting-detect-city" style="margin-top: 16px; width: 100%;">
+                    🌍 Auto-detect City from IP
+                  </button>
+                </div>
+              </div>
+
+              <!-- Weather & Time Module -->
+              <div class="settings-module">
+                <div class="module-header">
+                  <span class="module-icon">🌤️</span>
+                  <h2 class="module-title">Weather & Time</h2>
+                </div>
+                <div class="module-body">
+                  <div class="weather-info">
+                    <div class="weather-row">
+                      <span class="weather-label">City</span>
+                      <span class="weather-value" id="weather-city">-</span>
+                    </div>
+                    <div class="weather-row">
+                      <span class="weather-label">Condition</span>
+                      <span class="weather-value" id="weather-condition">-</span>
+                    </div>
+                    <div class="weather-row">
+                      <span class="weather-label">Temperature</span>
+                      <span class="weather-value" id="weather-temp">-</span>
+                    </div>
+                    <div class="weather-row">
+                      <span class="weather-label">Sunrise / Sunset</span>
+                      <span class="weather-value" id="weather-sun">-</span>
+                    </div>
+                  </div>
+                  <div class="weather-actions">
+                    <button class="btn-secondary" id="btn-refresh-weather">🔄 Refresh</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Terminal Module -->
+              <div class="settings-module">
+                <div class="module-header">
+                  <span class="module-icon">⌨️</span>
+                  <h2 class="module-title">Terminal</h2>
+                </div>
+                <div class="module-body">
+                  <div class="setting-item">
+                    <label class="setting-label">Font Size</label>
+                    <input type="range" class="setting-range" id="setting-font-size" min="10" max="24" value="14">
+                    <div class="setting-hint">Current: <span id="font-size-value">14</span>px</div>
+                  </div>
+                  <div class="setting-item">
+                    <label class="setting-label">Theme</label>
+                    <select class="setting-select" id="setting-theme">
+                      <option value="default">Default (Dark)</option>
+                      <option value="light">Light</option>
+                      <option value="monokai">Monokai</option>
+                      <option value="dracula">Dracula</option>
+                    </select>
+                  </div>
+                  <div class="setting-item">
+                    <label class="setting-label">
+                      <input type="checkbox" id="setting-bell" class="setting-checkbox">
+                      Enable Bell Sound
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Authentication Module -->
+              <div class="settings-module">
+                <div class="module-header">
+                  <span class="module-icon">🔐</span>
+                  <h2 class="module-title">Authentication</h2>
+                </div>
+                <div class="module-body">
+                  <div class="auth-status">
+                    <div class="status-row">
+                      <span class="status-label">Status</span>
+                      <span class="status-value" id="auth-status">-</span>
+                    </div>
+                    <div class="status-row">
+                      <span class="status-label">Type</span>
+                      <span class="status-value" id="auth-type">-</span>
+                    </div>
+                  </div>
+                  <div id="webauthn-section" style="display: none;">
+                    <button class="btn-secondary" id="btn-webauthn-status">🔄 Check Status</button>
+                    <button class="btn-primary" id="btn-webauthn-register">🔑 Register Passkey</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- About Module -->
+              <div class="settings-module">
+                <div class="module-header">
+                  <span class="module-icon">ℹ️</span>
+                  <h2 class="module-title">About</h2>
+                </div>
+                <div class="module-body">
+                  <div class="about-info">
+                    <div class="info-row">
+                      <span class="info-label">Version</span>
+                      <span class="info-value" id="app-version">{{ .Version }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">Build</span>
+                      <span class="info-value" id="app-build">{{ .buildAt }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">Commit</span>
+                      <span class="info-value" id="app-commit">{{ .commit }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="settings-footer">
+              <button class="btn-secondary" id="btn-reset-all">🔄 Reset All</button>
+              <button class="btn-primary" id="btn-save-all">💾 Save All Changes</button>
+            </div>
+          </div>
+        </div>
+
         <!-- IRC Chat Container - mutually exclusive with terminal -->
         <div id="irc-chat-container" class="irc-chat-container">
           <div class="irc-chat-header">
@@ -325,6 +576,81 @@
             <input type="text" id="irc-chat-input" class="irc-chat-input" placeholder="Type a message or /help...">
             <button id="irc-send-btn" class="btn-irc-send">Send</button>
           </div>
+        </div>
+
+        <!-- Right Panel - Right side operation area for file/HTTP preview and more -->
+        <div id="right-panel" class="right-panel">
+          <div class="right-panel-header">
+            <div class="right-panel-title">
+              <span class="right-panel-icon">📋</span>
+              <span class="right-panel-title-text">Right Panel</span>
+            </div>
+            <div class="right-panel-actions">
+              <button class="btn-right-panel-action" id="right-panel-screenshot-btn" title="Screenshot (let AI see)">📷</button>
+              <button class="btn-right-panel-action" id="right-panel-refresh-btn" title="Refresh">🔄</button>
+              <button class="btn-right-panel-action" id="right-panel-close-btn" title="Close">✕</button>
+            </div>
+          </div>
+          <div class="right-panel-tabs">
+            <button class="right-panel-tab active" data-tab="agui">AG UI</button>
+            <button class="right-panel-tab" data-tab="file">File</button>
+            <button class="right-panel-tab" data-tab="http">HTTP</button>
+          </div>
+          <div class="right-panel-content">
+            <!-- AG UI Tab - Agent UI Interaction -->
+            <div class="right-panel-tab-content active" id="right-panel-tab-agui">
+              <div class="agui-toolbar">
+                <input type="text" class="agui-endpoint-url" id="agui-endpoint-url" placeholder="AG UI endpoint (e.g., /api/agui)" value="/api/agui">
+                <button class="btn-agui-tool" id="agui-connect-btn" title="Connect">🔌</button>
+                <button class="btn-agui-tool" id="agui-clear-btn" title="Clear Chat">🗑</button>
+              </div>
+              <div class="agui-status-bar" id="agui-status-bar">
+                <span class="agui-status-indicator" id="agui-status-indicator"></span>
+                <span class="agui-status-text" id="agui-status-text">Disconnected</span>
+              </div>
+              <div class="agui-messages-container" id="agui-messages-container">
+                <div class="right-panel-empty-state">
+                  <div class="empty-icon">🤖</div>
+                  <div class="empty-text">AG UI Not Connected</div>
+                  <div class="empty-hint">Enter an endpoint and click 🔌 to connect</div>
+                </div>
+              </div>
+              <div class="agui-input-container">
+                <textarea class="agui-input" id="agui-input" placeholder="Type a message to the agent..." rows="3"></textarea>
+                <button class="agui-send-btn" id="agui-send-btn">Send</button>
+              </div>
+            </div>
+            <!-- File Preview Tab -->
+            <div class="right-panel-tab-content" id="right-panel-tab-file">
+              <div class="right-panel-toolbar">
+                <input type="text" class="right-panel-file-path" id="right-panel-file-path" placeholder="Enter file path..." readonly>
+                <button class="btn-right-panel-tool" id="right-panel-file-btn" title="Open File">📂</button>
+              </div>
+              <div class="right-panel-file-content" id="right-panel-file-content">
+                <div class="right-panel-empty-state">
+                  <div class="empty-icon">📄</div>
+                  <div class="empty-text">No file previewing</div>
+                  <div class="empty-hint">Click a file or enter a path to preview</div>
+                </div>
+              </div>
+            </div>
+            <!-- HTTP Preview Tab -->
+            <div class="right-panel-tab-content" id="right-panel-tab-http">
+              <div class="right-panel-toolbar">
+                <input type="text" class="right-panel-http-url" id="right-panel-http-url" placeholder="http://localhost:8080">
+                <button class="btn-right-panel-tool" id="right-panel-http-go-btn" title="Load URL">🔗</button>
+              </div>
+              <div class="right-panel-http-content" id="right-panel-http-content">
+                <div class="right-panel-empty-state">
+                  <div class="empty-icon">🌐</div>
+                  <div class="empty-text">No HTTP service previewing</div>
+                  <div class="empty-hint">Enter a URL to preview the web page</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Resize handle -->
+          <div class="right-panel-resize-handle" id="right-panel-resize-handle"></div>
         </div>
       </div>
     </div>
@@ -365,6 +691,17 @@
           this.selectedColor = 'blue';
           // Banner state
           this.sessionNotes = {}; // Store notes per session: { [sessionId]: string }
+          // Right panel state
+          this.rightPanelVisible = false;
+          this.rightPanelWidth = 400;
+          this.rightPanelActiveTab = 'agui';
+          // AG UI state
+          this.aguiClient = null;
+          this.aguiStatus = 'disconnected';
+          this.aguiMessages = [];
+          this.aguiIsTyping = false;
+          // Pinned sessions
+          this.pinnedSessions = new Set();
         }
 
         // Auth-aware fetch wrapper - adds token to all API requests
@@ -405,7 +742,23 @@
             };
             updateClock();
             setInterval(updateClock, 1000);
+
+            // Click to return to landing page
+            hostElem.style.cursor = 'pointer';
+            hostElem.addEventListener('click', () => {
+              this.disconnectTerminal();
+              this.activeSessionId = null;
+              localStorage.removeItem('last_active_session');
+              this.showLandingPage();
+              // Update sidebar active state
+              document.querySelectorAll('.session-item').forEach(item => {
+                item.classList.remove('active');
+              });
+            });
           }
+
+          // Initialize Landing Page
+          this.initLandingPage();
 
           // Initialize IRC entry (show if IRC is enabled)
           this.initIRCEntry();
@@ -414,11 +767,14 @@
           this.initDynamicBackground();
 
           // Apply banner position setting
-          const savedBannerPosition = localStorage.getItem('gotty_banner_position') || 'top';
+          const savedBannerPosition = localStorage.getItem('gotty_banner_position') || 'bottom';
           this.applyBannerPosition(savedBannerPosition);
 
           // Initialize workspace selector
           this.initWorkspaceSelector();
+
+          // Initialize settings page events
+          this.initSettingsPageEvents();
 
           // Fetch workspaces first, then sessions
           this.fetchWorkspaces();
@@ -511,6 +867,16 @@
             }
           }
 
+          // Restore pinned sessions state
+          const pinned = localStorage.getItem('pinned_sessions');
+          if (pinned) {
+            try {
+              this.pinnedSessions = new Set(JSON.parse(pinned));
+            } catch (e) {
+              this.pinnedSessions = new Set();
+            }
+          }
+
           // Initial fetch
           this.fetchSessions();
 
@@ -524,6 +890,9 @@
 
           // Initialize banner
           this.initBanner();
+
+          // Initialize right panel
+          this.initRightPanel();
         }
 
         // ==================== Workspace Methods ====================
@@ -835,6 +1204,1053 @@
           // Load notes for current session
           this.updateBannerNotes();
         }
+
+        // ==================== Right Panel Methods ====================
+
+        initRightPanel() {
+          const rightPanel = document.getElementById('right-panel');
+          if (!rightPanel) return;
+
+          // Initialize tabs
+          this.initRightPanelTabs();
+
+          // Initialize buttons
+          this.initRightPanelButtons();
+
+          // Initialize resize handle
+          this.initRightPanelResize();
+
+          // Auto-hide right panel when clicking outside
+          this.initRightPanelAutoHide();
+
+          // Restore state from localStorage
+          const savedWidth = localStorage.getItem('right_panel_width');
+          if (savedWidth) {
+            this.rightPanelWidth = parseInt(savedWidth, 10);
+            rightPanel.style.width = savedWidth + 'px';
+          }
+
+          const savedVisible = localStorage.getItem('right_panel_visible') === 'true';
+          if (savedVisible) {
+            this.showRightPanel();
+          }
+        }
+
+        initRightPanelTabs() {
+          const tabs = document.querySelectorAll('.right-panel-tab');
+          tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+              const tabName = tab.dataset.tab;
+              this.switchRightPanelTab(tabName);
+            });
+          });
+        }
+
+        switchRightPanelTab(tabName) {
+          this.rightPanelActiveTab = tabName;
+
+          // Update tab states
+          document.querySelectorAll('.right-panel-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.tab === tabName);
+          });
+
+          // Update content states
+          document.querySelectorAll('.right-panel-tab-content').forEach(content => {
+            content.classList.toggle('active', content.id === 'right-panel-tab-' + tabName);
+          });
+        }
+
+        initRightPanelButtons() {
+          // Close button
+          const closeBtn = document.getElementById('right-panel-close-btn');
+          if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+              this.hideRightPanel();
+            });
+          }
+
+          // Refresh button
+          const refreshBtn = document.getElementById('right-panel-refresh-btn');
+          if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+              this.refreshRightPanelContent();
+            });
+          }
+
+          // Screenshot button
+          const screenshotBtn = document.getElementById('right-panel-screenshot-btn');
+          if (screenshotBtn) {
+            screenshotBtn.addEventListener('click', () => {
+              this.captureRightPanelScreenshot();
+            });
+          }
+
+          // File button
+          const fileBtn = document.getElementById('right-panel-file-btn');
+          if (fileBtn) {
+            fileBtn.addEventListener('click', () => {
+              this.openRightPanelFile();
+            });
+          }
+
+          // HTTP Go button
+          const httpGoBtn = document.getElementById('right-panel-http-go-btn');
+          if (httpGoBtn) {
+            httpGoBtn.addEventListener('click', () => {
+              this.loadRightPanelHttp();
+            });
+          }
+
+          // HTTP URL input - allow Enter key
+          const httpUrlInput = document.getElementById('right-panel-http-url');
+          if (httpUrlInput) {
+            httpUrlInput.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter') {
+                this.loadRightPanelHttp();
+              }
+            });
+          }
+
+          // Initialize AG UI
+          this.initAGUI();
+        }
+
+        initRightPanelResize() {
+          const resizeHandle = document.getElementById('right-panel-resize-handle');
+          const rightPanel = document.getElementById('right-panel');
+          if (!resizeHandle || !rightPanel) return;
+
+          let isResizing = false;
+          let startX = 0;
+          let startWidth = 0;
+
+          resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            startX = e.clientX;
+            startWidth = rightPanel.offsetWidth;
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+          });
+
+          document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+
+            const delta = startX - e.clientX;
+            let newWidth = startWidth + delta;
+
+            // Constrain width
+            newWidth = Math.max(300, Math.min(newWidth, 800));
+
+            rightPanel.style.width = newWidth + 'px';
+            this.rightPanelWidth = newWidth;
+          });
+
+          document.addEventListener('mouseup', () => {
+            if (isResizing) {
+              isResizing = false;
+              document.body.style.cursor = '';
+              document.body.style.userSelect = '';
+              localStorage.setItem('right_panel_width', this.rightPanelWidth.toString());
+            }
+          });
+        }
+
+        initRightPanelAutoHide() {
+          const rightPanel = document.getElementById('right-panel');
+          const rightPanelBtn = document.getElementById('right-panel-btn');
+          const bannerRightPanelBtn = document.getElementById('banner-right-panel-btn');
+          if (!rightPanel) return;
+
+          // Click outside to hide
+          document.addEventListener('click', (e) => {
+            if (!this.rightPanelVisible) return;
+
+            // Check if click is inside right panel
+            if (rightPanel.contains(e.target)) {
+              return;
+            }
+
+            // Check if click is on right panel toggle buttons
+            if (rightPanelBtn && rightPanelBtn.contains(e.target)) {
+              return;
+            }
+            if (bannerRightPanelBtn && bannerRightPanelBtn.contains(e.target)) {
+              return;
+            }
+
+            // Hide the panel
+            this.hideRightPanel();
+          });
+        }
+
+        // ==================== AG UI Methods ====================
+
+        initAGUI() {
+          // Check if AGUIClient is available
+          if (typeof window.AGUIClient === 'undefined') {
+            console.warn('[AG-UI] AGUIClient not available, skipping initialization');
+            return;
+          }
+
+          // Initialize AG UI client
+          this.aguiClient = new window.AGUIClient({
+            endpoint: '/api/agui',
+            onEvent: (event) => this.handleAGUIEvent(event),
+            onStatusChange: (status) => this.handleAGUIStatusChange(status),
+            onError: (error) => this.handleAGUIError(error),
+          });
+
+          // Connect button
+          const connectBtn = document.getElementById('agui-connect-btn');
+          if (connectBtn) {
+            connectBtn.addEventListener('click', () => {
+              this.toggleAGUIConnection();
+            });
+          }
+
+          // Clear button
+          const clearBtn = document.getElementById('agui-clear-btn');
+          if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+              this.clearAGUIChat();
+            });
+          }
+
+          // Send button
+          const sendBtn = document.getElementById('agui-send-btn');
+          if (sendBtn) {
+            sendBtn.addEventListener('click', () => {
+              this.sendAGUIMessage();
+            });
+          }
+
+          // Input - allow Enter key (Shift+Enter for newline)
+          const input = document.getElementById('agui-input');
+          if (input) {
+            input.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendAGUIMessage();
+              }
+            });
+          }
+
+          // Initialize status display
+          this.updateAGUIStatus('disconnected');
+        }
+
+        handleAGUIEvent(event) {
+          console.log('[AG-UI] Event received:', event);
+
+          switch (event.type) {
+            case 'message':
+              this.aguiMessages.push(event);
+              this.renderAGUIMessages();
+              break;
+            case 'tool_call':
+              this.aguiMessages.push(event);
+              this.renderAGUIMessages();
+              break;
+            case 'state_update':
+              this.aguiMessages.push(event);
+              this.renderAGUIMessages();
+              break;
+            case 'human_in_the_loop':
+              this.aguiMessages.push(event);
+              this.renderAGUIMessages();
+              this.showAGUIHumanInTheLoop(event);
+              break;
+            case 'error':
+              this.aguiMessages.push({
+                type: 'system',
+                id: 'error-' + Date.now(),
+                role: 'system',
+                content: 'Error: ' + (event.message || 'Unknown error'),
+                timestamp: Date.now(),
+              });
+              this.renderAGUIMessages();
+              break;
+            case 'ping':
+              // Ignore ping events
+              break;
+            case 'done':
+              this.aguiIsTyping = false;
+              this.renderAGUIMessages();
+              break;
+          }
+        }
+
+        handleAGUIStatusChange(status) {
+          console.log('[AG-UI] Status changed:', status);
+          this.aguiStatus = status;
+          this.updateAGUIStatus(status);
+        }
+
+        handleAGUIError(error) {
+          console.error('[AG-UI] Error:', error);
+          this.aguiMessages.push({
+            type: 'system',
+            id: 'error-' + Date.now(),
+            role: 'system',
+            content: 'Connection error: ' + error.message,
+            timestamp: Date.now(),
+          });
+          this.renderAGUIMessages();
+        }
+
+        updateAGUIStatus(status) {
+          const indicator = document.getElementById('agui-status-indicator');
+          const statusText = document.getElementById('agui-status-text');
+          const connectBtn = document.getElementById('agui-connect-btn');
+          const input = document.getElementById('agui-input');
+          const sendBtn = document.getElementById('agui-send-btn');
+
+          if (!indicator || !statusText) return;
+
+          // Update indicator
+          indicator.className = 'agui-status-indicator ' + status;
+
+          // Update status text
+          const statusLabels = {
+            'disconnected': 'Disconnected',
+            'connecting': 'Connecting...',
+            'connected': 'Connected',
+            'error': 'Error',
+          };
+          statusText.textContent = statusLabels[status] || status;
+
+          // Update connect button
+          if (connectBtn) {
+            if (status === 'connected') {
+              connectBtn.textContent = '🔴';
+              connectBtn.title = 'Disconnect';
+            } else if (status === 'connecting') {
+              connectBtn.textContent = '⏳';
+              connectBtn.title = 'Connecting...';
+            } else {
+              connectBtn.textContent = '🔌';
+              connectBtn.title = 'Connect';
+            }
+          }
+
+          // Update input state
+          if (input) {
+            input.disabled = status !== 'connected';
+          }
+          if (sendBtn) {
+            sendBtn.disabled = status !== 'connected';
+          }
+        }
+
+        async toggleAGUIConnection() {
+          if (!this.aguiClient) return;
+
+          if (this.aguiStatus === 'connected') {
+            this.aguiClient.disconnect();
+          } else {
+            const endpointInput = document.getElementById('agui-endpoint-url');
+            const endpoint = endpointInput?.value || '/api/agui';
+
+            try {
+              this.aguiIsTyping = true;
+              this.renderAGUIMessages();
+              await this.aguiClient.connect(endpoint);
+
+              // Add system message
+              this.aguiMessages.push({
+                type: 'system',
+                id: 'system-' + Date.now(),
+                role: 'system',
+                content: 'Connected to AG UI endpoint: ' + endpoint,
+                timestamp: Date.now(),
+              });
+              this.renderAGUIMessages();
+            } catch (error) {
+              this.aguiIsTyping = false;
+              console.error('[AG-UI] Failed to connect:', error);
+            }
+          }
+        }
+
+        async sendAGUIMessage() {
+          const input = document.getElementById('agui-input');
+          if (!input || !this.aguiClient) return;
+
+          const content = input.value.trim();
+          if (!content) return;
+
+          // Add user message
+          const userMessage = {
+            type: 'message',
+            id: 'user-' + Date.now(),
+            role: 'user',
+            content,
+            timestamp: Date.now(),
+          };
+          this.aguiMessages.push(userMessage);
+          this.renderAGUIMessages();
+
+          // Clear input
+          input.value = '';
+
+          // Show typing indicator
+          this.aguiIsTyping = true;
+          this.renderAGUIMessages();
+
+          try {
+            await this.aguiClient.sendMessage(content);
+          } catch (error) {
+            this.aguiIsTyping = false;
+            console.error('[AG-UI] Failed to send message:', error);
+            this.aguiMessages.push({
+              type: 'system',
+              id: 'error-' + Date.now(),
+              role: 'system',
+              content: 'Failed to send message: ' + (error.message || String(error)),
+              timestamp: Date.now(),
+            });
+            this.renderAGUIMessages();
+          }
+        }
+
+        clearAGUIChat() {
+          this.aguiMessages = [];
+          this.renderAGUIMessages();
+        }
+
+        renderAGUIMessages() {
+          const container = document.getElementById('agui-messages-container');
+          if (!container) return;
+
+          if (this.aguiMessages.length === 0) {
+            container.innerHTML = `
+              <div class="right-panel-empty-state">
+                <div class="empty-icon">🤖</div>
+                <div class="empty-text">AG UI Not Connected</div>
+                <div class="empty-hint">Enter an endpoint and click 🔌 to connect</div>
+              </div>
+            `;
+            return;
+          }
+
+          container.innerHTML = '';
+
+          for (const event of this.aguiMessages) {
+            const elem = this.createAGUIEventElement(event);
+            if (elem) {
+              container.appendChild(elem);
+            }
+          }
+
+          // Add typing indicator if typing
+          if (this.aguiIsTyping) {
+            const typingElem = document.createElement('div');
+            typingElem.className = 'agui-typing-indicator';
+            typingElem.innerHTML = `
+              <div class="agui-typing-dot"></div>
+              <div class="agui-typing-dot"></div>
+              <div class="agui-typing-dot"></div>
+            `;
+            container.appendChild(typingElem);
+          }
+
+          // Scroll to bottom
+          container.scrollTop = container.scrollHeight;
+        }
+
+        createAGUIEventElement(event) {
+          switch (event.type) {
+            case 'message':
+              return this.createAGUIMessageElement(event);
+            case 'tool_call':
+              return this.createAGUIToolCallElement(event);
+            case 'state_update':
+              return this.createAGUIStateUpdateElement(event);
+            case 'human_in_the_loop':
+              return this.createAGUIHumanInTheLoopElement(event);
+            case 'system':
+              return this.createAGUISystemMessageElement(event);
+            default:
+              return null;
+          }
+        }
+
+        createAGUIMessageElement(event) {
+          const elem = document.createElement('div');
+          elem.className = 'agui-message ' + event.role;
+
+          const time = new Date(event.timestamp).toLocaleTimeString('zh-CN', { hour12: false });
+
+          elem.innerHTML = `
+            <div class="agui-message-header">
+              <span class="agui-message-role">${event.role}</span>
+              <span class="agui-message-time">${time}</span>
+            </div>
+            <div class="agui-message-content">${this.escapeHtml(event.content)}</div>
+          `;
+
+          return elem;
+        }
+
+        createAGUIToolCallElement(event) {
+          const elem = document.createElement('div');
+          elem.className = 'agui-event';
+
+          elem.innerHTML = `
+            <div class="agui-event-header">
+              <span class="agui-event-icon">🔧</span>
+              <span class="agui-event-title">Tool Call: ${this.escapeHtml(event.name)}</span>
+            </div>
+            <div class="agui-event-content">${this.escapeHtml(JSON.stringify(event.args, null, 2))}</div>
+          `;
+
+          return elem;
+        }
+
+        createAGUIStateUpdateElement(event) {
+          const elem = document.createElement('div');
+          elem.className = 'agui-event';
+
+          elem.innerHTML = `
+            <div class="agui-event-header">
+              <span class="agui-event-icon">📊</span>
+              <span class="agui-event-title">State Update: ${this.escapeHtml(event.key)}</span>
+            </div>
+            <div class="agui-event-content">${this.escapeHtml(JSON.stringify(event.value, null, 2))}</div>
+          `;
+
+          return elem;
+        }
+
+        createAGUIHumanInTheLoopElement(event) {
+          const elem = document.createElement('div');
+          elem.className = 'agui-event';
+
+          elem.innerHTML = `
+            <div class="agui-event-header">
+              <span class="agui-event-icon">👤</span>
+              <span class="agui-event-title">Human In The Loop</span>
+            </div>
+            <div class="agui-event-content">${this.escapeHtml(event.message)}</div>
+          `;
+
+          return elem;
+        }
+
+        createAGUISystemMessageElement(event) {
+          const elem = document.createElement('div');
+          elem.className = 'agui-message system';
+
+          const time = new Date(event.timestamp).toLocaleTimeString('zh-CN', { hour12: false });
+
+          elem.innerHTML = `
+            <div class="agui-message-header">
+              <span class="agui-message-role">system</span>
+              <span class="agui-message-time">${time}</span>
+            </div>
+            <div class="agui-message-content">${this.escapeHtml(event.content)}</div>
+          `;
+
+          return elem;
+        }
+
+        showAGUIHumanInTheLoop(event) {
+          // TODO: Implement HITL UI
+          console.log('[AG-UI] Human in the loop request:', event);
+        }
+
+        escapeHtml(text) {
+          const div = document.createElement('div');
+          div.textContent = text;
+          return div.innerHTML;
+        }
+
+        showRightPanel() {
+          const rightPanel = document.getElementById('right-panel');
+          const main = document.getElementById('main');
+          if (!rightPanel) return;
+
+          rightPanel.classList.add('visible');
+          main.classList.add('has-right-panel');
+          this.rightPanelVisible = true;
+          localStorage.setItem('right_panel_visible', 'true');
+
+          // Update button states
+          this.updateRightPanelButtonState(true);
+
+          // Resize terminal to fit new layout
+          this.fitTerminal();
+        }
+
+        hideRightPanel() {
+          const rightPanel = document.getElementById('right-panel');
+          const main = document.getElementById('main');
+          if (!rightPanel) return;
+
+          rightPanel.classList.remove('visible');
+          main.classList.remove('has-right-panel');
+          this.rightPanelVisible = false;
+          localStorage.setItem('right_panel_visible', 'false');
+
+          // Update button states
+          this.updateRightPanelButtonState(false);
+
+          // Resize terminal to fit new layout
+          this.fitTerminal();
+        }
+
+        toggleRightPanel() {
+          if (this.rightPanelVisible) {
+            this.hideRightPanel();
+          } else {
+            this.showRightPanel();
+          }
+        }
+
+        updateRightPanelButtonState(isVisible) {
+          // Update sidebar button
+          const sidebarBtn = document.getElementById('right-panel-btn');
+          if (sidebarBtn) {
+            sidebarBtn.classList.toggle('active', isVisible);
+          }
+          // Update banner button
+          const bannerBtn = document.getElementById('banner-right-panel-btn');
+          if (bannerBtn) {
+            bannerBtn.classList.toggle('active', isVisible);
+          }
+        }
+
+        refreshRightPanelContent() {
+          const activeTab = this.rightPanelActiveTab;
+          if (activeTab === 'file') {
+            const filePath = document.getElementById('right-panel-file-path').value;
+            if (filePath) {
+              this.loadRightPanelFile(filePath);
+            }
+          } else if (activeTab === 'http') {
+            const httpUrl = document.getElementById('right-panel-http-url').value;
+            if (httpUrl) {
+              this.loadRightPanelHttpUrl(httpUrl);
+            }
+          }
+        }
+
+        openRightPanelFile() {
+          // Simple prompt for file path - will be enhanced with file browser later
+          const filePath = prompt('Enter file path:');
+          if (filePath) {
+            this.loadRightPanelFile(filePath);
+          }
+        }
+
+        async loadRightPanelFile(filePath) {
+          console.log('[RightPanel] Loading file:', filePath);
+          const pathInput = document.getElementById('right-panel-file-path');
+          const contentDiv = document.getElementById('right-panel-file-content');
+
+          if (pathInput) pathInput.value = filePath;
+
+          try {
+            const url = `/api/preview/file?path=${encodeURIComponent(filePath)}`;
+            console.log('[RightPanel] Fetching URL:', url);
+            const response = await this.authFetch(url);
+            console.log('[RightPanel] Response status:', response.status);
+            if (!response.ok) {
+              throw new Error(`Failed to load file: ${response.statusText}`);
+            }
+            const data = await response.json();
+            console.log('[RightPanel] Response data:', data);
+            if (data.content) {
+              contentDiv.innerHTML = `<pre class="right-panel-file-text">${this.escapeHtml(data.content)}</pre>`;
+              console.log('[RightPanel] File content displayed');
+            } else {
+              contentDiv.innerHTML = `<div class="right-panel-empty-state"><div class="empty-text">File is empty</div></div>`;
+            }
+          } catch (error) {
+            console.error('[RightPanel] Error loading file:', error);
+            contentDiv.innerHTML = `<div class="right-panel-empty-state"><div class="empty-text">Error: ${error.message}</div></div>`;
+          }
+        }
+
+        loadRightPanelHttp() {
+          const urlInput = document.getElementById('right-panel-http-url');
+          const url = urlInput.value.trim();
+          console.log('[RightPanel] HTTP URL entered:', url);
+          if (url) {
+            this.loadRightPanelHttpUrl(url);
+          }
+        }
+
+        loadRightPanelHttpUrl(url) {
+          console.log('[RightPanel] Loading HTTP URL:', url);
+          const contentDiv = document.getElementById('right-panel-http-content');
+          const urlInput = document.getElementById('right-panel-http-url');
+
+          if (urlInput) urlInput.value = url;
+
+          // Use iframe to preview HTTP service
+          contentDiv.innerHTML = `<iframe class="right-panel-iframe" src="${url}" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>`;
+          console.log('[RightPanel] Iframe created for URL:', url);
+        }
+
+        escapeHtml(text) {
+          const div = document.createElement('div');
+          div.textContent = text;
+          return div.innerHTML;
+        }
+
+        fitTerminal() {
+          // Fit terminal considering right panel state
+          if (this.term && this.term.fitWithSidebarState) {
+            const sidebar = document.getElementById('sidebar');
+            const isSidebarCollapsed = sidebar && (
+              sidebar.classList.contains('collapsed') ||
+              sidebar.classList.contains('auto-hide')
+            );
+            this.term.fitWithSidebarState(isSidebarCollapsed);
+          }
+        }
+
+        // ==================== Right Panel Debug Methods ====================
+
+        /**
+         * Capture screenshot of right panel content and save to file
+         */
+        async captureRightPanelScreenshot() {
+          console.log('[RightPanel Debug] Capturing screenshot...');
+
+          // Wait a bit for DOM to be ready
+          await new Promise(resolve => setTimeout(resolve, 150));
+
+          // Capture the entire right panel
+          const rightPanel = document.getElementById('right-panel');
+          const contentDiv = document.getElementById('right-panel-content');
+          const httpContent = document.getElementById('right-panel-http-content');
+
+          if (!rightPanel) {
+            console.error('[RightPanel Debug] Right panel element not found');
+            return;
+          }
+
+          // Detect iframes before capturing (html2canvas cannot render iframe content)
+          const iframes = httpContent?.querySelectorAll('iframe') || [];
+          const iframeInfos = [];
+          iframes.forEach((iframe, index) => {
+            const rect = iframe.getBoundingClientRect();
+            const panelRect = rightPanel.getBoundingClientRect();
+            // Calculate position relative to right panel
+            iframeInfos.push({
+              url: iframe.src || 'about:blank',
+              x: rect.left - panelRect.left,
+              y: rect.top - panelRect.top,
+              width: rect.width,
+              height: rect.height
+            });
+          });
+
+          try {
+            // Use html2canvas if available
+            if (window.html2canvas) {
+              console.log('[RightPanel Debug] html2canvas is available, capturing...');
+              console.log('[RightPanel Debug] Found', iframes.length, 'iframe(s)');
+
+              // Use ignoreElements to skip iframes (they will be drawn as placeholders)
+              const canvas = await window.html2canvas(rightPanel, {
+                backgroundColor: '#1e1e2e',
+                scale: 1,
+                logging: false,
+                useCORS: true,
+                allowTaint: true,
+                ignoreElements: (el) => el.tagName === 'IFRAME'
+              });
+
+              const ctx = canvas.getContext('2d');
+
+              // Draw blue placeholder rectangles for each iframe
+              iframeInfos.forEach((info, index) => {
+                // Draw semi-transparent blue rectangle
+                ctx.fillStyle = 'rgba(74, 158, 255, 0.3)';
+                ctx.fillRect(info.x, info.y, info.width, info.height);
+
+                // Draw border
+                ctx.strokeStyle = '#4a9eff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(info.x, info.y, info.width, info.height);
+
+                // Draw URL text (truncate if too long)
+                const maxTextWidth = info.width - 20;
+                let urlText = info.url;
+                if (urlText.length > 60) {
+                  urlText = urlText.substring(0, 57) + '...';
+                }
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 12px Monaco, Menlo, monospace';
+                ctx.textBaseline = 'top';
+                ctx.fillText(urlText, info.x + 10, info.y + 8);
+
+                // Draw iframe icon
+                ctx.font = '14px Arial';
+                ctx.fillText('🌐', info.x + info.width - 30, info.y + 6);
+              });
+
+              const dataUrl = canvas.toDataURL('image/png');
+              this.downloadRightPanelData('right-panel-screenshot.png', dataUrl);
+              console.log('[RightPanel Debug] Screenshot captured and downloaded');
+
+              // Also send debug info to server
+              this.sendDebugToLog();
+            } else {
+              console.log('[RightPanel Debug] html2canvas not available, using fallback');
+              // Fallback: capture visible content as text
+              const debugInfo = this.getRightPanelDebugInfo();
+              const blob = new Blob([JSON.stringify(debugInfo, null, 2)], { type: 'application/json' });
+              const dataUrl = URL.createObjectURL(blob);
+              this.downloadRightPanelData('right-panel-debug.json', dataUrl);
+              console.log('[RightPanel Debug] Debug info exported (html2canvas not available)');
+
+              // Also send debug info to server
+              this.sendDebugToLog();
+            }
+          } catch (error) {
+            console.error('[RightPanel Debug] Screenshot failed:', error);
+            // Fallback to text export
+            this.exportRightPanelContent();
+          }
+        }
+
+        /**
+         * Get debug info about right panel
+         */
+        getRightPanelDebugInfo() {
+          const rightPanel = document.getElementById('right-panel');
+          const contentDiv = document.getElementById('right-panel-content');
+          const fileContent = document.getElementById('right-panel-file-content');
+          const httpContent = document.getElementById('right-panel-http-content');
+          const pathInput = document.getElementById('right-panel-file-path');
+          const urlInput = document.getElementById('right-panel-http-url');
+
+          return {
+            timestamp: new Date().toISOString(),
+            panelVisible: this.rightPanelVisible,
+            activeTab: this.rightPanelActiveTab,
+            panelWidth: this.rightPanelWidth,
+            filePath: pathInput?.value || '',
+            httpUrl: urlInput?.value || '',
+            fileContentHtml: fileContent?.innerHTML?.substring(0, 500) || '',
+            httpContentHasIframe: httpContent?.querySelector('iframe') !== null,
+            iframeSrc: httpContent?.querySelector('iframe')?.src || '',
+            contentDivClasses: contentDiv?.className || '',
+            domStructure: this.getRightPanelDomStructure()
+          };
+        }
+
+        /**
+         * Get DOM structure of right panel
+         */
+        getRightPanelDomStructure() {
+          const rightPanel = document.getElementById('right-panel');
+          if (!rightPanel) return null;
+
+          function getElementInfo(el) {
+            if (!el || el.nodeType !== 1) return null;
+            return {
+              tag: el.tagName.toLowerCase(),
+              id: el.id || null,
+              classes: el.className || null,
+              text: (el.textContent || '').substring(0, 50).trim(),
+              children: Array.from(el.children).map(getElementInfo).filter(Boolean)
+            };
+          }
+
+          return getElementInfo(rightPanel);
+        }
+
+        /**
+         * Export right panel content as text/HTML
+         */
+        exportRightPanelContent() {
+          const activeTab = this.rightPanelActiveTab;
+          let content = '';
+          let filename = '';
+
+          if (activeTab === 'file') {
+            const fileContent = document.getElementById('right-panel-file-content');
+            const filePath = document.getElementById('right-panel-file-path')?.value;
+            content = `=== Right Panel File Content ===\nFile: ${filePath}\n\n${fileContent?.innerText || 'No content'}`;
+            filename = 'right-panel-file-content.txt';
+          } else if (activeTab === 'http') {
+            const httpContent = document.getElementById('right-panel-http-content');
+            const iframe = httpContent?.querySelector('iframe');
+            content = `=== Right Panel HTTP Content ===\nURL: ${iframe?.src || 'No iframe'}\n\nNote: iframe content cannot be exported due to CORS`;
+            filename = 'right-panel-http-content.txt';
+          }
+
+          const blob = new Blob([content], { type: 'text/plain' });
+          const dataUrl = URL.createObjectURL(blob);
+          this.downloadRightPanelData(filename, dataUrl);
+        }
+
+        /**
+         * Download right panel data
+         */
+        downloadRightPanelData(filename, dataUrl) {
+          const a = document.createElement('a');
+          a.href = dataUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(dataUrl);
+          console.log('[RightPanel Debug] Data downloaded:', filename);
+        }
+
+        /**
+         * Send debug info to server log (for AI to see)
+         */
+        async sendDebugToLog() {
+          const debugInfo = this.getRightPanelDebugInfo();
+          try {
+            await fetch('/api/right-panel-debug', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(debugInfo)
+            });
+            console.log('[RightPanel Debug] Debug info sent to server');
+          } catch (error) {
+            console.error('[RightPanel Debug] Failed to send debug:', error);
+          }
+        }
+
+        /**
+         * Execute custom operation on right panel DOM
+         * This allows AI to manipulate the right panel content
+         */
+        operateRightPanelDom(operation) {
+          console.log('[RightPanel DOM Op] Executing operation:', operation);
+
+          const rightPanel = document.getElementById('right-panel');
+          const content = document.getElementById('right-panel-content');
+          const fileContent = document.getElementById('right-panel-file-content');
+          const httpContent = document.getElementById('right-panel-http-content');
+
+          if (!rightPanel) {
+            console.error('[RightPanel DOM Op] Right panel not found');
+            return { success: false, error: 'Right panel not found' };
+          }
+
+          try {
+            switch (operation.type) {
+              // Get content text
+              case 'getContent':
+                return {
+                  success: true,
+                  data: {
+                    fileContent: fileContent?.innerText || '',
+                    httpContent: httpContent?.innerText || '',
+                    activeTab: this.rightPanelActiveTab
+                  }
+                };
+
+              // Set content HTML
+              case 'setContent':
+                if (this.rightPanelActiveTab === 'file' && fileContent) {
+                  fileContent.innerHTML = operation.html || '';
+                } else if (this.rightPanelActiveTab === 'http' && httpContent) {
+                  httpContent.innerHTML = operation.html || '';
+                }
+                return { success: true, message: 'Content updated' };
+
+              // Find element by selector
+              case 'find':
+                const el = content?.querySelector(operation.selector);
+                return {
+                  success: true,
+                  found: el !== null,
+                  tag: el?.tagName?.toLowerCase(),
+                  id: el?.id,
+                  classes: el?.className,
+                  text: el?.textContent?.substring(0, 200)
+                };
+
+              // Find all elements by selector
+              case 'findAll':
+                const elements = content?.querySelectorAll(operation.selector) || [];
+                return {
+                  success: true,
+                  count: elements.length,
+                  elements: Array.from(elements).map(e => ({
+                    tag: e.tagName?.toLowerCase(),
+                    id: e.id,
+                    classes: e.className,
+                    text: e.textContent?.substring(0, 100)
+                  }))
+                };
+
+              // Click element
+              case 'click':
+                const clickEl = content?.querySelector(operation.selector);
+                if (clickEl) {
+                  clickEl.click();
+                  return { success: true, message: `Clicked ${operation.selector}` };
+                }
+                return { success: false, error: `Element not found: ${operation.selector}` };
+
+              // Get iframe content info
+              case 'getIframeInfo':
+                const iframe = httpContent?.querySelector('iframe');
+                if (iframe) {
+                  return {
+                    success: true,
+                    src: iframe.src,
+                    hasContent: iframe.contentDocument !== null,
+                    // Note: Can't read cross-origin iframe content
+                    title: iframe.contentDocument?.title || 'N/A (cross-origin)'
+                  };
+                }
+                return { success: false, error: 'No iframe found' };
+
+              // Highlight element (for debugging)
+              case 'highlight':
+                const highlightEl = content?.querySelector(operation.selector);
+                if (highlightEl) {
+                  const originalBorder = highlightEl.style.border;
+                  highlightEl.style.border = '2px solid red';
+                  setTimeout(() => {
+                    highlightEl.style.border = originalBorder;
+                  }, 2000);
+                  return { success: true, message: 'Highlighted for 2 seconds' };
+                }
+                return { success: false, error: `Element not found: ${operation.selector}` };
+
+              // Switch tab
+              case 'switchTab':
+                this.switchRightPanelTab(operation.tab);
+                return { success: true, message: `Switched to ${operation.tab} tab` };
+
+              // Close panel
+              case 'close':
+                this.hideRightPanel();
+                return { success: true, message: 'Panel closed' };
+
+              // Open panel
+              case 'open':
+                this.showRightPanel();
+                return { success: true, message: 'Panel opened' };
+
+              default:
+                return { success: false, error: `Unknown operation: ${operation.type}` };
+            }
+          } catch (error) {
+            console.error('[RightPanel DOM Op] Error:', error);
+            return { success: false, error: error.message };
+          }
+        }
+
+        // ==================== End Right Panel Debug Methods ====================
+
+        // ==================== End Right Panel Methods ====================
 
         initBannerContextMenu() {
           const bannerNotes = document.getElementById('banner-notes');
@@ -1242,6 +2658,9 @@
               if (!sessionId) return;
 
               switch (action) {
+                case 'pin':
+                  this.togglePin(sessionId);
+                  break;
                 case 'kill':
                   this.showConfirm('Permanently delete this zellij session?', () => {
                     this.killSession(sessionId);
@@ -1416,11 +2835,8 @@
                   const channel = match[1];
                   this.irc.channels.add(channel);
                   this.addChannelToList(channel, 1);
-                  // Auto show chat on first join
-                  if (!this.irc.chatVisible) {
-                    this.showIRCChat(channel);
-                    this.irc.chatVisible = true;
-                  }
+                  // Don't auto show chat - let user click to open
+                  // This allows landing page to be shown by default
                 }
               }
               break;
@@ -1558,16 +2974,27 @@
         }
 
         showIRCChat(channel) {
+          // Hide all other pages
+          this.hideLandingPage();
+          const settingsPage = document.getElementById('settings-page');
+          if (settingsPage) settingsPage.classList.remove('visible');
+
           const chatContainer = document.getElementById('irc-chat-container');
           const terminalWrapper = document.getElementById('terminal-wrapper');
           const channelElem = document.getElementById('irc-chat-channel');
+          const banner = document.getElementById('banner');
+
           if (chatContainer && channelElem) {
             this.irc.channel = channel || this.irc.channel;
             channelElem.textContent = this.irc.channel;
             chatContainer.classList.add('visible');
-            // Hide terminal wrapper to prevent z-fighting
+            // Hide terminal wrapper
             if (terminalWrapper) {
               terminalWrapper.style.display = 'none';
+            }
+            // Hide banner
+            if (banner) {
+              banner.style.display = 'none';
             }
           }
         }
@@ -1577,9 +3004,14 @@
           const terminalWrapper = document.getElementById('terminal-wrapper');
           if (chatContainer) {
             chatContainer.classList.remove('visible');
-            // Show terminal wrapper again
-            if (terminalWrapper) {
+            // Show terminal wrapper again if there's an active session
+            if (this.activeSessionId && terminalWrapper) {
               terminalWrapper.style.display = 'block';
+              const banner = document.getElementById('banner');
+              if (banner) banner.style.display = 'flex';
+            } else {
+              // No active session, show landing page
+              this.showLandingPage();
             }
           }
         }
@@ -1703,23 +3135,11 @@
             this.sessions = data.sessions || [];
             this.renderSessionList();
 
-            // Auto-select session if none selected
-            if (!this.activeSessionId && this.sessions.length > 0) {
-              // Try to restore last active session
-              const lastSessionId = localStorage.getItem('last_active_session');
-              if (lastSessionId) {
-                const lastSession = this.sessions.find(s => s.id === lastSessionId && !s.is_folder);
-                if (lastSession) {
-                  this.setActiveSession(lastSessionId);
-                  return;
-                }
-              }
-              // Fallback to first session
-              const firstSession = this.findFirstSession();
-              if (firstSession) {
-                this.setActiveSession(firstSession.id);
-              }
-            }
+            // Update landing page recent sessions
+            this.updateLandingRecentSessions();
+
+            // Note: We don't auto-select session anymore, landing page is shown by default
+            // User can click on a session or recent session item to select it
           } catch (error) {
             console.error('Failed to fetch sessions:', error);
             this.renderSessionList();
@@ -1852,7 +3272,11 @@
           menu.classList.add('visible');
           menu.dataset.sessionId = id;
 
-          // Hide kill/close/rename options for folders
+          // Hide pin/kill/close/rename options for folders
+          const pinItem = menu.querySelector('[data-action="pin"]');
+          if (pinItem) {
+            pinItem.style.display = isFolder ? 'none' : 'flex';
+          }
           const killItem = menu.querySelector('[data-action="kill"]');
           if (killItem) {
             killItem.style.display = isFolder ? 'none' : 'flex';
@@ -1864,6 +3288,16 @@
           const renameItem = menu.querySelector('[data-action="rename"]');
           if (renameItem) {
             renameItem.style.display = isFolder ? 'none' : 'flex';
+          }
+
+          // Update pin item text based on current state
+          if (pinItem && !isFolder) {
+            const pinIcon = pinItem.querySelector('.menu-icon');
+            const isPinned = this.pinnedSessions.has(id);
+            if (pinIcon) {
+              pinIcon.textContent = isPinned ? '📍' : '📌';
+            }
+            pinItem.lastChild.textContent = isPinned ? ' Unpin' : ' Pin';
           }
 
           // Populate workspace submenu (for both sessions and folders)
@@ -1907,6 +3341,23 @@
           if (menu) {
             menu.classList.remove('visible');
           }
+        }
+
+        // Toggle pin state for a session
+        togglePin(sessionId) {
+          if (this.pinnedSessions.has(sessionId)) {
+            this.pinnedSessions.delete(sessionId);
+          } else {
+            this.pinnedSessions.add(sessionId);
+          }
+          // Save to localStorage
+          localStorage.setItem('pinned_sessions', JSON.stringify([...this.pinnedSessions]));
+          // Re-render the session list
+          this.renderSessionList();
+        }
+
+        isPinned(sessionId) {
+          return this.pinnedSessions.has(sessionId);
         }
 
         showConfirm(message, onConfirm) {
@@ -2336,8 +3787,15 @@
             return;
           }
 
-          // Build tree structure
+          // Separate pinned and unpinned sessions (only for root-level, non-folder sessions)
           const rootItems = this.sessions.filter(s => !s.parent_id);
+          const pinnedItems = rootItems.filter(s => !s.is_folder && this.pinnedSessions.has(s.id));
+          const unpinnedRootItems = rootItems.filter(item => {
+            if (item.is_folder) return true;
+            return !this.pinnedSessions.has(item.id);
+          });
+
+          // Build children map for all sessions
           const childrenMap = new Map();
           this.sessions.filter(s => s.parent_id).forEach(child => {
             if (!childrenMap.has(child.parent_id)) {
@@ -2378,7 +3836,23 @@
             return html;
           };
 
-          container.innerHTML = renderItems(rootItems);
+          // Build HTML with pinned section first
+          let html = '';
+
+          // Render pinned sessions section
+          if (pinnedItems.length > 0) {
+            html += '<div class="pinned-section">';
+            html += '<div class="pinned-section-header"><span class="pinned-icon">📌</span> Pinned</div>';
+            html += renderItems(pinnedItems);
+            html += '</div>';
+          }
+
+          // Render unpinned sessions section
+          html += '<div class="unpinned-section">';
+          html += renderItems(unpinnedRootItems);
+          html += '</div>';
+
+          container.innerHTML = html;
 
           // Focus on input if editing
           if (this.editingId) {
@@ -2485,8 +3959,23 @@
           const session = this.sessions.find(s => s.id === id);
           if (!session || session.is_folder) return;
 
-          // Hide IRC chat when switching to a terminal session
-          this.hideIRCChat();
+          // Hide all other pages
+          const landingPage = document.getElementById('landing-page');
+          const settingsPage = document.getElementById('settings-page');
+          const ircChatContainer = document.getElementById('irc-chat-container');
+          const terminalWrapper = document.getElementById('terminal-wrapper');
+          const banner = document.getElementById('banner');
+
+          if (landingPage) landingPage.classList.remove('visible');
+          if (settingsPage) settingsPage.classList.remove('visible');
+          if (ircChatContainer) ircChatContainer.classList.remove('visible');
+
+          // Show terminal and banner
+          if (terminalWrapper) {
+            terminalWrapper.classList.remove('hidden');
+            terminalWrapper.style.display = 'block';
+          }
+          if (banner) banner.style.display = 'flex';
 
           if (this.activeSessionId !== id) {
             this.disconnectTerminal();
@@ -2507,6 +3996,492 @@
             }
           });
         }
+
+        // ==================== Landing Page Methods ====================
+
+        initLandingPage() {
+          // Show landing page by default
+          this.showLandingPage();
+
+          // Update landing page time every second
+          this.updateLandingTime();
+          setInterval(() => this.updateLandingTime(), 1000);
+
+          // Recent sessions will be updated when fetchSessions completes
+        }
+
+        updateLandingTime() {
+          const timeEl = document.getElementById('landing-time');
+          const greetingEl = document.getElementById('landing-greeting');
+          const dateEl = document.getElementById('landing-date');
+
+          if (!timeEl || !greetingEl || !dateEl) return;
+
+          const now = new Date();
+          const hours = now.getHours();
+
+          // Time
+          const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+          timeEl.textContent = timeStr;
+
+          // Greeting based on time of day
+          let greeting = 'Hello';
+          if (hours >= 5 && hours < 12) {
+            greeting = 'Good Morning';
+          } else if (hours >= 12 && hours < 17) {
+            greeting = 'Good Afternoon';
+          } else if (hours >= 17 && hours < 21) {
+            greeting = 'Good Evening';
+          } else {
+            greeting = 'Good Night';
+          }
+          greetingEl.textContent = greeting;
+
+          // Date
+          const dateStr = now.toLocaleDateString('zh-CN', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+          dateEl.textContent = dateStr;
+        }
+
+        updateLandingRecentSessions() {
+          const container = document.getElementById('landing-recent-sessions');
+          if (!container) return;
+
+          // Get non-folder sessions, sorted by last active time (most recent first)
+          const recentSessions = this.sessions
+            .filter(s => !s.is_folder)
+            .sort((a, b) => {
+              // Sort by order if available, otherwise by title
+              return (a.order || 0) - (b.order || 0);
+            })
+            .slice(0, 5); // Show top 5
+
+          if (recentSessions.length === 0) {
+            container.innerHTML = '<div class="no-sessions">No sessions yet. Create one to get started!</div>';
+            return;
+          }
+
+          let html = '';
+          recentSessions.forEach(session => {
+            const activityClass = session.is_active ? 'active' : '';
+            const activityIcon = session.is_active ? '🟢' : '⚪';
+            const meta = session.workdir ? session.workdir : (session.subtitle || '');
+
+            html += `
+              <div class="recent-session-item" onclick="sessionManager.setActiveSession('${session.id}')">
+                <div class="session-icon">${activityIcon}</div>
+                <div class="session-info">
+                  <div class="session-title">${this.escapeHtml(session.title)}</div>
+                  <div class="session-meta">${this.escapeHtml(meta)}</div>
+                </div>
+                <div class="session-arrow">→</div>
+              </div>
+            `;
+          });
+
+          container.innerHTML = html;
+        }
+
+        showLandingPage() {
+          // Hide all other pages
+          const settingsPage = document.getElementById('settings-page');
+          const ircChatContainer = document.getElementById('irc-chat-container');
+          if (settingsPage) settingsPage.classList.remove('visible');
+          if (ircChatContainer) ircChatContainer.classList.remove('visible');
+
+          const landingPage = document.getElementById('landing-page');
+          const terminalWrapper = document.getElementById('terminal-wrapper');
+          const banner = document.getElementById('banner');
+
+          if (landingPage) {
+            landingPage.classList.add('visible');
+          }
+          if (terminalWrapper) {
+            terminalWrapper.classList.add('hidden');
+          }
+          // Hide banner when landing page is visible
+          if (banner) {
+            banner.style.display = 'none';
+          }
+
+          // Update recent sessions
+          this.updateLandingRecentSessions();
+        }
+
+        hideLandingPage() {
+          const landingPage = document.getElementById('landing-page');
+          if (landingPage) {
+            landingPage.classList.remove('visible');
+          }
+        }
+
+        // ==================== End Landing Page Methods ====================
+
+        // ==================== Settings Page Methods ====================
+
+        showSettingsPage() {
+          // Hide all other pages
+          this.hideLandingPage();
+          this.hideIRCChat();
+
+          const settingsPage = document.getElementById('settings-page');
+          const terminalWrapper = document.getElementById('terminal-wrapper');
+          const banner = document.getElementById('banner');
+
+          if (settingsPage) {
+            settingsPage.classList.add('visible');
+            // Load settings values
+            this.loadSettingsValues();
+          }
+          if (terminalWrapper) {
+            terminalWrapper.classList.add('hidden');
+          }
+          if (banner) {
+            banner.style.display = 'none';
+          }
+        }
+
+        hideSettingsPage() {
+          const settingsPage = document.getElementById('settings-page');
+          if (settingsPage) {
+            settingsPage.classList.remove('visible');
+          }
+          // Show landing page
+          this.showLandingPage();
+        }
+
+        async loadSettingsValues() {
+          try {
+            // First try to load from server
+            const response = await this.authFetch('/api/user-settings');
+            if (response.ok) {
+              const settings = await response.json();
+
+              // Display settings
+              const hostNameInput = document.getElementById('setting-host-name');
+              const cityCodeInput = document.getElementById('setting-city-code');
+              const autohideCheckbox = document.getElementById('setting-autohide');
+              const weatherBgCheckbox = document.getElementById('setting-weather-bg');
+
+              if (hostNameInput) hostNameInput.value = settings.host_name || '';
+              if (cityCodeInput) cityCodeInput.value = settings.city_code || '';
+              if (autohideCheckbox) autohideCheckbox.checked = settings.auto_hide_sidebar || false;
+              if (weatherBgCheckbox) weatherBgCheckbox.checked = settings.weather_bg || false;
+
+              // Banner position
+              const bannerPos = settings.banner_position || 'top';
+              const bannerTopRadio = document.getElementById('banner-position-top');
+              const bannerBottomRadio = document.getElementById('banner-position-bottom');
+              if (bannerPos === 'top' && bannerTopRadio) bannerTopRadio.checked = true;
+              if (bannerPos === 'bottom' && bannerBottomRadio) bannerBottomRadio.checked = true;
+
+              // IRC settings
+              const showIrcCheckbox = document.getElementById('setting-show-irc');
+              const ircNickInput = document.getElementById('setting-irc-nick');
+              if (showIrcCheckbox) showIrcCheckbox.checked = settings.show_irc !== false;
+              if (ircNickInput) ircNickInput.value = settings.irc_nick || 'user';
+
+              // Terminal settings
+              const fontSize = settings.font_size || '14';
+              const fontSizeInput = document.getElementById('setting-font-size');
+              const fontSizeValue = document.getElementById('font-size-value');
+              if (fontSizeInput) fontSizeInput.value = fontSize;
+              if (fontSizeValue) fontSizeValue.textContent = fontSize;
+
+              const theme = settings.theme || 'default';
+              const themeSelect = document.getElementById('setting-theme');
+              if (themeSelect) themeSelect.value = theme;
+
+              const bellCheckbox = document.getElementById('setting-bell');
+              if (bellCheckbox) bellCheckbox.checked = settings.bell !== false;
+
+              // Also sync to localStorage for backward compatibility
+              this.syncSettingsToLocalStorage(settings);
+
+              // Load weather info
+              this.loadWeatherInfo();
+              return;
+            }
+          } catch (error) {
+            console.error('Failed to load settings from server:', error);
+          }
+
+          // Fallback to localStorage if server fails
+          this.loadSettingsFromLocalStorage();
+        }
+
+        loadSettingsFromLocalStorage() {
+          // Display settings
+          const hostNameInput = document.getElementById('setting-host-name');
+          const cityCodeInput = document.getElementById('setting-city-code');
+          const autohideCheckbox = document.getElementById('setting-autohide');
+          const weatherBgCheckbox = document.getElementById('setting-weather-bg');
+
+          if (hostNameInput) hostNameInput.value = localStorage.getItem('gotty_host_name') || '';
+          if (cityCodeInput) cityCodeInput.value = localStorage.getItem('gotty_city_code') || '';
+          if (autohideCheckbox) autohideCheckbox.checked = localStorage.getItem('sidebar_auto_hide') === 'true';
+          if (weatherBgCheckbox) weatherBgCheckbox.checked = localStorage.getItem('gotty_weather_bg') === 'true';
+
+          // Banner position
+          const bannerPos = localStorage.getItem('gotty_banner_position') || 'top';
+          const bannerTopRadio = document.getElementById('banner-position-top');
+          const bannerBottomRadio = document.getElementById('banner-position-bottom');
+          if (bannerPos === 'top' && bannerTopRadio) bannerTopRadio.checked = true;
+          if (bannerPos === 'bottom' && bannerBottomRadio) bannerBottomRadio.checked = true;
+
+          // IRC settings
+          const showIrc = localStorage.getItem('gotty_show_irc') !== 'false';
+          const showIrcCheckbox = document.getElementById('setting-show-irc');
+          const ircNickInput = document.getElementById('setting-irc-nick');
+          if (showIrcCheckbox) showIrcCheckbox.checked = showIrc;
+          if (ircNickInput) ircNickInput.value = localStorage.getItem('gotty_irc_nick') || 'user';
+
+          // Terminal settings
+          const fontSize = localStorage.getItem('gotty_font_size') || '14';
+          const fontSizeInput = document.getElementById('setting-font-size');
+          const fontSizeValue = document.getElementById('font-size-value');
+          if (fontSizeInput) fontSizeInput.value = fontSize;
+          if (fontSizeValue) fontSizeValue.textContent = fontSize;
+
+          const theme = localStorage.getItem('gotty_theme') || 'default';
+          const themeSelect = document.getElementById('setting-theme');
+          if (themeSelect) themeSelect.value = theme;
+
+          const bellCheckbox = document.getElementById('setting-bell');
+          if (bellCheckbox) bellCheckbox.checked = localStorage.getItem('gotty_bell') !== 'false';
+
+          // Load weather info
+          this.loadWeatherInfo();
+        }
+
+        syncSettingsToLocalStorage(settings) {
+          if (settings.host_name !== undefined) localStorage.setItem('gotty_host_name', settings.host_name);
+          if (settings.city_code !== undefined) localStorage.setItem('gotty_city_code', settings.city_code);
+          if (settings.auto_hide_sidebar !== undefined) localStorage.setItem('sidebar_auto_hide', settings.auto_hide_sidebar.toString());
+          if (settings.weather_bg !== undefined) localStorage.setItem('gotty_weather_bg', settings.weather_bg.toString());
+          if (settings.banner_position !== undefined) localStorage.setItem('gotty_banner_position', settings.banner_position);
+          if (settings.show_irc !== undefined) localStorage.setItem('gotty_show_irc', settings.show_irc.toString());
+          if (settings.irc_nick !== undefined) localStorage.setItem('gotty_irc_nick', settings.irc_nick);
+          if (settings.font_size !== undefined) localStorage.setItem('gotty_font_size', settings.font_size);
+          if (settings.theme !== undefined) localStorage.setItem('gotty_theme', settings.theme);
+          if (settings.bell !== undefined) localStorage.setItem('gotty_bell', settings.bell.toString());
+        }
+
+        async saveSettingsValues() {
+          // Collect settings from form
+          const settings = {
+            host_name: document.getElementById('setting-host-name')?.value || '',
+            city_code: document.getElementById('setting-city-code')?.value || '',
+            auto_hide_sidebar: document.getElementById('setting-autohide')?.checked || false,
+            weather_bg: document.getElementById('setting-weather-bg')?.checked || false,
+            banner_position: document.getElementById('banner-position-top')?.checked ? 'top' : 'bottom',
+            show_irc: document.getElementById('setting-show-irc')?.checked !== false,
+            irc_nick: document.getElementById('setting-irc-nick')?.value || 'user',
+            font_size: document.getElementById('setting-font-size')?.value || '14',
+            theme: document.getElementById('setting-theme')?.value || 'default',
+            bell: document.getElementById('setting-bell')?.checked !== false,
+          };
+
+          // Save to server
+          try {
+            const response = await this.authFetch('/api/user-settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(settings)
+            });
+
+            if (response.ok) {
+              // Also save to localStorage for backward compatibility
+              this.syncSettingsToLocalStorage(settings);
+              this.showToast('Settings saved successfully!');
+              this.applySettings();
+              return;
+            }
+          } catch (error) {
+            console.error('Failed to save settings to server:', error);
+          }
+
+          // Fallback to localStorage only
+          localStorage.setItem('gotty_host_name', settings.host_name);
+          localStorage.setItem('gotty_city_code', settings.city_code);
+          localStorage.setItem('sidebar_auto_hide', settings.auto_hide_sidebar.toString());
+          localStorage.setItem('gotty_weather_bg', settings.weather_bg.toString());
+          localStorage.setItem('gotty_banner_position', settings.banner_position);
+          localStorage.setItem('gotty_show_irc', settings.show_irc.toString());
+          localStorage.setItem('gotty_irc_nick', settings.irc_nick);
+          localStorage.setItem('gotty_font_size', settings.font_size);
+          localStorage.setItem('gotty_theme', settings.theme);
+          localStorage.setItem('gotty_bell', settings.bell.toString());
+
+          this.showToast('Settings saved (local only)');
+          this.applySettings();
+        }
+
+        applySettings() {
+          // Apply host name
+          const savedHostName = localStorage.getItem('gotty_host_name');
+          if (savedHostName) {
+            const hostNameEl = document.querySelector('.header-host-name');
+            if (hostNameEl) hostNameEl.textContent = savedHostName;
+            document.title = savedHostName;
+          }
+
+          // Apply sidebar auto-hide
+          const autoHide = localStorage.getItem('sidebar_auto_hide') === 'true';
+          if (autoHide) {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar) sidebar.classList.add('autohide');
+          }
+
+          // Apply banner position
+          const bannerPos = localStorage.getItem('gotty_banner_position') || 'top';
+          this.applyBannerPosition(bannerPos);
+
+          // Apply weather background
+          const weatherBg = localStorage.getItem('gotty_weather_bg') === 'true';
+          if (weatherBg) {
+            this.initDynamicBackground();
+          }
+        }
+
+        resetAllSettings() {
+          if (!confirm('Reset all settings to default?')) return;
+
+          localStorage.removeItem('gotty_host_name');
+          localStorage.removeItem('gotty_city_code');
+          localStorage.removeItem('sidebar_auto_hide');
+          localStorage.removeItem('gotty_weather_bg');
+          localStorage.removeItem('gotty_banner_position');
+          localStorage.removeItem('gotty_show_irc');
+          localStorage.removeItem('gotty_irc_nick');
+          localStorage.removeItem('gotty_font_size');
+          localStorage.removeItem('gotty_theme');
+          localStorage.removeItem('gotty_bell');
+
+          this.loadSettingsValues();
+          this.showToast('All settings reset to default!');
+        }
+
+        async loadWeatherInfo() {
+          const cityCode = localStorage.getItem('gotty_city_code') || '101020100';
+          try {
+            const response = await this.authFetch('/api/weather?cityCode=' + encodeURIComponent(cityCode));
+            const data = await response.json();
+
+            if (data && data.data && data.data.forecast && data.data.forecast[0]) {
+              const today = data.data.forecast[0];
+              const city = data.cityInfo?.city || 'Unknown';
+
+              const cityEl = document.getElementById('weather-city');
+              const conditionEl = document.getElementById('weather-condition');
+              const tempEl = document.getElementById('weather-temp');
+              const sunEl = document.getElementById('weather-sun');
+
+              if (cityEl) cityEl.textContent = city;
+              if (conditionEl) conditionEl.textContent = today.type || '-';
+              if (tempEl) tempEl.textContent = `${today.low} ~ ${today.high}`;
+              if (sunEl) sunEl.textContent = `${today.sunrise} / ${today.sunset}`;
+            }
+          } catch (error) {
+            console.error('Failed to load weather:', error);
+          }
+        }
+
+        async detectCityFromIP() {
+          const btn = document.getElementById('setting-detect-city');
+          if (!btn) return;
+
+          const originalText = btn.textContent;
+          btn.textContent = '🌍 Detecting...';
+          btn.disabled = true;
+
+          try {
+            const response = await fetch('https://ip.sb/api');
+            const data = await response.json();
+
+            if (data && data.city) {
+              const cityCodeInput = document.getElementById('setting-city-code');
+              if (cityCodeInput) cityCodeInput.value = '101020100';
+              this.showToast('Detected: ' + data.city + ', ' + data.country);
+            }
+          } catch (error) {
+            console.error('Failed to detect city:', error);
+            alert('Failed to detect city from IP. Please enter manually.');
+          } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+          }
+        }
+
+        initSettingsPageEvents() {
+          // Save all button
+          const saveBtn = document.getElementById('btn-save-all');
+          if (saveBtn) {
+            saveBtn.addEventListener('click', () => this.saveSettingsValues());
+          }
+
+          // Reset all button
+          const resetBtn = document.getElementById('btn-reset-all');
+          if (resetBtn) {
+            resetBtn.addEventListener('click', () => this.resetAllSettings());
+          }
+
+          // Refresh weather button
+          const refreshWeatherBtn = document.getElementById('btn-refresh-weather');
+          if (refreshWeatherBtn) {
+            refreshWeatherBtn.addEventListener('click', () => this.loadWeatherInfo());
+          }
+
+          // City detect button
+          const detectCityBtn = document.getElementById('setting-detect-city');
+          if (detectCityBtn) {
+            detectCityBtn.addEventListener('click', () => this.detectCityFromIP());
+          }
+
+          // Font size display
+          const fontSizeInput = document.getElementById('setting-font-size');
+          if (fontSizeInput) {
+            fontSizeInput.addEventListener('input', (e) => {
+              const valueSpan = document.getElementById('font-size-value');
+              if (valueSpan) valueSpan.textContent = e.target.value;
+            });
+          }
+        }
+
+        // ==================== End Settings Page Methods ====================
+
+        // ==================== Toast Notification ====================
+
+        showToast(message) {
+          const toast = document.createElement('div');
+          toast.className = 'toast-notification';
+          toast.textContent = message;
+          toast.style.cssText = `
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: #4a9eff;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+          `;
+
+          document.body.appendChild(toast);
+
+          setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+          }, 3000);
+        }
+
+        // ==================== End Toast Notification ====================
 
         // ==================== Settings Methods ====================
 
