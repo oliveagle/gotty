@@ -447,8 +447,20 @@ export class Xterm {
                     const dpr = window.devicePixelRatio || 1;
                     el.width = currentWidth * dpr;
                     el.height = currentHeight * dpr;
+                    // Force CSS to stretch canvas to container
+                    el.style.transform = 'none';
+                    el.style.transformOrigin = 'top left';
                 }
             });
+
+            // Also force link-layer canvas specifically
+            const linkLayerCanvas = this.elem.querySelector('.xterm-link-layer canvas') as HTMLCanvasElement;
+            if (linkLayerCanvas) {
+                linkLayerCanvas.width = currentWidth * (window.devicePixelRatio || 1);
+                linkLayerCanvas.height = currentHeight * (window.devicePixelRatio || 1);
+                linkLayerCanvas.style.width = '100%';
+                linkLayerCanvas.style.height = '100%';
+            }
 
             // Only scroll if terminal is fully initialized
             // Delay scrollToBottom to ensure terminal is fully rendered
