@@ -803,7 +803,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: black;
     padding: 0;
     margin: 0;
-    width: 100%;
+    /* Remove width:100% - let flex handle it */
     order: 1;
 }
 
