@@ -842,6 +842,14 @@ body.sidebar-auto-hide #sidebar-trigger {
     margin: 0 !important;
     /* Use left/right for width, not explicit width */
     height: 100% !important;
+    /* Force hide scrollbar - xterm.css sets overflow-y:scroll */
+    overflow-y: auto !important;
+    scrollbar-width: none !important; /* Firefox */
+}
+
+/* Hide scrollbar for Webkit browsers (Chrome/Safari) */
+#terminal .xterm-viewport::-webkit-scrollbar {
+    display: none !important;
 }
 
 #terminal .xterm-screen {
