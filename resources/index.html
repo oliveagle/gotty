@@ -4280,11 +4280,6 @@
             ? `<div class="session-subtitle">${item.subtitle}</div>`
             : '';
 
-          // Workdir (only for sessions)
-          const workdirHtml = !isFolder && item.workdir
-            ? `<div class="session-workdir" title="${item.workdir}">${item.workdir}</div>`
-            : '';
-
           // Add session button (only for folders)
           const addBtn = isFolder
             ? `<button class="btn-add-child" onclick="sessionManager.createSessionInFolder('${item.id}', event)" title="Add session to folder">+</button>`
@@ -4327,7 +4322,6 @@
                 ${pinIndicator}
                 ${titleHtml}
                 ${subtitleHtml}
-                ${workdirHtml}
               </div>
               <div class="session-actions">
                 ${addBtn}
@@ -4452,7 +4446,7 @@
           recentSessions.forEach(session => {
             const activityClass = session.is_active ? 'active' : '';
             const activityIcon = session.is_active ? '🟢' : '⚪';
-            const meta = session.workdir ? session.workdir : (session.subtitle || '');
+            const meta = session.subtitle || '';
 
             html += `
               <div class="recent-session-item" onclick="sessionManager.setActiveSession('${session.id}')">
