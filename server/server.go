@@ -51,6 +51,8 @@ type Server struct {
 	upgrader      *websocket.Upgrader
 	indexTemplate *template.Template
 	titleTemplate *noesctmpl.Template
+
+	rootDir string // Root directory for scanning subdirectories
 }
 
 // New creates a new instance of Server.
@@ -186,6 +188,14 @@ func New(factory Factory, options *Options) (*Server, error) {
 	// Initialize user settings manager
 	InitUserSettings()
 
+	// Initialize root directory for scanning
+	rootDir := options.RootDir
+	if rootDir == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			rootDir = cwd
+		}
+	}
+
 	return &Server{
 		factory:          factory,
 		options:          options,
@@ -198,6 +208,7 @@ func New(factory Factory, options *Options) (*Server, error) {
 		loginAttemptMgr:  loginAttemptMgr,
 		ipFilter:         ipFilter,
 		ircHandler:       ircHandler,
+		rootDir:          rootDir,
 
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize:  1024,

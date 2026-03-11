@@ -50,6 +50,9 @@ type Options struct {
 	// Backend options
 	Backend string `hcl:"backend" json:"backend" flagName:"backend" flagDescribe:"Backend type: 'local' for direct command, 'zellij' for persistent sessions" default:"zellij"`
 
+	// Root directory for scanning subdirectories (for folder CWD recommendations)
+	RootDir string `hcl:"root_dir" json:"root_dir" flagName:"root-dir" flagDescribe:"Root directory for scanning subdirectories (default: current working directory)" default:""`
+
 	TitleVariables map[string]interface{}
 
 	// Internal flags for tracking explicit settings

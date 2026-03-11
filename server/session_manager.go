@@ -908,6 +908,182 @@ func (sm *SessionManager) UpdateActiveTab(sessionID string, tabName string) bool
 	return true
 }
 
+// GetFolderCwdOptions returns recommended cwd options for a folder
+// Returns unique cwd values from all sessions in the folder, sorted by frequency
+func (sm *SessionManager) GetFolderCwdOptions(folderID string) []string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	// Collect all cwd values from sessions in this folder (including nested)
+	cwdCount := make(map[string]int)
+	var collectCwds func(id string)
+	collectCwds = func(id string) {
+		for _, s := range sm.sessions {
+			if s.ParentID == id {
+				if s.IsFolder {
+					// Recursively collect from nested folders
+					collectCwds(s.ID)
+				} else if s.WorkDir != "" {
+					cwdCount[s.WorkDir]++
+				}
+			}
+		}
+	}
+	collectCwds(folderID)
+
+	// Convert to sorted slice (by frequency, descending)
+	type cwdFreq struct {
+		cwd   string
+		count int
+	}
+	var cwdFreqs []cwdFreq
+	for cwd, count := range cwdCount {
+		cwdFreqs = append(cwdFreqs, cwdFreq{cwd, count})
+	}
+	sort.Slice(cwdFreqs, func(i, j int) bool {
+		return cwdFreqs[i].count > cwdFreqs[j].count
+	})
+
+	// Return just the cwd strings
+	result := make([]string, 0, len(cwdFreqs))
+	for _, cf := range cwdFreqs {
+		result = append(result, cf.cwd)
+	}
+	return result
+}
+
+// GetFolderCwdOptionsWithScan returns recommended cwd options for a folder
+// It scans multiple sources:
+// 1. WorkDir from saved sessions
+// 2. Current working directory
+// 3. Common directories (home, cwd subdirectories)
+func (sm *SessionManager) GetFolderCwdOptionsWithScan(folderID string, rootDir string) []string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	// Collect all cwd values from sessions in this folder (including nested)
+	cwdCount := make(map[string]int)
+	var collectCwds func(id string)
+	collectCwds = func(id string) {
+		for _, s := range sm.sessions {
+			if s.ParentID == id {
+				if s.IsFolder {
+					// Recursively collect from nested folders
+					collectCwds(s.ID)
+				} else {
+					// For regular sessions, collect WorkDir if available
+					if s.WorkDir != "" {
+						cwdCount[s.WorkDir]++
+					}
+				}
+			}
+		}
+	}
+	collectCwds(folderID)
+
+	// Also scan common directories
+	sm.scanCommonDirectories(cwdCount, rootDir)
+
+	// Convert to sorted slice (by frequency, descending)
+	type cwdFreq struct {
+		cwd   string
+		count int
+	}
+	var cwdFreqs []cwdFreq
+	for cwd, count := range cwdCount {
+		cwdFreqs = append(cwdFreqs, cwdFreq{cwd, count})
+	}
+	sort.Slice(cwdFreqs, func(i, j int) bool {
+		return cwdFreqs[i].count > cwdFreqs[j].count
+	})
+
+	// Return just the cwd strings
+	result := make([]string, 0, len(cwdFreqs))
+	for _, cf := range cwdFreqs {
+		result = append(result, cf.cwd)
+	}
+	return result
+}
+
+// scanCommonDirectories scans common directories and adds them to cwdCount
+func (sm *SessionManager) scanCommonDirectories(cwdCount map[string]int, rootDir string) {
+	// 1. Add current working directory
+	if cwd, err := os.Getwd(); err == nil && cwd != "" {
+		cwdCount[cwd]++
+	}
+
+	// 2. Add home directory
+	var homeDir string
+	if hd, err := os.UserHomeDir(); err == nil && hd != "" {
+		homeDir = hd
+		cwdCount[homeDir]++
+
+		// 3. Add common subdirectories in home
+		commonDirs := []string{"projects", "work", "dev", "src", "code", "repos", "repositories"}
+		for _, dir := range commonDirs {
+			path := filepath.Join(homeDir, dir)
+			if info, err := os.Stat(path); err == nil && info.IsDir() {
+				cwdCount[path]++
+			}
+		}
+	}
+
+	// 4. Scan subdirectories in rootDir (if provided and different from home)
+	if rootDir != "" && (homeDir == "" || rootDir != homeDir) {
+		if entries, err := os.ReadDir(rootDir); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					path := filepath.Join(rootDir, entry.Name())
+					// Skip hidden directories and common non-project dirs
+					if !strings.HasPrefix(entry.Name(), ".") &&
+					   entry.Name() != "node_modules" &&
+					   entry.Name() != "vendor" &&
+					   entry.Name() != ".git" {
+						cwdCount[path]++
+					}
+				}
+			}
+		}
+	}
+}
+
+// getZellijSessionCwd tries to get the current working directory of a zellij session
+// Note: This is not directly possible with zellij, so we return empty string
+// The GetFolderCwdOptionsWithScan function uses alternative methods instead
+func getZellijSessionCwd(sessionName string) string {
+	// Zellij doesn't provide a way to query the cwd of a running session
+	// We would need to parse terminal output or use shell integration
+	return ""
+}
+
+// SetFolderCwd sets the working directory for a folder
+func (sm *SessionManager) SetFolderCwd(folderID string, workDir string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, ok := sm.sessions[folderID]
+	if !ok || !session.IsFolder {
+		return false
+	}
+
+	session.WorkDir = workDir
+	sm.saveMetadata()
+	return true
+}
+
+// GetFolderCwd returns the working directory for a folder
+func (sm *SessionManager) GetFolderCwd(folderID string) (string, bool) {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	session, ok := sm.sessions[folderID]
+	if !ok || !session.IsFolder {
+		return "", false
+	}
+
+	return session.WorkDir, true
+}
+
 // GetZellijActiveTab returns the active tab name from zellij dump-layout output
 func GetZellijActiveTab() string {
 	cmd := exec.Command("zellij", "action", "dump-layout")

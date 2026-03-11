@@ -432,6 +432,7 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			ParentID string `json:"parent_id"`
 			IsFolder bool   `json:"is_folder"`
 			Title    string `json:"title"`
+			Cwd      string `json:"cwd,omitempty"` // Optional cwd override
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			// If no body, that's fine - create root session
@@ -472,7 +473,20 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Create regular session
+		// Determine cwd: use provided cwd, or folder's cwd if parent_id is set
+		workDir := req.Cwd
+		if workDir == "" && req.ParentID != "" {
+			// Try to get cwd from parent folder
+			if folderCwd, ok := server.sessionManager.GetFolderCwd(req.ParentID); ok && folderCwd != "" {
+				workDir = folderCwd
+			}
+		}
+
+		// Pass cwd to factory via params
 		params := make(map[string][]string)
+		if workDir != "" {
+			params["cwd"] = []string{workDir}
+		}
 		slave, err := server.factory.New(params)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
@@ -482,8 +496,16 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		var session *Session
 		if req.ParentID != "" {
 			session = server.sessionManager.CreateChild(server.factory.Name(), req.ParentID, slave)
+			// Set workdir for the new session
+			if workDir != "" {
+				server.sessionManager.UpdateWorkDir(session.ID, workDir)
+			}
 		} else {
 			session = server.sessionManager.Create(server.factory.Name(), slave)
+			// Set workdir for new session
+			if workDir != "" {
+				server.sessionManager.UpdateWorkDir(session.ID, workDir)
+			}
 		}
 		// Set workspace for the session
 		activeWorkspace := server.workspaceManager.GetActive()
@@ -494,6 +516,7 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			"parent_id":    session.ParentID,
 			"is_folder":    false,
 			"workspace_id": activeWorkspace,
+			"workdir":      workDir,
 		})
 	default:
 		http.Error(w, "Method not allowed", 405)
@@ -506,6 +529,18 @@ func (server *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 
 	// Extract session ID from URL path
 	id := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
+
+	// Check if this is a cwd-options request for a folder
+	if strings.HasSuffix(r.URL.Path, "/cwd-options") {
+		server.handleFolderCwdOptions(w, r, id)
+		return
+	}
+
+	// Check if this is a cwd set request for a folder
+	if strings.HasSuffix(r.URL.Path, "/cwd") {
+		server.handleFolderCwd(w, r, id)
+		return
+	}
 
 	switch r.Method {
 	case "GET":
@@ -1099,4 +1134,64 @@ func (server *Server) handleRightPanelDom(w http.ResponseWriter, r *http.Request
 		"status":    "ok",
 		"operation": operation["type"],
 	})
+}
+
+// handleFolderCwdOptions handles getting cwd options for a folder
+func (server *Server) handleFolderCwdOptions(w http.ResponseWriter, r *http.Request, folderID string) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+
+	// Get cwd options from session manager (with scan for running sessions)
+	options := server.sessionManager.GetFolderCwdOptionsWithScan(folderID, server.rootDir)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"options": options,
+	})
+}
+
+// handleFolderCwd handles setting cwd for a folder
+func (server *Server) handleFolderCwd(w http.ResponseWriter, r *http.Request, folderID string) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case "GET":
+		// Get current cwd for the folder
+		cwd, ok := server.sessionManager.GetFolderCwd(folderID)
+		if !ok {
+			http.Error(w, "Folder not found or not a folder", 404)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{
+			"cwd": cwd,
+		})
+	case "POST":
+		// Parse request body
+		var req struct {
+			Cwd string `json:"cwd"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", 400)
+			return
+		}
+		if req.Cwd == "" {
+			http.Error(w, "cwd is required", 400)
+			return
+		}
+
+		// Set cwd for the folder
+		if !server.sessionManager.SetFolderCwd(folderID, req.Cwd) {
+			http.Error(w, "Folder not found or not a folder", 404)
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]string{
+			"cwd": req.Cwd,
+		})
+	default:
+		http.Error(w, "Method not allowed", 405)
+	}
 }
