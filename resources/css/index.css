@@ -96,7 +96,7 @@ html, body {
 }
 
 #sidebar {
-    width: 160px;
+    width: 200px;
     background: #2d2d2d;
     border-right: 1px solid #1a1a1a;
     display: flex;
