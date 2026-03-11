@@ -2064,16 +2064,43 @@
           }
 
           try {
-            // Use html2canvas to capture the panel
-            const canvas = await window.html2canvas(rightPanel, {
-              backgroundColor: '#1e1e2e',
-              scale: 1,
-              logging: false,
-              useCORS: true,
-              allowTaint: true
-            });
+            // Check if we have an iframe preview
+            const httpContent = document.getElementById('right-panel-http-content');
+            const iframe = httpContent?.querySelector('.http-preview-container iframe');
 
-            console.log('[RightPanel] Screenshot captured, canvas size:', canvas.width, 'x', canvas.height);
+            let canvas;
+
+            if (iframe) {
+              // Iframe preview - capture iframe content directly
+              console.log('[RightPanel] Capturing iframe screenshot');
+
+              // Access iframe document (works because same-origin proxy)
+              const iframeDoc = iframe.contentWindow.document;
+
+              // Capture iframe body with html2canvas
+              canvas = await window.html2canvas(iframeDoc.body, {
+                document: iframeDoc,  // Critical: use iframe's document
+                backgroundColor: '#1e1e2e',
+                scale: 1,
+                logging: false,
+                useCORS: true,
+                allowTaint: true
+              });
+
+              console.log('[RightPanel] Iframe screenshot captured, size:', canvas.width, 'x', canvas.height);
+            } else {
+              // Regular content - capture the panel
+              console.log('[RightPanel] Capturing regular panel screenshot');
+              canvas = await window.html2canvas(rightPanel, {
+                backgroundColor: '#1e1e2e',
+                scale: 1,
+                logging: false,
+                useCORS: true,
+                allowTaint: true
+              });
+
+              console.log('[RightPanel] Screenshot captured, canvas size:', canvas.width, 'x', canvas.height);
+            }
 
             const dataUrl = canvas.toDataURL('image/png');
 
