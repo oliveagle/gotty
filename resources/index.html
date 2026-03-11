@@ -83,7 +83,7 @@
           <button id="home-btn" class="btn-toolbar btn-home" title="Home" onclick="sessionManager.showLandingPage()">🏠</button>
           <button id="new-folder-btn" class="btn-toolbar btn-folder" title="New Folder">🗂</button>
           <button id="new-session-btn" class="btn-toolbar btn-new" title="New Session">+</button>
-          <button id="right-panel-btn" class="btn-toolbar btn-right-panel" title="Right Panel" onclick="sessionManager.toggleRightPanel()">📋</button>
+          <button id="right-panel-btn" class="btn-toolbar btn-right-panel" title="Preview" onclick="sessionManager.toggleRightPanel()">📋</button>
           <button id="fullscreen-btn" class="btn-toolbar btn-fullscreen" title="Toggle Fullscreen (F11)">⛶</button>
           <button id="settings-btn" class="btn-toolbar btn-settings" title="Settings" onclick="sessionManager.showSettingsPage()">⛭</button>
         </div>
@@ -310,7 +310,7 @@
               <span id="marquee-content" class="marquee-content"></span>
             </div>
           </div>
-          <button id="banner-right-panel-btn" class="banner-right-panel-btn" title="Right Panel" onclick="sessionManager.toggleRightPanel()">📋</button>
+          <button id="banner-right-panel-btn" class="banner-right-panel-btn" title="Preview" onclick="sessionManager.toggleRightPanel()">📋</button>
           <button id="banner-settings-btn" class="banner-settings-btn" title="Settings" onclick="sessionManager.showSettingsPage()">⚙️</button>
         </div>
 
@@ -375,7 +375,7 @@
                 </div>
                 <div class="action-card" onclick="sessionManager.toggleRightPanel()">
                   <div class="action-icon">📋</div>
-                  <div class="action-label">Right Panel</div>
+                  <div class="action-label">Preview</div>
                 </div>
                 <div class="action-card" onclick="sessionManager.showIRCChat('#general')">
                   <div class="action-icon">💬</div>
@@ -607,12 +607,12 @@
         </div>
       </div>
 
-      <!-- Right Panel - sibling of #sidebar and #main inside #app -->
+      <!-- Preview Panel - sibling of #sidebar and #main inside #app -->
       <div id="right-panel" class="right-panel">
       <div class="right-panel-header">
         <div class="right-panel-title">
           <span class="right-panel-icon">📋</span>
-          <span class="right-panel-title-text">Right Panel</span>
+          <span class="right-panel-title-text">Preview</span>
         </div>
         <div class="right-panel-actions">
           <button class="btn-right-panel-action" id="right-panel-pin-btn" title="Pin Panel">📌</button>
@@ -718,7 +718,7 @@
           // Right panel state
           this.rightPanelVisible = false;
           this.rightPanelPinned = false;
-          this.rightPanelWidth = 320;
+          this.rightPanelWidth = 280;
           this.rightPanelActiveTab = 'agui';
           // AG UI state
           this.aguiClient = null;
