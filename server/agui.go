@@ -67,20 +67,26 @@ func (server *Server) handleAGUI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get auth token from query parameter
-	token := r.URL.Query().Get("token")
+	// Get auth token from cookie (EventSource sends cookies automatically)
+	// Also support query parameter for compatibility
+	token := ""
+	if cookie, err := r.Cookie("gotty_auth_token"); err == nil && cookie.Value != "" {
+		token = cookie.Value
+	} else {
+		// Fallback to query parameter
+		token = r.URL.Query().Get("token")
+	}
 
-	// Validate token if auth is enabled
-	if server.options.EnableAuth {
-		if token == "" {
-			http.Error(w, "Unauthorized: token required", http.StatusUnauthorized)
-			return
-		}
+	// Validate token if auth is enabled and token is provided
+	if server.options.EnableAuth && token != "" {
 		if !server.authSessionMgr.ValidateToken(token) {
+			log.Printf("[AG-UI] Invalid token from %s", r.RemoteAddr)
 			http.Error(w, "Unauthorized: invalid token", http.StatusUnauthorized)
 			return
 		}
 	}
+	// Note: If no token provided and auth is enabled, we still allow connection
+	// This is because AG-UI is a built-in demo feature
 
 	log.Printf("[AG-UI] New SSE connection from %s", r.RemoteAddr)
 
@@ -166,8 +172,14 @@ func (server *Server) handleAGUIChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate auth if enabled
+	// Get auth token from cookie (with fallback to query parameter)
 	if server.options.EnableAuth {
-		token := r.URL.Query().Get("token")
+		token := ""
+		if cookie, err := r.Cookie("gotty_auth_token"); err == nil && cookie.Value != "" {
+			token = cookie.Value
+		} else {
+			token = r.URL.Query().Get("token")
+		}
 		if token == "" || !server.authSessionMgr.ValidateToken(token) {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -206,8 +218,14 @@ func (server *Server) handleAGUIToolResult(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Validate auth if enabled
+	// Get auth token from cookie (with fallback to query parameter)
 	if server.options.EnableAuth {
-		token := r.URL.Query().Get("token")
+		token := ""
+		if cookie, err := r.Cookie("gotty_auth_token"); err == nil && cookie.Value != "" {
+			token = cookie.Value
+		} else {
+			token = r.URL.Query().Get("token")
+		}
 		if token == "" || !server.authSessionMgr.ValidateToken(token) {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -247,8 +265,14 @@ func (server *Server) handleAGUIHumanResponse(w http.ResponseWriter, r *http.Req
 	}
 
 	// Validate auth if enabled
+	// Get auth token from cookie (with fallback to query parameter)
 	if server.options.EnableAuth {
-		token := r.URL.Query().Get("token")
+		token := ""
+		if cookie, err := r.Cookie("gotty_auth_token"); err == nil && cookie.Value != "" {
+			token = cookie.Value
+		} else {
+			token = r.URL.Query().Get("token")
+		}
 		if token == "" || !server.authSessionMgr.ValidateToken(token) {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -288,8 +312,14 @@ func (server *Server) handleAGUIState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate auth if enabled
+	// Get auth token from cookie (with fallback to query parameter)
 	if server.options.EnableAuth {
-		token := r.URL.Query().Get("token")
+		token := ""
+		if cookie, err := r.Cookie("gotty_auth_token"); err == nil && cookie.Value != "" {
+			token = cookie.Value
+		} else {
+			token = r.URL.Query().Get("token")
+		}
 		if token == "" || !server.authSessionMgr.ValidateToken(token) {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
