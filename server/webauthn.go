@@ -442,7 +442,18 @@ func (m *AuthSessionManager) loadSessions() error {
 
 	var sessions map[string]*AuthSession
 	if err := json.Unmarshal(data, &sessions); err != nil {
-		return fmt.Errorf("failed to parse session file: %w", err)
+		// File might be corrupted, try to recover from tmp file
+		log.Printf("[AuthSession] Failed to parse session file: %v, trying to recover", err)
+		tmpFile := m.dataFile + ".tmp"
+		if tmpData, tmpErr := os.ReadFile(tmpFile); tmpErr == nil {
+			if tmpErr := json.Unmarshal(tmpData, &sessions); tmpErr == nil {
+				log.Printf("[AuthSession] Recovered sessions from tmp file")
+			} else {
+				return fmt.Errorf("failed to parse session file and tmp file: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to parse session file: %w", err)
+		}
 	}
 
 	m.mu.Lock()
@@ -476,7 +487,13 @@ func (m *AuthSessionManager) saveSessions() error {
 		return err
 	}
 
-	return os.WriteFile(m.dataFile, data, 0600)
+	// Use atomic write: write to temp file first, then rename
+	// This prevents file corruption if server is killed during write
+	tmpFile := m.dataFile + ".tmp"
+	if err := os.WriteFile(tmpFile, data, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmpFile, m.dataFile)
 }
 
 // CreateSession creates a new auth session and returns the token

@@ -3208,9 +3208,10 @@ body.sidebar-auto-hide #sidebar-trigger {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
+    padding: 6px 10px;
     background: #252538;
     border-bottom: 1px solid #3a3a5a;
+    min-height: 32px;
 }
 
 .right-panel-title {
@@ -3266,16 +3267,17 @@ body.sidebar-auto-hide #sidebar-trigger {
     display: flex;
     background: #252538;
     border-bottom: 1px solid #3a3a5a;
-    padding: 0 16px;
+    padding: 0 8px;
+    min-height: 28px;
 }
 
 .right-panel-tab {
-    padding: 10px 16px;
+    padding: 6px 10px;
     background: transparent;
     border: none;
     color: #888;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     position: relative;
     transition: color 0.2s;
@@ -3330,22 +3332,25 @@ body.sidebar-auto-hide #sidebar-trigger {
 /* Right panel toolbar */
 .right-panel-toolbar {
     display: flex;
-    gap: 8px;
-    padding: 12px 16px;
+    gap: 6px;
+    padding: 0px 8px;
     background: #2a2a3e;
     border-bottom: 1px solid #3a3a5a;
+    align-items: center;
+    min-height: 28px;
 }
 
 .right-panel-file-path,
 .right-panel-http-url {
     flex: 1;
-    padding: 8px 12px;
+    padding: 4px 8px;
     background: #1a1a2e;
     border: 1px solid #3a3a5a;
-    border-radius: 4px;
+    border-radius: 3px;
     color: #e0e0e0;
-    font-size: 13px;
+    font-size: 12px;
     font-family: monospace;
+    min-height: 24px;
 }
 
 .right-panel-file-path::placeholder,
@@ -3360,19 +3365,38 @@ body.sidebar-auto-hide #sidebar-trigger {
 }
 
 .btn-right-panel-tool {
-    padding: 8px 12px;
+    padding: 4px 8px;
     background: #3a3a5a;
     border: none;
-    border-radius: 4px;
+    border-radius: 3px;
     color: #e0e0e0;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 12px;
     transition: all 0.2s;
+    min-height: 24px;
 }
 
 .btn-right-panel-tool:hover {
     background: #4a9eff;
     color: #fff;
+}
+
+/* Right panel status bar (unified across all tabs) */
+.right-panel-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    background: #252538;
+    border-bottom: 1px solid #3a3a5a;
+    font-size: 11px;
+    flex-shrink: 0;
+    min-height: 20px;
+}
+
+.right-panel-status-text {
+    color: #888;
+    font-family: monospace;
 }
 
 /* Right panel content areas */
@@ -3517,21 +3541,24 @@ pre.right-panel-file-text {
 /* AG UI toolbar */
 .agui-toolbar {
     display: flex;
-    gap: 8px;
-    padding: 12px 16px;
+    gap: 6px;
+    padding: 0px 8px;
     background: #2a2a3e;
     border-bottom: 1px solid #3a3a5a;
+    align-items: center;
+    min-height: 28px;
 }
 
 .agui-endpoint-url {
     flex: 1;
-    padding: 8px 12px;
+    padding: 4px 8px;
     background: #1a1a2e;
     border: 1px solid #3a3a5a;
-    border-radius: 4px;
+    border-radius: 3px;
     color: #e0e0e0;
-    font-size: 13px;
+    font-size: 12px;
     font-family: monospace;
+    min-height: 24px;
 }
 
 .agui-endpoint-url::placeholder {
@@ -3547,11 +3574,13 @@ pre.right-panel-file-text {
 .agui-status-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
+    gap: 6px;
+    padding: 3px 8px;
     background: #252538;
     border-bottom: 1px solid #3a3a5a;
-    font-size: 12px;
+    font-size: 11px;
+    flex-shrink: 0;
+    min-height: 20px;
 }
 
 .agui-status-indicator {
