@@ -955,7 +955,7 @@ func (sm *SessionManager) GetFolderCwdOptions(folderID string) []string {
 // GetFolderCwdOptionsWithScan returns recommended cwd options for a folder
 // It scans multiple sources:
 // 1. WorkDir from saved sessions in this folder
-// 2. If no session cwd found, scan common directories as fallback
+// 2. If no session cwd found, return gotty starting directory as default option
 func (sm *SessionManager) GetFolderCwdOptionsWithScan(folderID string, rootDir string) []string {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -1000,28 +1000,17 @@ func (sm *SessionManager) GetFolderCwdOptionsWithScan(folderID string, rootDir s
 		return result
 	}
 
-	// No session cwd found, scan common directories as fallback
-	sm.scanCommonDirectories(cwdCount, rootDir)
+	// No session cwd found - return gotty starting directory as default option
+	if rootDir != "" {
+		return []string{rootDir}
+	}
 
-	// Convert to sorted slice (by frequency, descending)
-	type cwdFreq struct {
-		cwd   string
-		count int
+	// Fallback to current working directory
+	if cwd, err := os.Getwd(); err == nil {
+		return []string{cwd}
 	}
-	var cwdFreqs []cwdFreq
-	for cwd, count := range cwdCount {
-		cwdFreqs = append(cwdFreqs, cwdFreq{cwd, count})
-	}
-	sort.Slice(cwdFreqs, func(i, j int) bool {
-		return cwdFreqs[i].count > cwdFreqs[j].count
-	})
 
-	// Return just the cwd strings
-	result := make([]string, 0, len(cwdFreqs))
-	for _, cf := range cwdFreqs {
-		result = append(result, cf.cwd)
-	}
-	return result
+	return []string{}
 }
 
 // scanCommonDirectories scans common directories and adds them to cwdCount

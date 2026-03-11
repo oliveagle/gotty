@@ -103,10 +103,8 @@ export class Xterm {
         // Fit after DOM layout is complete
         // Delay slightly to ensure CSS and flexbox layout are settled
         setTimeout(() => {
-            this.lastWidth = Math.round(this.elem.clientWidth);
-            this.lastHeight = Math.round(this.elem.clientHeight);
-            // Resize debug log disabled
-            this.fitAddon.fit();
+            // Use doFit for proper width tracking instead of direct fitAddon.fit()
+            this.doFit('initial');
             // Final check: ensure cursor blink is enabled after fit
             this.term.options.cursorBlink = true;
         }, 100);

@@ -528,19 +528,30 @@ func (server *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// Extract session ID from URL path
-	id := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
+	// Path format: /api/sessions/{id} or /api/sessions/{id}/cwd or /api/sessions/{id}/cwd-options
+	path := r.URL.Path
+	id := ""
 
 	// Check if this is a cwd-options request for a folder
-	if strings.HasSuffix(r.URL.Path, "/cwd-options") {
+	if strings.HasSuffix(path, "/cwd-options") {
+		// Remove /cwd-options suffix to get the ID
+		path = strings.TrimSuffix(path, "/cwd-options")
+		id = path[strings.LastIndex(path, "/")+1:]
 		server.handleFolderCwdOptions(w, r, id)
 		return
 	}
 
 	// Check if this is a cwd set request for a folder
-	if strings.HasSuffix(r.URL.Path, "/cwd") {
+	if strings.HasSuffix(path, "/cwd") {
+		// Remove /cwd suffix to get the ID
+		path = strings.TrimSuffix(path, "/cwd")
+		id = path[strings.LastIndex(path, "/")+1:]
 		server.handleFolderCwd(w, r, id)
 		return
 	}
+
+	// Regular session operation - extract ID from full path
+	id = r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
 
 	switch r.Method {
 	case "GET":
