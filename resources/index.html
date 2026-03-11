@@ -4136,6 +4136,12 @@
             return path;
           };
 
+          // Helper function to get parent session name (folder name)
+          const getSessionParentName = (parentId) => {
+            const parent = this.sessions.find(s => s.id === parentId);
+            return parent ? parent.title : '';
+          };
+
           // Assign color indices to folders (root level only)
           let folderColorIndex = 0;
           const folderColors = new Map();
@@ -4168,21 +4174,23 @@
             return html;
           };
 
-          // Render pinned item without path
+          // Render pinned item with folder name
           const renderPinnedItem = (item) => {
-            const pathDisplay = '';
+            // Get folder name (parent title) if session has a parent
+            const folderName = item.parent_id ? this.getSessionParentName(item.parent_id) : '';
 
             // Activity indicator
             const activityDot = `<div class="activity-dot ${item.is_active ? 'active' : 'inactive'}" title="${item.is_active ? 'Active' : 'Idle'}"></div>`;
 
-            // Title without path or workdir
+            // Title with optional folder prefix
             const titleHtml = `
               <div class="session-info">
                 <div>
                   <div class="session-title">
-                    <span>${item.title}</span>
+                    ${folderName ? `<span class="folder-prefix">${this.escapeHtml(folderName)}</span>` : ''}
+                    <span>${this.escapeHtml(item.title)}</span>
                   </div>
-                  ${item.subtitle ? `<div class="session-subtitle">${item.subtitle}</div>` : ''}
+                  ${item.subtitle ? `<div class="session-subtitle">${this.escapeHtml(item.subtitle)}</div>` : ''}
                 </div>
               </div>
             `;
