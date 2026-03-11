@@ -273,19 +273,19 @@ body.sidebar-auto-hide #sidebar-trigger {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.25);
     z-index: 1;
     pointer-events: none;
 }
 
 /* Stronger dark overlay for night sky readability */
 .sidebar-header.theme-night::before {
-    background: rgba(0, 0, 0, 0.65);
+    background: rgba(0, 0, 0, 0.35);
 }
 
 /* Moderate overlay for bright daytime skies */
 .sidebar-header.theme-noon::before {
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.2);
 }
 
 .sky-container {
@@ -3337,20 +3337,20 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: #2a2a3e;
     border-bottom: 1px solid #3a3a5a;
     align-items: center;
-    min-height: 28px;
+    min-height: 24px;
 }
 
 .right-panel-file-path,
 .right-panel-http-url {
     flex: 1;
-    padding: 4px 8px;
+    padding: 2px 8px;
     background: #1a1a2e;
     border: 1px solid #3a3a5a;
     border-radius: 3px;
     color: #e0e0e0;
     font-size: 12px;
     font-family: monospace;
-    min-height: 24px;
+    min-height: 20px;
 }
 
 .right-panel-file-path::placeholder,
@@ -3546,19 +3546,19 @@ pre.right-panel-file-text {
     background: #2a2a3e;
     border-bottom: 1px solid #3a3a5a;
     align-items: center;
-    min-height: 28px;
+    min-height: 24px;
 }
 
 .agui-endpoint-url {
     flex: 1;
-    padding: 4px 8px;
+    padding: 2px 8px;
     background: #1a1a2e;
     border: 1px solid #3a3a5a;
     border-radius: 3px;
     color: #e0e0e0;
     font-size: 12px;
     font-family: monospace;
-    min-height: 24px;
+    min-height: 20px;
 }
 
 .agui-endpoint-url::placeholder {
