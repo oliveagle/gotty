@@ -108,7 +108,13 @@ func (factory *Factory) NewWithID(sessionID string, params map[string][]string) 
 		targetTab = tabs[0]
 	}
 
-	return NewWithTab(sessionName, factory.command, argv, targetTab, factory.opts...)
+	// Check if cwd is specified in params
+	cwd := ""
+	if cwds, ok := params["cwd"]; ok && len(cwds) > 0 {
+		cwd = cwds[0]
+	}
+
+	return NewWithTab(sessionName, factory.command, argv, targetTab, cwd, factory.opts...)
 }
 
 // IsPersistent returns true - zellij sessions persist after client disconnect

@@ -36,6 +36,9 @@ export class Xterm {
             allowProposedApi: true,
             // Explicitly enable selection
             screenReaderMode: false,
+            // Disable scrollbar to use full container width
+            // FitAddon subtracts scrollbar width from available space
+            scrollback: 0,
         });
 
         this.fitAddon = new FitAddon();

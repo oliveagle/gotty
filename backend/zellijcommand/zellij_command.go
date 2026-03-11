@@ -122,11 +122,11 @@ func stripANSI(s string) string {
 
 // New creates a new ZellijCommand, connecting to existing session or creating a new one
 func New(sessionName string, command string, argv []string, options ...Option) (*ZellijCommand, error) {
-	return NewWithTab(sessionName, command, argv, "", options...)
+	return NewWithTab(sessionName, command, argv, "", "", options...)
 }
 
 // NewWithTab creates a new ZellijCommand, connecting to existing session and optionally switching to a specific tab
-func NewWithTab(sessionName string, command string, argv []string, targetTab string, options ...Option) (*ZellijCommand, error) {
+func NewWithTab(sessionName string, command string, argv []string, targetTab string, cwd string, options ...Option) (*ZellijCommand, error) {
 	// Security: Validate session name to prevent command injection
 	if err := validateSessionName(sessionName); err != nil {
 		return nil, errors.Wrapf(err, "invalid session name")
@@ -146,7 +146,11 @@ func NewWithTab(sessionName string, command string, argv []string, targetTab str
 	} else {
 		// Create new session in background first, then attach
 		// This avoids the panic when zellij can't get terminal attributes
-		createCmd := exec.Command("zellij", "attach", "-c", "-b", sessionName)
+		args := []string{"attach", "-c", "-b", sessionName}
+		if cwd != "" {
+			args = append(args, "--options", "--default-cwd", cwd)
+		}
+		createCmd := exec.Command("zellij", args...)
 		if err := createCmd.Run(); err != nil {
 			// Session might have been created by another process, continue anyway
 		}
