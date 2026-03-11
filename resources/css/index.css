@@ -6,6 +6,11 @@
     --ws-bg-gradient: rgba(74, 158, 255, 0.15);
     --ws-border: rgba(74, 158, 255, 0.3);
     --ws-glow: rgba(74, 158, 255, 0.4);
+
+    /* Toolbar button sizes */
+    --btn-width: 36px;
+    --btn-height: 28px;
+    --btn-font-size: 14px;
 }
 
 [data-workspace-theme="blue"] {
@@ -213,11 +218,11 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: transparent;
     border: 1px solid #555;
     color: #888;
-    width: 36px;
-    height: 28px;
+    width: var(--btn-width);
+    height: var(--btn-height);
     border-radius: 4px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--btn-font-size);
     line-height: 1;
     display: flex;
     align-items: center;
@@ -599,11 +604,11 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: #4a9eff;
     border: none;
     color: white;
-    width: 36px;
-    height: 28px;
+    width: var(--btn-width);
+    height: var(--btn-height);
     border-radius: 4px;
     cursor: pointer;
-    font-size: 18px;
+    font-size: var(--btn-font-size);
     line-height: 1;
     display: flex;
     align-items: center;
@@ -619,11 +624,11 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: transparent;
     border: 1px solid #555;
     color: #888;
-    width: 36px;
-    height: 28px;
+    width: var(--btn-width);
+    height: var(--btn-height);
     border-radius: 4px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--btn-font-size);
     line-height: 1;
     display: flex;
     align-items: center;
@@ -2094,7 +2099,7 @@ body.sidebar-auto-hide #sidebar-trigger {
 }
 
 .btn-settings {
-    font-size: 16px;
+    font-size: var(--btn-font-size);
 }
 
 .settings-hint {
