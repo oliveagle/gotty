@@ -629,20 +629,20 @@
       <div class="right-panel-content">
         <!-- AG UI Tab - Agent UI Interaction -->
         <div class="right-panel-tab-content active" id="right-panel-tab-agui">
-          <div class="agui-toolbar">
-            <input type="text" class="agui-endpoint-url" id="agui-endpoint-url" placeholder="AG UI endpoint (e.g., /api/agui)" value="/api/agui">
-            <button class="btn-right-panel-tool" id="agui-connect-btn" title="Connect">🔌</button>
-          </div>
           <div class="agui-status-bar">
             <div class="agui-status-indicator disconnected" id="agui-status-indicator"></div>
-            <span class="agui-status-text" id="agui-status-text">Disconnected</span>
+            <span class="agui-status-text" id="agui-status-text">点击连接 GoTTY Agent</span>
           </div>
           <div class="right-panel-file-content agui-messages-container" id="agui-messages-container">
             <div class="right-panel-empty-state">
               <div class="empty-icon">🤖</div>
-              <div class="empty-text">No AG UI connection</div>
-              <div class="empty-hint">Enter endpoint URL and click Connect</div>
+              <div class="empty-text">GoTTY AG UI</div>
+              <div class="empty-hint">点击下方按钮连接内置 Agent</div>
             </div>
+          </div>
+          <div class="agui-input-container">
+            <textarea class="agui-input" id="agui-input" placeholder="输入消息给 GoTTY Agent..." rows="2"></textarea>
+            <button class="agui-send-btn" id="agui-send-btn" title="Send">➤</button>
           </div>
         </div>
         <!-- File Preview Tab -->
@@ -1304,6 +1304,11 @@
           document.querySelectorAll('.right-panel-tab-content').forEach(content => {
             content.classList.toggle('active', content.id === 'right-panel-tab-' + tabName);
           });
+
+          // Auto-connect to AG UI when switching to AG UI tab
+          if (tabName === 'agui' && this.aguiClient && this.aguiStatus === 'disconnected') {
+            this.autoConnectAGUI();
+          }
         }
 
         initRightPanelButtons() {
@@ -1471,29 +1476,13 @@
             return;
           }
 
-          // Initialize AG UI client
+          // Initialize AG UI client with fixed endpoint
           this.aguiClient = new window.AGUIClient({
-            endpoint: '/api/agui',
+            endpoint: '/api/agui',  // Fixed: always connect to GoTTY backend
             onEvent: (event) => this.handleAGUIEvent(event),
             onStatusChange: (status) => this.handleAGUIStatusChange(status),
             onError: (error) => this.handleAGUIError(error),
           });
-
-          // Connect button
-          const connectBtn = document.getElementById('agui-connect-btn');
-          if (connectBtn) {
-            connectBtn.addEventListener('click', () => {
-              this.toggleAGUIConnection();
-            });
-          }
-
-          // Clear button
-          const clearBtn = document.getElementById('agui-clear-btn');
-          if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-              this.clearAGUIChat();
-            });
-          }
 
           // Send button
           const sendBtn = document.getElementById('agui-send-btn');
@@ -1516,6 +1505,30 @@
 
           // Initialize status display
           this.updateAGUIStatus('disconnected');
+
+          // Auto-connect on tab switch
+          this.autoConnectAGUI();
+        }
+
+        async autoConnectAGUI() {
+          // Auto-connect to GoTTY backend when AG UI tab is visible
+          if (!this.aguiClient || this.aguiStatus !== 'disconnected') return;
+
+          try {
+            await this.aguiClient.connect('/api/agui');
+            console.log('[AG-UI] Auto-connected to GoTTY backend');
+          } catch (error) {
+            console.error('[AG-UI] Auto-connect failed:', error);
+            // Add error message to chat
+            this.aguiMessages.push({
+              type: 'system',
+              id: 'error-' + Date.now(),
+              role: 'system',
+              content: '连接失败：' + (error.message || '未知错误'),
+              timestamp: Date.now(),
+            });
+            this.renderAGUIMessages();
+          }
         }
 
         handleAGUIEvent(event) {
@@ -1580,7 +1593,6 @@
         updateAGUIStatus(status) {
           const indicator = document.getElementById('agui-status-indicator');
           const statusText = document.getElementById('agui-status-text');
-          const connectBtn = document.getElementById('agui-connect-btn');
           const input = document.getElementById('agui-input');
           const sendBtn = document.getElementById('agui-send-btn');
 
@@ -1589,28 +1601,14 @@
           // Update indicator
           indicator.className = 'agui-status-indicator ' + status;
 
-          // Update status text
+          // Update status text (Chinese labels)
           const statusLabels = {
-            'disconnected': 'Disconnected',
-            'connecting': 'Connecting...',
-            'connected': 'Connected',
-            'error': 'Error',
+            'disconnected': '点击输入框开始对话',
+            'connecting': '连接中...',
+            'connected': '已连接到 GoTTY Agent',
+            'error': '连接错误',
           };
           statusText.textContent = statusLabels[status] || status;
-
-          // Update connect button
-          if (connectBtn) {
-            if (status === 'connected') {
-              connectBtn.textContent = '🔴';
-              connectBtn.title = 'Disconnect';
-            } else if (status === 'connecting') {
-              connectBtn.textContent = '⏳';
-              connectBtn.title = 'Connecting...';
-            } else {
-              connectBtn.textContent = '🔌';
-              connectBtn.title = 'Connect';
-            }
-          }
 
           // Update input state
           if (input) {
@@ -1618,36 +1616,6 @@
           }
           if (sendBtn) {
             sendBtn.disabled = status !== 'connected';
-          }
-        }
-
-        async toggleAGUIConnection() {
-          if (!this.aguiClient) return;
-
-          if (this.aguiStatus === 'connected') {
-            this.aguiClient.disconnect();
-          } else {
-            const endpointInput = document.getElementById('agui-endpoint-url');
-            const endpoint = endpointInput?.value || '/api/agui';
-
-            try {
-              this.aguiIsTyping = true;
-              this.renderAGUIMessages();
-              await this.aguiClient.connect(endpoint);
-
-              // Add system message
-              this.aguiMessages.push({
-                type: 'system',
-                id: 'system-' + Date.now(),
-                role: 'system',
-                content: 'Connected to AG UI endpoint: ' + endpoint,
-                timestamp: Date.now(),
-              });
-              this.renderAGUIMessages();
-            } catch (error) {
-              this.aguiIsTyping = false;
-              console.error('[AG-UI] Failed to connect:', error);
-            }
           }
         }
 
@@ -1690,11 +1658,6 @@
             });
             this.renderAGUIMessages();
           }
-        }
-
-        clearAGUIChat() {
-          this.aguiMessages = [];
-          this.renderAGUIMessages();
         }
 
         renderAGUIMessages() {
