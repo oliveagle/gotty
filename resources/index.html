@@ -1973,114 +1973,45 @@
           contentDiv.innerHTML = '<div class="right-panel-loading">Loading...</div>';
 
           try {
-            // Fetch the URL content
-            const response = await fetch(url, {
-              mode: 'cors',
-              credentials: 'omit'
-            });
+            // Use iframe with same-origin proxy for full JS/CSS isolation
+            // The server proxies the external URL to same-origin, so:
+            // 1. Each iframe has independent window/document sandbox
+            // 2. JS executes naturally in iframe context
+            // 3. Screenshot works because same-origin
+            // 4. No CORS issues because server-side proxy
 
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const html = await response.text();
-            console.log('[RightPanel] Fetched HTML, length:', html.length);
-
-            // Create a container div with Shadow DOM for style isolation
             const container = document.createElement('div');
             container.className = 'http-preview-container';
             container.style.cssText = 'width: 100%; height: 100%; overflow: auto; position: relative;';
 
-            // Attach Shadow DOM (open mode so html2canvas can access it)
-            const shadow = container.attachShadow({ mode: 'open' });
-            // Set Shadow DOM host styles
-            shadow.host.style.cssText = 'width: 100%; height: 100%; display: block;';
+            const iframe = document.createElement('iframe');
+            iframe.style.cssText = 'width: 100%; height: 100%; border: none; display: block;';
 
-            // Parse the fetched HTML
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
+            // Construct proxy URL - use absolute path from window.location
+            const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
+            const proxyUrl = baseUrl + 'api/proxy/?url=' + encodeURIComponent(url);
 
-            // Extract base URL for resolving relative paths
-            let baseURL = url;
-            const base = doc.querySelector('base');
-            if (base && base.href) {
-              baseURL = base.href;
-            }
+            iframe.src = proxyUrl;
+            iframe.sandbox = 'allow-scripts allow-same-origin allow-forms';
 
-            // Create wrapper for content
-            const wrapper = document.createElement('div');
-            wrapper.className = 'http-preview-wrapper';
-            wrapper.style.cssText = 'width: 100%; min-height: 100%; box-sizing: border-box;';
+            // Handle iframe load events
+            iframe.onload = () => {
+              console.log('[RightPanel] Iframe loaded:', url);
+              // Remove loading indicator
+              contentDiv.innerHTML = '';
+              container.appendChild(iframe);
+              contentDiv.appendChild(container);
+            };
 
-            // Add minimal base styles for Shadow DOM host and wrapper
-            // Don't reset all margins/paddings - preserve original page styles
-            const baseStyle = document.createElement('style');
-            baseStyle.textContent = `
-                :host {
-                    display: block;
-                    width: 100%;
-                    height: 100%;
-                    overflow: auto;
-                }
-                .http-preview-wrapper {
-                    display: block;
-                    width: 100%;
-                    min-height: 100%;
-                    box-sizing: border-box;
-                }
-            `;
-            shadow.appendChild(baseStyle);
+            iframe.onerror = () => {
+              console.error('[RightPanel] Iframe error:', url);
+              throw new Error('Failed to load content in iframe');
+            };
 
-            // Extract and apply original page styles from <link> tags (external CSS)
-            const links = Array.from(doc.querySelectorAll('link[rel="stylesheet"]'));
-            links.forEach(link => {
-              const href = link.getAttribute('href');
-              if (href) {
-                const resolvedHref = new URL(href, baseURL).href;
-                const linkEl = document.createElement('link');
-                linkEl.rel = 'stylesheet';
-                linkEl.href = resolvedHref;
-                shadow.appendChild(linkEl);
-              }
-            });
-
-            // Extract and apply original page styles from <style> tags
-            const styles = Array.from(doc.querySelectorAll('style'));
-            styles.forEach(style => {
-                const styleEl = document.createElement('style');
-                // Transform 'body' to '.http-preview-wrapper' so styles apply correctly in Shadow DOM
-                let cssText = style.innerHTML.replace(/body\s*\{/g, '.http-preview-wrapper {');
-                // Also transform 'html' if present
-                cssText = cssText.replace(/html\s*\{/g, '.http-preview-wrapper {');
-                styleEl.textContent = cssText;
-                shadow.appendChild(styleEl);
-            });
-
-            wrapper.innerHTML = doc.body.innerHTML;
-
-            // Fix relative URLs
-            wrapper.querySelectorAll('img').forEach(img => {
-              const src = img.getAttribute('src');
-              if (src && !src.startsWith('http') && !src.startsWith('data:') && !src.startsWith('blob:')) {
-                img.src = new URL(src, baseURL).href;
-              }
-            });
-
-            wrapper.querySelectorAll('a').forEach(a => {
-              const href = a.getAttribute('href');
-              if (href && !href.startsWith('http') && !href.startsWith('#') && !href.startsWith('javascript:')) {
-                a.href = new URL(href, baseURL).href;
-              }
-            });
-
-            // Append wrapper to Shadow DOM
-            shadow.appendChild(wrapper);
-
-            // Clear loading and show content
-            contentDiv.innerHTML = '';
+            container.appendChild(iframe);
             contentDiv.appendChild(container);
 
-            console.log('[RightPanel] HTTP content loaded via Shadow DOM:', url);
+            console.log('[RightPanel] HTTP content loaded via iframe:', url);
 
           } catch (error) {
             console.error('[RightPanel] Failed to load HTTP content:', error);
@@ -2089,7 +2020,7 @@
                 <div class="error-icon">⚠️</div>
                 <div class="error-title">Failed to load content</div>
                 <div class="error-message">${this.escapeHtml(error.message)}</div>
-                <div class="error-hint">Make sure the URL is accessible and allows CORS</div>
+                <div class="error-hint">Make sure the URL is accessible</div>
               </div>
             `;
           }
