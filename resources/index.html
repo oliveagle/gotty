@@ -2010,24 +2010,51 @@
             // Create wrapper for content
             const wrapper = document.createElement('div');
             wrapper.className = 'http-preview-wrapper';
-            wrapper.style.cssText = 'width: 100%; min-height: 100%; margin: 0; padding: 0; box-sizing: border-box;';
+            wrapper.style.cssText = 'width: 100%; min-height: 100%; box-sizing: border-box;';
 
-            // Add CSS reset for injected content to fix margin/padding issues
-            const style = document.createElement('style');
-            style.textContent = `
-                * {
-                    margin: 0 !important;
-                    padding: 0 !important;
+            // Add minimal base styles for Shadow DOM host and wrapper
+            // Don't reset all margins/paddings - preserve original page styles
+            const baseStyle = document.createElement('style');
+            baseStyle.textContent = `
+                :host {
+                    display: block;
+                    width: 100%;
+                    height: 100%;
+                    overflow: auto;
+                }
+                .http-preview-wrapper {
+                    display: block;
+                    width: 100%;
+                    min-height: 100%;
                     box-sizing: border-box;
                 }
-                body {
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    width: 100%;
-                    height: auto;
-                }
             `;
-            shadow.appendChild(style);
+            shadow.appendChild(baseStyle);
+
+            // Extract and apply original page styles from <link> tags (external CSS)
+            const links = Array.from(doc.querySelectorAll('link[rel="stylesheet"]'));
+            links.forEach(link => {
+              const href = link.getAttribute('href');
+              if (href) {
+                const resolvedHref = new URL(href, baseURL).href;
+                const linkEl = document.createElement('link');
+                linkEl.rel = 'stylesheet';
+                linkEl.href = resolvedHref;
+                shadow.appendChild(linkEl);
+              }
+            });
+
+            // Extract and apply original page styles from <style> tags
+            const styles = Array.from(doc.querySelectorAll('style'));
+            styles.forEach(style => {
+                const styleEl = document.createElement('style');
+                // Transform 'body' to '.http-preview-wrapper' so styles apply correctly in Shadow DOM
+                let cssText = style.innerHTML.replace(/body\s*\{/g, '.http-preview-wrapper {');
+                // Also transform 'html' if present
+                cssText = cssText.replace(/html\s*\{/g, '.http-preview-wrapper {');
+                styleEl.textContent = cssText;
+                shadow.appendChild(styleEl);
+            });
 
             wrapper.innerHTML = doc.body.innerHTML;
 
@@ -2045,37 +2072,6 @@
                 a.href = new URL(href, baseURL).href;
               }
             });
-
-            // Extract and transform styles from <style> tags
-            const styles = Array.from(doc.querySelectorAll('style'));
-            styles.forEach(style => {
-              const styleEl = document.createElement('style');
-              // Transform 'body' to '.http-preview-wrapper' so styles apply correctly in Shadow DOM
-              let cssText = style.innerHTML.replace(/body\s*\{/g, '.http-preview-wrapper {');
-              // Also transform 'html' if present
-              cssText = cssText.replace(/html\s*\{/g, '.http-preview-wrapper {');
-              styleEl.textContent = cssText;
-              shadow.appendChild(styleEl);
-            });
-
-            // Add base styles for Shadow DOM
-            const baseStyles = document.createElement('style');
-            baseStyles.textContent = `
-              :host {
-                display: block;
-                width: 100%;
-                height: 100%;
-              }
-              .http-preview-wrapper {
-                display: block;
-                width: 100%;
-                min-height: 100%;
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-              }
-            `;
-            shadow.insertBefore(baseStyles, shadow.firstChild);
 
             // Append wrapper to Shadow DOM
             shadow.appendChild(wrapper);
