@@ -599,7 +599,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: #4a9eff;
     border: none;
     color: white;
-    width: 28px;
+    width: 36px;
     height: 28px;
     border-radius: 4px;
     cursor: pointer;
@@ -619,7 +619,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: transparent;
     border: 1px solid #555;
     color: #888;
-    width: 28px;
+    width: 36px;
     height: 28px;
     border-radius: 4px;
     cursor: pointer;
