@@ -3422,6 +3422,16 @@ body.sidebar-auto-hide #sidebar-trigger {
     word-wrap: break-word;
 }
 
+/* Reset <pre> default styles when used with right-panel-file-text */
+pre.right-panel-file-text {
+    margin: 0;
+    padding: 16px;
+    background: transparent;
+    border: none;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
 /* Git diff view styles */
 .right-panel-diff-view {
     padding: 16px;
