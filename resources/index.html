@@ -651,6 +651,9 @@
             <input type="text" class="right-panel-file-path" id="right-panel-file-path" placeholder="/path/to/file">
             <button class="btn-right-panel-tool" id="right-panel-file-go-btn" title="Load File">📂</button>
           </div>
+          <div class="right-panel-status-bar">
+            <span class="right-panel-status-text" id="file-status-text">就绪</span>
+          </div>
           <div class="right-panel-file-content" id="right-panel-file-content">
             <div class="right-panel-empty-state">
               <div class="empty-icon">📄</div>
@@ -664,6 +667,9 @@
           <div class="right-panel-toolbar">
             <input type="text" class="right-panel-http-url" id="right-panel-http-url" placeholder="http://localhost:8080">
             <button class="btn-right-panel-tool" id="right-panel-http-go-btn" title="Load URL">🔗</button>
+          </div>
+          <div class="right-panel-status-bar">
+            <span class="right-panel-status-text" id="http-status-text">就绪</span>
           </div>
           <div class="right-panel-http-content" id="right-panel-http-content">
             <div class="right-panel-empty-state">
@@ -4203,23 +4209,9 @@
           // Separate pinned and unpinned sessions (only for root-level, non-folder sessions)
           const rootItems = this.sessions.filter(s => !s.parent_id);
 
-          // Get current session IDs
-          const currentSessionIds = new Set(this.sessions.map(s => s.id));
-
-          // Clean up pinned sessions: remove IDs that no longer exist
-          let pinnedChanged = false;
-          this.pinnedSessions.forEach(id => {
-            if (!currentSessionIds.has(id)) {
-              this.pinnedSessions.delete(id);
-              pinnedChanged = true;
-            }
-          });
-
-          // Save cleaned up pinned sessions
-          if (pinnedChanged) {
-            localStorage.setItem('pinned_sessions', JSON.stringify([...this.pinnedSessions]));
-            console.log('[renderSessionList] Cleaned up stale pinned sessions');
-          }
+          // Note: We don't auto-clean pinned sessions here anymore.
+          // Pinned sessions are preserved across service restarts even if session IDs change.
+          // They will be shown as "not found" until user manually unpins them or the session reappears.
 
           // Get all pinned sessions (including those in folders)
           const pinnedItems = this.sessions.filter(s => !s.is_folder && this.pinnedSessions.has(s.id));
