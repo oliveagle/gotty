@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -1205,4 +1207,134 @@ func (server *Server) handleFolderCwd(w http.ResponseWriter, r *http.Request, fo
 	default:
 		http.Error(w, "Method not allowed", 405)
 	}
+}
+
+// handleURLProxy proxies external URLs to provide same-origin content for iframe preview
+// This allows iframe to load external content while maintaining same-origin policy
+func (server *Server) handleURLProxy(w http.ResponseWriter, r *http.Request) {
+	// Only allow GET requests
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get target URL from query parameter
+	targetURL := r.URL.Query().Get("url")
+	if targetURL == "" {
+		http.Error(w, "Missing 'url' query parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Validate URL
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid URL: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Security: Block private/internal IP ranges to prevent SSRF attacks
+	if isPrivateIP(parsedURL.Hostname()) {
+		log.Printf("[SECURITY] Blocked request to private IP: %s", targetURL)
+		http.Error(w, "Access to private IP addresses is not allowed", http.StatusForbidden)
+		return
+	}
+
+	// Fetch the target URL
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// Limit redirects
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			// Block redirects to private IPs
+			if isPrivateIP(req.URL.Hostname()) {
+				return errors.New("redirect to private IP blocked")
+			}
+			return nil
+		},
+	}
+
+	resp, err := client.Get(targetURL)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to fetch URL: %v", err), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers (except hop-by-hop headers)
+	for key, values := range resp.Header {
+		// Skip hop-by-hop headers and security-sensitive headers
+		lowerKey := strings.ToLower(key)
+		if lowerKey == "transfer-encoding" ||
+		   lowerKey == "connection" ||
+		   lowerKey == "keep-alive" ||
+		   lowerKey == "proxy-authenticate" ||
+		   lowerKey == "proxy-authorization" ||
+		   lowerKey == "te" ||
+		   lowerKey == "trailer" ||
+		   lowerKey == "upgrade" ||
+		   lowerKey == "set-cookie" {
+			continue
+		}
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Set CORS headers to allow access from the main page
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	// Handle OPTIONS preflight request
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Copy status code
+	w.WriteHeader(resp.StatusCode)
+
+	// Copy response body
+	buf := new(bytes.Buffer)
+	_, err = buf.ReadFrom(resp.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read response: %v", err), http.StatusBadGateway)
+		return
+	}
+	w.Write(buf.Bytes())
+}
+
+// isPrivateIP checks if a hostname resolves to a private IP address
+// Used to prevent SSRF attacks
+func isPrivateIP(hostname string) bool {
+	// Resolve hostname to IP addresses
+	ips, err := net.LookupIP(hostname)
+	if err != nil {
+		// If we can't resolve, allow it (better safe than sorry)
+		return false
+	}
+
+	// Check each IP
+	for _, ip := range ips {
+		if ip.IsPrivate() ||
+		   ip.IsLoopback() ||
+		   ip.IsLinkLocalUnicast() ||
+		   ip.IsLinkLocalMulticast() {
+			return true
+		}
+
+		// Check for IPv4-mapped IPv6 addresses
+		if ip4 := ip.To4(); ip4 != nil {
+			// Check private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+			if ip4[0] == 10 ||
+			   (ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31) ||
+			   (ip4[0] == 192 && ip4[1] == 168) ||
+			   (ip4[0] == 127) {
+				return true
+			}
+		}
+	}
+	return false
 }

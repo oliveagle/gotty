@@ -443,6 +443,9 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	// Weather API proxy (protected)
 	siteMux.HandleFunc(pathPrefix+"api/weather", authMiddleware.Wrap(server.handleWeather))
 
+	// URL Proxy for iframe preview (protected)
+	siteMux.HandleFunc(pathPrefix+"api/proxy/", authMiddleware.Wrap(server.handleURLProxy))
+
 	// Build info API (protected)
 	siteMux.HandleFunc(pathPrefix+"api/build-info", authMiddleware.Wrap(server.handleBuildInfo))
 
@@ -472,6 +475,15 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	siteMux.HandleFunc(pathPrefix+"api/webauthn/login/finish", server.handleWebAuthnLoginFinish)
 	siteMux.HandleFunc(pathPrefix+"api/webauthn/validate", server.handleWebAuthnValidateToken)
 
+	// AG-UI Protocol API (SSE streaming + REST endpoints)
+	// Note: AG-UI is built-in GoTTY functionality, no additional auth middleware needed
+	// GoTTY's base authentication already protects the entire application
+	siteMux.HandleFunc(pathPrefix+"api/agui", server.handleAGUI)
+	siteMux.HandleFunc(pathPrefix+"api/agui/chat", server.handleAGUIChat)
+	siteMux.HandleFunc(pathPrefix+"api/agui/tool_result", server.handleAGUIToolResult)
+	siteMux.HandleFunc(pathPrefix+"api/agui/human_response", server.handleAGUIHumanResponse)
+	siteMux.HandleFunc(pathPrefix+"api/agui/state", server.handleAGUIState)
+
 	// IRC chatroom routes
 	if server.options.EnableIRC && server.ircHandler != nil {
 		ircData := struct {
@@ -497,8 +509,22 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	// Apply rate limiting middleware for security
 	siteHandler = server.RateLimitMiddleware(siteHandler)
 
+	// Extract AG-UI SSE endpoint (must not be gzipped to preserve Flusher interface)
+	var aguiHandler http.Handler
+	aguiMux := http.NewServeMux()
+	aguiMux.HandleFunc(pathPrefix+"api/agui", server.handleAGUI)
+	aguiHandler = server.wrapHeaders(aguiMux)
+
+	// Remove AG-UI SSE from siteMux (REST endpoints stay)
+	// Wrap other handlers with gzip
 	withGz := gziphandler.GzipHandler(server.wrapHeaders(siteHandler))
 	siteHandler = server.wrapLogger(withGz)
+
+	// Merge AG-UI SSE handler (without gzip) into the main handler chain
+	finalMux := http.NewServeMux()
+	finalMux.Handle("/", siteHandler)
+	finalMux.Handle(pathPrefix+"api/agui", aguiHandler)
+	siteHandler = http.Handler(finalMux)
 
 	wsMux := http.NewServeMux()
 	wsMux.Handle("/", siteHandler)

@@ -629,20 +629,20 @@
       <div class="right-panel-content">
         <!-- AG UI Tab - Agent UI Interaction -->
         <div class="right-panel-tab-content active" id="right-panel-tab-agui">
-          <div class="agui-toolbar">
-            <input type="text" class="agui-endpoint-url" id="agui-endpoint-url" placeholder="AG UI endpoint (e.g., /api/agui)" value="/api/agui">
-            <button class="btn-right-panel-tool" id="agui-connect-btn" title="Connect">🔌</button>
-          </div>
           <div class="agui-status-bar">
             <div class="agui-status-indicator disconnected" id="agui-status-indicator"></div>
-            <span class="agui-status-text" id="agui-status-text">Disconnected</span>
+            <span class="agui-status-text" id="agui-status-text">点击连接 GoTTY Agent</span>
           </div>
           <div class="right-panel-file-content agui-messages-container" id="agui-messages-container">
             <div class="right-panel-empty-state">
               <div class="empty-icon">🤖</div>
-              <div class="empty-text">No AG UI connection</div>
-              <div class="empty-hint">Enter endpoint URL and click Connect</div>
+              <div class="empty-text">GoTTY AG UI</div>
+              <div class="empty-hint">点击下方按钮连接内置 Agent</div>
             </div>
+          </div>
+          <div class="agui-input-container">
+            <textarea class="agui-input" id="agui-input" placeholder="输入消息给 GoTTY Agent..." rows="2"></textarea>
+            <button class="agui-send-btn" id="agui-send-btn" title="Send">➤</button>
           </div>
         </div>
         <!-- File Preview Tab -->
@@ -1304,6 +1304,11 @@
           document.querySelectorAll('.right-panel-tab-content').forEach(content => {
             content.classList.toggle('active', content.id === 'right-panel-tab-' + tabName);
           });
+
+          // Auto-connect to AG UI when switching to AG UI tab
+          if (tabName === 'agui' && this.aguiClient && this.aguiStatus === 'disconnected') {
+            this.autoConnectAGUI();
+          }
         }
 
         initRightPanelButtons() {
@@ -1471,29 +1476,13 @@
             return;
           }
 
-          // Initialize AG UI client
+          // Initialize AG UI client with fixed endpoint
           this.aguiClient = new window.AGUIClient({
-            endpoint: '/api/agui',
+            endpoint: '/api/agui',  // Fixed: always connect to GoTTY backend
             onEvent: (event) => this.handleAGUIEvent(event),
             onStatusChange: (status) => this.handleAGUIStatusChange(status),
             onError: (error) => this.handleAGUIError(error),
           });
-
-          // Connect button
-          const connectBtn = document.getElementById('agui-connect-btn');
-          if (connectBtn) {
-            connectBtn.addEventListener('click', () => {
-              this.toggleAGUIConnection();
-            });
-          }
-
-          // Clear button
-          const clearBtn = document.getElementById('agui-clear-btn');
-          if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-              this.clearAGUIChat();
-            });
-          }
 
           // Send button
           const sendBtn = document.getElementById('agui-send-btn');
@@ -1516,6 +1505,30 @@
 
           // Initialize status display
           this.updateAGUIStatus('disconnected');
+
+          // Auto-connect on tab switch
+          this.autoConnectAGUI();
+        }
+
+        async autoConnectAGUI() {
+          // Auto-connect to GoTTY backend when AG UI tab is visible
+          if (!this.aguiClient || this.aguiStatus !== 'disconnected') return;
+
+          try {
+            await this.aguiClient.connect('/api/agui');
+            console.log('[AG-UI] Auto-connected to GoTTY backend');
+          } catch (error) {
+            console.error('[AG-UI] Auto-connect failed:', error);
+            // Add error message to chat
+            this.aguiMessages.push({
+              type: 'system',
+              id: 'error-' + Date.now(),
+              role: 'system',
+              content: '连接失败：' + (error.message || '未知错误'),
+              timestamp: Date.now(),
+            });
+            this.renderAGUIMessages();
+          }
         }
 
         handleAGUIEvent(event) {
@@ -1580,7 +1593,6 @@
         updateAGUIStatus(status) {
           const indicator = document.getElementById('agui-status-indicator');
           const statusText = document.getElementById('agui-status-text');
-          const connectBtn = document.getElementById('agui-connect-btn');
           const input = document.getElementById('agui-input');
           const sendBtn = document.getElementById('agui-send-btn');
 
@@ -1589,28 +1601,14 @@
           // Update indicator
           indicator.className = 'agui-status-indicator ' + status;
 
-          // Update status text
+          // Update status text (Chinese labels)
           const statusLabels = {
-            'disconnected': 'Disconnected',
-            'connecting': 'Connecting...',
-            'connected': 'Connected',
-            'error': 'Error',
+            'disconnected': '点击输入框开始对话',
+            'connecting': '连接中...',
+            'connected': '已连接到 GoTTY Agent',
+            'error': '连接错误',
           };
           statusText.textContent = statusLabels[status] || status;
-
-          // Update connect button
-          if (connectBtn) {
-            if (status === 'connected') {
-              connectBtn.textContent = '🔴';
-              connectBtn.title = 'Disconnect';
-            } else if (status === 'connecting') {
-              connectBtn.textContent = '⏳';
-              connectBtn.title = 'Connecting...';
-            } else {
-              connectBtn.textContent = '🔌';
-              connectBtn.title = 'Connect';
-            }
-          }
 
           // Update input state
           if (input) {
@@ -1618,36 +1616,6 @@
           }
           if (sendBtn) {
             sendBtn.disabled = status !== 'connected';
-          }
-        }
-
-        async toggleAGUIConnection() {
-          if (!this.aguiClient) return;
-
-          if (this.aguiStatus === 'connected') {
-            this.aguiClient.disconnect();
-          } else {
-            const endpointInput = document.getElementById('agui-endpoint-url');
-            const endpoint = endpointInput?.value || '/api/agui';
-
-            try {
-              this.aguiIsTyping = true;
-              this.renderAGUIMessages();
-              await this.aguiClient.connect(endpoint);
-
-              // Add system message
-              this.aguiMessages.push({
-                type: 'system',
-                id: 'system-' + Date.now(),
-                role: 'system',
-                content: 'Connected to AG UI endpoint: ' + endpoint,
-                timestamp: Date.now(),
-              });
-              this.renderAGUIMessages();
-            } catch (error) {
-              this.aguiIsTyping = false;
-              console.error('[AG-UI] Failed to connect:', error);
-            }
           }
         }
 
@@ -1690,11 +1658,6 @@
             });
             this.renderAGUIMessages();
           }
-        }
-
-        clearAGUIChat() {
-          this.aguiMessages = [];
-          this.renderAGUIMessages();
         }
 
         renderAGUIMessages() {
@@ -1803,7 +1766,9 @@
 
         createAGUIHumanInTheLoopElement(event) {
           const elem = document.createElement('div');
-          elem.className = 'agui-event';
+          elem.className = 'agui-event hitl';
+
+          const actions = this.getHITLActions(event);
 
           elem.innerHTML = `
             <div class="agui-event-header">
@@ -1811,9 +1776,105 @@
               <span class="agui-event-title">Human In The Loop</span>
             </div>
             <div class="agui-event-content">${this.escapeHtml(event.message)}</div>
+            <div class="hitl-actions">${actions}</div>
           `;
 
+          // Bind action handlers
+          this.bindHITLActions(elem, event);
+
           return elem;
+        }
+
+        getHITLActions(event) {
+          switch (event.requestType) {
+            case 'confirm':
+              return `
+                <button class="hitl-btn hitl-btn-confirm" data-action="confirm">确认</button>
+                <button class="hitl-btn hitl-btn-cancel" data-action="cancel">取消</button>
+              `;
+            case 'input':
+              return `
+                <input type="text" class="hitl-input" placeholder="请输入..." data-action="input">
+                <button class="hitl-btn hitl-btn-submit" data-action="submit">提交</button>
+              `;
+            case 'select':
+              if (event.schema && event.schema.options) {
+                const options = event.schema.options.map(opt =>
+                  `<option value="${this.escapeHtml(opt.value)}">${this.escapeHtml(opt.label)}</option>`
+                ).join('');
+                return `
+                  <select class="hitl-select" data-action="select">${options}</select>
+                  <button class="hitl-btn hitl-btn-submit" data-action="submit">提交</button>
+                `;
+              }
+              return `<div class="hitl-error">Invalid schema</div>`;
+            default:
+              return `<div class="hitl-error">Unknown request type: ${event.requestType}</div>`;
+          }
+        }
+
+        bindHITLActions(elem, event) {
+          const confirmBtn = elem.querySelector('[data-action="confirm"]');
+          const cancelBtn = elem.querySelector('[data-action="cancel"]');
+          const submitBtn = elem.querySelector('[data-action="submit"]');
+          const input = elem.querySelector('.hitl-input');
+          const select = elem.querySelector('.hitl-select');
+
+          if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+              this.sendHITLResponse(event.id, { confirm: true });
+            });
+          }
+
+          if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+              this.sendHITLResponse(event.id, { confirm: false });
+            });
+          }
+
+          if (submitBtn) {
+            submitBtn.addEventListener('click', () => {
+              if (input && input.value) {
+                this.sendHITLResponse(event.id, { value: input.value });
+              } else if (select) {
+                this.sendHITLResponse(event.id, { value: select.value });
+              }
+            });
+          }
+
+          // Enter key for input
+          if (input) {
+            input.addEventListener('keypress', (e) => {
+              if (e.key === 'Enter' && input.value) {
+                this.sendHITLResponse(event.id, { value: input.value });
+              }
+            });
+          }
+        }
+
+        async sendHITLResponse(requestId, data) {
+          if (!this.aguiClient) {
+            console.error('[AG-UI] Cannot send HITL response: client not connected');
+            return;
+          }
+
+          try {
+            await this.aguiClient.sendHumanResponse(requestId, data);
+            console.log('[AG-UI] HITL response sent:', data);
+          } catch (error) {
+            console.error('[AG-UI] Failed to send HITL response:', error);
+          }
+        }
+
+        showAGUIHumanInTheLoop(event) {
+          // Add HITL event to message list
+          this.aguiMessages.push({
+            type: 'human_in_the_loop',
+            ...event,
+            timestamp: Date.now()
+          });
+          this.renderAGUIMessages();
+          console.log('[AG-UI] Human in the loop request:', event);
         }
 
         createAGUISystemMessageElement(event) {
@@ -1831,11 +1892,6 @@
           `;
 
           return elem;
-        }
-
-        showAGUIHumanInTheLoop(event) {
-          // TODO: Implement HITL UI
-          console.log('[AG-UI] Human in the loop request:', event);
         }
 
         escapeHtml(text) {
@@ -1973,114 +2029,45 @@
           contentDiv.innerHTML = '<div class="right-panel-loading">Loading...</div>';
 
           try {
-            // Fetch the URL content
-            const response = await fetch(url, {
-              mode: 'cors',
-              credentials: 'omit'
-            });
+            // Use iframe with same-origin proxy for full JS/CSS isolation
+            // The server proxies the external URL to same-origin, so:
+            // 1. Each iframe has independent window/document sandbox
+            // 2. JS executes naturally in iframe context
+            // 3. Screenshot works because same-origin
+            // 4. No CORS issues because server-side proxy
 
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const html = await response.text();
-            console.log('[RightPanel] Fetched HTML, length:', html.length);
-
-            // Create a container div with Shadow DOM for style isolation
             const container = document.createElement('div');
             container.className = 'http-preview-container';
             container.style.cssText = 'width: 100%; height: 100%; overflow: auto; position: relative;';
 
-            // Attach Shadow DOM (open mode so html2canvas can access it)
-            const shadow = container.attachShadow({ mode: 'open' });
-            // Set Shadow DOM host styles
-            shadow.host.style.cssText = 'width: 100%; height: 100%; display: block;';
+            const iframe = document.createElement('iframe');
+            iframe.style.cssText = 'width: 100%; height: 100%; border: none; display: block;';
 
-            // Parse the fetched HTML
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
+            // Construct proxy URL - use absolute path from window.location
+            const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
+            const proxyUrl = baseUrl + 'api/proxy/?url=' + encodeURIComponent(url);
 
-            // Extract base URL for resolving relative paths
-            let baseURL = url;
-            const base = doc.querySelector('base');
-            if (base && base.href) {
-              baseURL = base.href;
-            }
+            iframe.src = proxyUrl;
+            iframe.sandbox = 'allow-scripts allow-same-origin allow-forms';
 
-            // Create wrapper for content
-            const wrapper = document.createElement('div');
-            wrapper.className = 'http-preview-wrapper';
-            wrapper.style.cssText = 'width: 100%; min-height: 100%; box-sizing: border-box;';
+            // Handle iframe load events
+            iframe.onload = () => {
+              console.log('[RightPanel] Iframe loaded:', url);
+              // Remove loading indicator
+              contentDiv.innerHTML = '';
+              container.appendChild(iframe);
+              contentDiv.appendChild(container);
+            };
 
-            // Add minimal base styles for Shadow DOM host and wrapper
-            // Don't reset all margins/paddings - preserve original page styles
-            const baseStyle = document.createElement('style');
-            baseStyle.textContent = `
-                :host {
-                    display: block;
-                    width: 100%;
-                    height: 100%;
-                    overflow: auto;
-                }
-                .http-preview-wrapper {
-                    display: block;
-                    width: 100%;
-                    min-height: 100%;
-                    box-sizing: border-box;
-                }
-            `;
-            shadow.appendChild(baseStyle);
+            iframe.onerror = () => {
+              console.error('[RightPanel] Iframe error:', url);
+              throw new Error('Failed to load content in iframe');
+            };
 
-            // Extract and apply original page styles from <link> tags (external CSS)
-            const links = Array.from(doc.querySelectorAll('link[rel="stylesheet"]'));
-            links.forEach(link => {
-              const href = link.getAttribute('href');
-              if (href) {
-                const resolvedHref = new URL(href, baseURL).href;
-                const linkEl = document.createElement('link');
-                linkEl.rel = 'stylesheet';
-                linkEl.href = resolvedHref;
-                shadow.appendChild(linkEl);
-              }
-            });
-
-            // Extract and apply original page styles from <style> tags
-            const styles = Array.from(doc.querySelectorAll('style'));
-            styles.forEach(style => {
-                const styleEl = document.createElement('style');
-                // Transform 'body' to '.http-preview-wrapper' so styles apply correctly in Shadow DOM
-                let cssText = style.innerHTML.replace(/body\s*\{/g, '.http-preview-wrapper {');
-                // Also transform 'html' if present
-                cssText = cssText.replace(/html\s*\{/g, '.http-preview-wrapper {');
-                styleEl.textContent = cssText;
-                shadow.appendChild(styleEl);
-            });
-
-            wrapper.innerHTML = doc.body.innerHTML;
-
-            // Fix relative URLs
-            wrapper.querySelectorAll('img').forEach(img => {
-              const src = img.getAttribute('src');
-              if (src && !src.startsWith('http') && !src.startsWith('data:') && !src.startsWith('blob:')) {
-                img.src = new URL(src, baseURL).href;
-              }
-            });
-
-            wrapper.querySelectorAll('a').forEach(a => {
-              const href = a.getAttribute('href');
-              if (href && !href.startsWith('http') && !href.startsWith('#') && !href.startsWith('javascript:')) {
-                a.href = new URL(href, baseURL).href;
-              }
-            });
-
-            // Append wrapper to Shadow DOM
-            shadow.appendChild(wrapper);
-
-            // Clear loading and show content
-            contentDiv.innerHTML = '';
+            container.appendChild(iframe);
             contentDiv.appendChild(container);
 
-            console.log('[RightPanel] HTTP content loaded via Shadow DOM:', url);
+            console.log('[RightPanel] HTTP content loaded via iframe:', url);
 
           } catch (error) {
             console.error('[RightPanel] Failed to load HTTP content:', error);
@@ -2089,7 +2076,7 @@
                 <div class="error-icon">⚠️</div>
                 <div class="error-title">Failed to load content</div>
                 <div class="error-message">${this.escapeHtml(error.message)}</div>
-                <div class="error-hint">Make sure the URL is accessible and allows CORS</div>
+                <div class="error-hint">Make sure the URL is accessible</div>
               </div>
             `;
           }
@@ -2133,16 +2120,43 @@
           }
 
           try {
-            // Use html2canvas to capture the panel
-            const canvas = await window.html2canvas(rightPanel, {
-              backgroundColor: '#1e1e2e',
-              scale: 1,
-              logging: false,
-              useCORS: true,
-              allowTaint: true
-            });
+            // Check if we have an iframe preview
+            const httpContent = document.getElementById('right-panel-http-content');
+            const iframe = httpContent?.querySelector('.http-preview-container iframe');
 
-            console.log('[RightPanel] Screenshot captured, canvas size:', canvas.width, 'x', canvas.height);
+            let canvas;
+
+            if (iframe) {
+              // Iframe preview - capture iframe content directly
+              console.log('[RightPanel] Capturing iframe screenshot');
+
+              // Access iframe document (works because same-origin proxy)
+              const iframeDoc = iframe.contentWindow.document;
+
+              // Capture iframe body with html2canvas
+              canvas = await window.html2canvas(iframeDoc.body, {
+                document: iframeDoc,  // Critical: use iframe's document
+                backgroundColor: '#1e1e2e',
+                scale: 1,
+                logging: false,
+                useCORS: true,
+                allowTaint: true
+              });
+
+              console.log('[RightPanel] Iframe screenshot captured, size:', canvas.width, 'x', canvas.height);
+            } else {
+              // Regular content - capture the panel
+              console.log('[RightPanel] Capturing regular panel screenshot');
+              canvas = await window.html2canvas(rightPanel, {
+                backgroundColor: '#1e1e2e',
+                scale: 1,
+                logging: false,
+                useCORS: true,
+                allowTaint: true
+              });
+
+              console.log('[RightPanel] Screenshot captured, canvas size:', canvas.width, 'x', canvas.height);
+            }
 
             const dataUrl = canvas.toDataURL('image/png');
 
