@@ -208,7 +208,8 @@ body.sidebar-auto-hide #sidebar-trigger {
 
 .sidebar-toolbar {
     display: flex;
-    justify-content: space-around;
+    justify-content: center;
+    gap: 4px;
     padding: 8px;
     border-top: 1px solid #1a1a1a;
     background: #252525;
