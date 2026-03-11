@@ -703,6 +703,9 @@ body.sidebar-auto-hide #sidebar-trigger {
 .session-info {
     flex: 1;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .session-title {
@@ -803,7 +806,7 @@ body.sidebar-auto-hide #sidebar-trigger {
     background: black;
     padding: 0;
     margin: 0;
-    /* Remove width:100% - let flex handle it */
+    width: 100%;
     order: 1;
 }
 
@@ -842,14 +845,6 @@ body.sidebar-auto-hide #sidebar-trigger {
     margin: 0 !important;
     /* Use left/right for width, not explicit width */
     height: 100% !important;
-    /* Force hide scrollbar - xterm.css sets overflow-y:scroll */
-    overflow-y: auto !important;
-    scrollbar-width: none !important; /* Firefox */
-}
-
-/* Hide scrollbar for Webkit browsers (Chrome/Safari) */
-#terminal .xterm-viewport::-webkit-scrollbar {
-    display: none !important;
 }
 
 #terminal .xterm-screen {
@@ -862,19 +857,9 @@ body.sidebar-auto-hide #sidebar-trigger {
 #terminal .xterm-canvas-layer,
 #terminal .xterm-text-layer,
 #terminal .xterm-cursor-layer,
-#terminal .xterm-selection-layer,
-#terminal .xterm-link-layer {
+#terminal .xterm-selection-layer {
     width: 100% !important;
     height: 100% !important;
-}
-
-/* Force canvas elements to stretch to container width */
-#terminal .xterm-screen canvas,
-#terminal .xterm-link-layer canvas {
-    width: 100% !important;
-    height: 100% !important;
-    /* Override any inline width/height attributes */
-    max-width: none !important;
 }
 
 /* IRC Chat Container - mutually exclusive with terminal */
@@ -3785,3 +3770,72 @@ body.sidebar-auto-hide #sidebar-trigger {
         opacity: 1;
     }
 }
+
+/* ==================== Pinned Sessions ==================== */
+/* Pinned section container */
+.pinned-section {
+    border-bottom: 1px solid rgba(74, 158, 255, 0.3);
+    margin-bottom: 8px;
+}
+
+/* Pinned section header */
+.pinned-section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #4a9eff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: rgba(74, 158, 255, 0.1);
+    border-left: 2px solid #4a9eff;
+}
+
+.pinned-icon {
+    font-size: 12px;
+}
+
+/* Unpinned section */
+.unpinned-section {
+    /* No special styling, just normal session list */
+}
+
+/* All sessions section (contains all root items) */
+.all-sessions-section {
+    /* No special styling */
+}
+
+/* Pin indicator on session items */
+.pin-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    margin-right: 3px;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.session-item.pinned {
+    background: rgba(74, 158, 255, 0.08);
+    border-left: 2px solid rgba(74, 158, 255, 0.5);
+}
+
+.session-item.pinned:hover {
+    background: rgba(74, 158, 255, 0.15);
+}
+
+.session-item.pinned.active {
+    background: rgba(74, 158, 255, 0.3);
+}
+
+/* Pinned section divider */
+.pinned-section {
+    border-bottom: 1px dashed rgba(74, 158, 255, 0.3);
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+
+

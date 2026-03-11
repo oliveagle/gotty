@@ -102,7 +102,7 @@
       <!-- Context menu for sessions -->
       <div id="context-menu" class="context-menu">
         <div class="context-menu-item" data-action="pin">
-          <span class="menu-icon">📌</span> Pin/Unpin
+          <span class="menu-icon">📍</span> Pin
         </div>
         <div class="context-menu-divider"></div>
         <div class="context-menu-item" data-action="kill">
@@ -1961,50 +1961,57 @@
             // Create a container div with Shadow DOM for style isolation
             const container = document.createElement('div');
             container.className = 'http-preview-container';
-            container.style.cssText = 'width: 100%; height: 100%; overflow: auto; background: #fff;';
+            container.style.cssText = 'width: 100%; height: 100%; overflow: auto; position: relative;';
 
-            // Open shadow DOM
+            // Attach Shadow DOM (open mode so html2canvas can access it)
             const shadow = container.attachShadow({ mode: 'open' });
 
             // Parse the fetched HTML
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
 
-            // Extract and inject styles
-            const styles = Array.from(doc.querySelectorAll('style'));
-            styles.forEach(style => {
-              shadow.appendChild(style.cloneNode(true));
-            });
-
             // Extract base URL for resolving relative paths
-            const baseURL = new URL(url);
+            let baseURL = url;
             const base = doc.querySelector('base');
-            if (base) {
-              baseURL = new URL(base.href, url);
+            if (base && base.href) {
+              baseURL = base.href;
             }
 
-            // Fix relative URLs in the fetched content
-            const elements = shadow.createElement('div');
-            elements.innerHTML = doc.body.innerHTML;
+            // Create wrapper for content
+            const wrapper = document.createElement('div');
+            wrapper.className = 'http-preview-wrapper';
+            wrapper.style.cssText = 'min-height: 100%; margin: 0; padding: 0;';
+            wrapper.innerHTML = doc.body.innerHTML;
 
-            // Fix image src
-            elements.querySelectorAll('img').forEach(img => {
+            // Fix relative URLs
+            wrapper.querySelectorAll('img').forEach(img => {
               const src = img.getAttribute('src');
-              if (src && !src.startsWith('http') && !src.startsWith('data:')) {
+              if (src && !src.startsWith('http') && !src.startsWith('data:') && !src.startsWith('blob:')) {
                 img.src = new URL(src, baseURL).href;
               }
             });
 
-            // Fix link href (for stylesheets)
-            elements.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
-              const href = link.getAttribute('href');
-              if (href && !href.startsWith('http')) {
-                link.href = new URL(href, baseURL).href;
+            wrapper.querySelectorAll('a').forEach(a => {
+              const href = a.getAttribute('href');
+              if (href && !href.startsWith('http') && !href.startsWith('#') && !href.startsWith('javascript:')) {
+                a.href = new URL(href, baseURL).href;
               }
             });
 
-            // Append content to shadow DOM
-            shadow.appendChild(elements);
+            // Extract and transform styles from <style> tags
+            const styles = Array.from(doc.querySelectorAll('style'));
+            styles.forEach(style => {
+              const styleEl = document.createElement('style');
+              // Transform 'body' to '.http-preview-wrapper' so styles apply correctly in Shadow DOM
+              let cssText = style.innerHTML.replace(/body\s*\{/g, '.http-preview-wrapper {');
+              // Also transform 'html' if present
+              cssText = cssText.replace(/html\s*\{/g, '.http-preview-wrapper {');
+              styleEl.textContent = cssText;
+              shadow.appendChild(styleEl);
+            });
+
+            // Append wrapper to Shadow DOM
+            shadow.appendChild(wrapper);
 
             // Clear loading and show content
             contentDiv.innerHTML = '';
@@ -3375,8 +3382,9 @@
             const isPinned = this.pinnedSessions.has(id);
             if (pinIcon) {
               pinIcon.textContent = isPinned ? '📍' : '📌';
+              pinIcon.style.fontSize = isPinned ? '14px' : '12px';
+              pinIcon.style.transform = isPinned ? 'rotate(-15deg)' : 'none';
             }
-            pinItem.lastChild.textContent = isPinned ? ' Unpin' : ' Pin';
           }
 
           // Populate workspace submenu (for both sessions and folders)
@@ -3868,7 +3876,17 @@
 
           // Separate pinned and unpinned sessions (only for root-level, non-folder sessions)
           const rootItems = this.sessions.filter(s => !s.parent_id);
+
+          // Debug: log session IDs and types
+          console.log('[renderSessionList] Session IDs:', rootItems.map(s => ({ id: s.id, idType: typeof s.id, title: s.title })));
+          console.log('[renderSessionList] pinnedSessions Set:', [...this.pinnedSessions]);
+          console.log('[renderSessionList] pinnedSessions values types:', [...this.pinnedSessions].map(id => ({ id, type: typeof id })));
+
           const pinnedItems = rootItems.filter(s => !s.is_folder && this.pinnedSessions.has(s.id));
+
+          // Debug log
+          console.log('[renderSessionList] pinnedItems after filter:', pinnedItems.map(i => i.title));
+
           const unpinnedRootItems = rootItems.filter(item => {
             if (item.is_folder) return true;
             return !this.pinnedSessions.has(item.id);
@@ -3918,7 +3936,7 @@
           // Build HTML with pinned section first
           let html = '';
 
-          // Render pinned sessions section
+          // Render pinned sessions section (show in both pinned area and original location)
           if (pinnedItems.length > 0) {
             html += '<div class="pinned-section">';
             html += '<div class="pinned-section-header"><span class="pinned-icon">📌</span> Pinned</div>';
@@ -3926,9 +3944,9 @@
             html += '</div>';
           }
 
-          // Render unpinned sessions section
-          html += '<div class="unpinned-section">';
-          html += renderItems(unpinnedRootItems);
+          // Render all root items (including pinned ones in their original location)
+          html += '<div class="all-sessions-section">';
+          html += renderItems(rootItems);
           html += '</div>';
 
           container.innerHTML = html;
@@ -3963,6 +3981,11 @@
             ? `<div class="activity-dot ${item.is_active ? 'active' : 'inactive'}" title="${item.is_active ? 'Active' : 'Idle'}"></div>`
             : '';
 
+          // Pin indicator (only for non-folder sessions that are pinned)
+          const pinIndicator = !isFolder && this.pinnedSessions.has(item.id)
+            ? `<div class="pin-indicator" title="Pinned">📌</div>`
+            : '';
+
           // Expand button
           const expandBtn = hasChildren
             ? `<button class="session-expand ${isExpanded ? 'expanded' : ''}" onclick="sessionManager.toggleExpand('${item.id}', event)" title="Expand/Collapse">▶</button>`
@@ -3994,7 +4017,8 @@
             item.id === this.activeSessionId ? 'active' : '',
             isFolder ? 'folder' : '',
             isFolder && colorIndex !== null ? `folder-color-${colorIndex}` : '',
-            depth > 0 ? 'child' : ''
+            depth > 0 ? 'child' : '',
+            !isFolder && this.pinnedSessions.has(item.id) ? 'pinned' : ''
           ].filter(Boolean).join(' ');
 
           // Draggable attribute (both sessions and folders are draggable)
@@ -4021,6 +4045,7 @@
               ${activityDot}
               ${expandBtn}
               <div class="session-info">
+                ${pinIndicator}
                 ${titleHtml}
                 ${subtitleHtml}
                 ${workdirHtml}

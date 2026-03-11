@@ -414,60 +414,13 @@ export class Xterm {
             // Resize debug log disabled
             this.lastWidth = currentWidth;
             this.lastHeight = currentHeight;
-
-            // Force container dimensions before fit
-            this.elem.style.width = `${currentWidth}px`;
-            this.elem.style.height = `${currentHeight}px`;
-
             this.fitAddon.fit();
 
-            // Force WebGL to update canvas size (if WebGL is being used)
-            // This needs to be done AFTER fitAddon.fit()
-            if (this.webglAddon) {
-                // Force WebGL to recalculate by temporarily clearing and re-rendering
-                // This ensures the WebGL canvas matches the new dimensions
-                this.webglAddon.clear();
-            }
-
-            // Force all xterm layers to match container dimensions exactly
+            // Force viewport to match container width exactly
             const viewport = this.elem.querySelector('.xterm-viewport') as HTMLElement;
             if (viewport) {
                 viewport.style.width = '100%';
                 viewport.style.right = '0';
-                viewport.style.bottom = '0';
-            }
-
-            // Force screen and all layers to exact container size
-            const screen = this.elem.querySelector('.xterm-screen') as HTMLElement;
-            if (screen) {
-                screen.style.width = `${currentWidth}px`;
-                screen.style.height = `${currentHeight}px`;
-            }
-
-            // Force all layer canvases to match screen size
-            const layers = this.elem.querySelectorAll('.xterm-screen canvas, .xterm-link-layer, .xterm-text-layer, .xterm-cursor-layer, .xterm-selection-layer');
-            layers.forEach((layer) => {
-                const el = layer as HTMLElement;
-                el.style.width = '100%';
-                el.style.height = '100%';
-                // Also update canvas attributes for proper scaling
-                if (el instanceof HTMLCanvasElement) {
-                    const dpr = window.devicePixelRatio || 1;
-                    el.width = currentWidth * dpr;
-                    el.height = currentHeight * dpr;
-                    // Force CSS to stretch canvas to container
-                    el.style.transform = 'none';
-                    el.style.transformOrigin = 'top left';
-                }
-            });
-
-            // Also force link-layer canvas specifically
-            const linkLayerCanvas = this.elem.querySelector('.xterm-link-layer canvas') as HTMLCanvasElement;
-            if (linkLayerCanvas) {
-                linkLayerCanvas.width = currentWidth * (window.devicePixelRatio || 1);
-                linkLayerCanvas.height = currentHeight * (window.devicePixelRatio || 1);
-                linkLayerCanvas.style.width = '100%';
-                linkLayerCanvas.style.height = '100%';
             }
 
             // Only scroll if terminal is fully initialized
