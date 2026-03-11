@@ -4172,24 +4172,21 @@
             return html;
           };
 
-          // Render pinned item with path
+          // Render pinned item without path
           const renderPinnedItem = (item) => {
-            const path = getSessionPath(item.id);
-            const pathDisplay = path.length > 1 ? path.slice(0, -1).join(' / ') + ' / ' : '';
+            const pathDisplay = '';
 
             // Activity indicator
             const activityDot = `<div class="activity-dot ${item.is_active ? 'active' : 'inactive'}" title="${item.is_active ? 'Active' : 'Idle'}"></div>`;
 
-            // Title with path
+            // Title without path or workdir
             const titleHtml = `
               <div class="session-info">
                 <div>
                   <div class="session-title">
-                    ${pathDisplay ? `<span style="color: #666; font-size: 11px;">${pathDisplay}</span>` : ''}
                     <span>${item.title}</span>
                   </div>
                   ${item.subtitle ? `<div class="session-subtitle">${item.subtitle}</div>` : ''}
-                  ${item.workdir ? `<div class="session-workdir" title="${item.workdir}">${item.workdir}</div>` : ''}
                 </div>
               </div>
             `;
