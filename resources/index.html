@@ -4177,7 +4177,7 @@
           // Render pinned item with folder name
           const renderPinnedItem = (item) => {
             // Get folder name (parent title) if session has a parent
-            const folderName = item.parent_id ? this.getSessionParentName(item.parent_id) : '';
+            const folderName = item.parent_id ? getSessionParentName(item.parent_id) : '';
 
             // Activity indicator
             const activityDot = `<div class="activity-dot ${item.is_active ? 'active' : 'inactive'}" title="${item.is_active ? 'Active' : 'Idle'}"></div>`;
