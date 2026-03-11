@@ -509,8 +509,22 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	// Apply rate limiting middleware for security
 	siteHandler = server.RateLimitMiddleware(siteHandler)
 
+	// Extract AG-UI SSE endpoint (must not be gzipped to preserve Flusher interface)
+	var aguiHandler http.Handler
+	aguiMux := http.NewServeMux()
+	aguiMux.HandleFunc(pathPrefix+"api/agui", server.handleAGUI)
+	aguiHandler = server.wrapHeaders(aguiMux)
+
+	// Remove AG-UI SSE from siteMux (REST endpoints stay)
+	// Wrap other handlers with gzip
 	withGz := gziphandler.GzipHandler(server.wrapHeaders(siteHandler))
 	siteHandler = server.wrapLogger(withGz)
+
+	// Merge AG-UI SSE handler (without gzip) into the main handler chain
+	finalMux := http.NewServeMux()
+	finalMux.Handle("/", siteHandler)
+	finalMux.Handle(pathPrefix+"api/agui", aguiHandler)
+	siteHandler = http.Handler(finalMux)
 
 	wsMux := http.NewServeMux()
 	wsMux.Handle("/", siteHandler)
