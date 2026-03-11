@@ -2011,6 +2011,24 @@
             const wrapper = document.createElement('div');
             wrapper.className = 'http-preview-wrapper';
             wrapper.style.cssText = 'width: 100%; min-height: 100%; margin: 0; padding: 0; box-sizing: border-box;';
+
+            // Add CSS reset for injected content to fix margin/padding issues
+            const style = document.createElement('style');
+            style.textContent = `
+                * {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box;
+                }
+                body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    width: 100%;
+                    height: auto;
+                }
+            `;
+            shadow.appendChild(style);
+
             wrapper.innerHTML = doc.body.innerHTML;
 
             // Fix relative URLs

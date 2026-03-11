@@ -373,37 +373,30 @@ export class Xterm {
     /**
      * Fit terminal after sidebar/right panel toggle.
      * Waits for CSS transitions to complete before fitting.
+     * Debounced to prevent multiple rapid calls during transitions.
      *
      * @param sidebarCollapsed - Whether sidebar is collapsed (hidden)
      * @param rightPanelVisible - Whether right panel is visible (for extended delay)
      */
     fitWithSidebarState(sidebarCollapsed: boolean, rightPanelVisible: boolean = false): void {
-        // Resize debug log disabled
+        // Cancel any pending fit to prevent accumulation
+        if (this.fitTimer) {
+            clearTimeout(this.fitTimer);
+            this.fitTimer = null;
+        }
+        if (this.fitDebounceTimer) {
+            clearTimeout(this.fitDebounceTimer);
+            this.fitDebounceTimer = null;
+        }
 
         // Use longer delay if right panel is visible (300ms transition + buffer)
         const delay = rightPanelVisible ? 350 : 250;
 
         // Wait for CSS transitions to complete
-        setTimeout(() => {
-            const width = Math.round(this.elem.clientWidth);
-            const height = Math.round(this.elem.clientHeight);
-            // Resize debug log disabled
-
-            this.lastWidth = width;
-            this.lastHeight = height;
-            this.fitAddon.fit();
-            // Only scroll if terminal is fully initialized
-            // Delay scrollToBottom to ensure terminal is fully rendered
-            setTimeout(() => {
-                if (this.term.rows > 0 && this.term.cols > 0) {
-                    try {
-                        this.term.scrollToBottom();
-                    } catch (e) {
-                        // Ignore scrollToBottom errors during initialization
-                    }
-                }
-            }, 50);
-            // Resize debug log disabled
+        this.fitTimer = setTimeout(() => {
+            this.fitTimer = null;
+            // Use doFit for proper width tracking and viewport fix
+            this.doFit('sidebar-state');
         }, delay);
     }
 
