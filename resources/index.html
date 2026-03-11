@@ -3348,6 +3348,10 @@
           const menu = document.getElementById('context-menu');
           const session = this.sessions.find(s => s.id === id);
 
+          console.log('[showContextMenu] received id:', id);
+          console.log('[showContextMenu] current sessions:', this.sessions.map(s => ({ id: s.id, title: s.title })));
+          console.log('[showContextMenu] found session:', session);
+
           if (!menu || !session) return;
 
           const isFolder = session.is_folder;
@@ -3432,13 +3436,21 @@
 
         // Toggle pin state for a session
         togglePin(sessionId) {
+          console.log('[togglePin] sessionId:', sessionId);
+          console.log('[togglePin] current pinnedSessions:', [...this.pinnedSessions]);
+
           if (this.pinnedSessions.has(sessionId)) {
             this.pinnedSessions.delete(sessionId);
+            console.log('[togglePin] unpinned, new pinnedSessions:', [...this.pinnedSessions]);
           } else {
             this.pinnedSessions.add(sessionId);
+            console.log('[togglePin] pinned, new pinnedSessions:', [...this.pinnedSessions]);
           }
+
           // Save to localStorage
           localStorage.setItem('pinned_sessions', JSON.stringify([...this.pinnedSessions]));
+          console.log('[togglePin] saved to localStorage, verified:', localStorage.getItem('pinned_sessions'));
+
           // Re-render the session list
           this.renderSessionList();
         }
@@ -3877,20 +3889,26 @@
           // Separate pinned and unpinned sessions (only for root-level, non-folder sessions)
           const rootItems = this.sessions.filter(s => !s.parent_id);
 
-          // Debug: log session IDs and types
-          console.log('[renderSessionList] Session IDs:', rootItems.map(s => ({ id: s.id, idType: typeof s.id, title: s.title })));
-          console.log('[renderSessionList] pinnedSessions Set:', [...this.pinnedSessions]);
-          console.log('[renderSessionList] pinnedSessions values types:', [...this.pinnedSessions].map(id => ({ id, type: typeof id })));
+          // Get current session IDs
+          const currentSessionIds = new Set(this.sessions.map(s => s.id));
 
-          const pinnedItems = rootItems.filter(s => !s.is_folder && this.pinnedSessions.has(s.id));
-
-          // Debug log
-          console.log('[renderSessionList] pinnedItems after filter:', pinnedItems.map(i => i.title));
-
-          const unpinnedRootItems = rootItems.filter(item => {
-            if (item.is_folder) return true;
-            return !this.pinnedSessions.has(item.id);
+          // Clean up pinned sessions: remove IDs that no longer exist
+          let pinnedChanged = false;
+          this.pinnedSessions.forEach(id => {
+            if (!currentSessionIds.has(id)) {
+              this.pinnedSessions.delete(id);
+              pinnedChanged = true;
+            }
           });
+
+          // Save cleaned up pinned sessions
+          if (pinnedChanged) {
+            localStorage.setItem('pinned_sessions', JSON.stringify([...this.pinnedSessions]));
+            console.log('[renderSessionList] Cleaned up stale pinned sessions');
+          }
+
+          // Get all pinned sessions (including those in folders)
+          const pinnedItems = this.sessions.filter(s => !s.is_folder && this.pinnedSessions.has(s.id));
 
           // Build children map for all sessions
           const childrenMap = new Map();
@@ -3900,6 +3918,30 @@
             }
             childrenMap.get(child.parent_id).push(child);
           });
+
+          // Build parent map for path lookup
+          const parentMap = new Map();
+          this.sessions.forEach(s => {
+            if (s.parent_id) {
+              parentMap.set(s.id, s.parent_id);
+            }
+          });
+
+          // Helper function to get session path
+          const getSessionPath = (sessionId) => {
+            const path = [];
+            let currentId = sessionId;
+            while (currentId) {
+              const session = this.sessions.find(s => s.id === currentId);
+              if (session) {
+                path.unshift(session.title);
+                currentId = parentMap.get(currentId);
+              } else {
+                break;
+              }
+            }
+            return path;
+          };
 
           // Assign color indices to folders (root level only)
           let folderColorIndex = 0;
@@ -3933,14 +3975,57 @@
             return html;
           };
 
+          // Render pinned item with path
+          const renderPinnedItem = (item) => {
+            const path = getSessionPath(item.id);
+            const pathDisplay = path.length > 1 ? path.slice(0, -1).join(' / ') + ' / ' : '';
+
+            // Activity indicator
+            const activityDot = `<div class="activity-dot ${item.is_active ? 'active' : 'inactive'}" title="${item.is_active ? 'Active' : 'Idle'}"></div>`;
+
+            // Title with path
+            const titleHtml = `
+              <div class="session-info">
+                <div>
+                  <div class="session-title">
+                    ${pathDisplay ? `<span style="color: #666; font-size: 11px;">${pathDisplay}</span>` : ''}
+                    <span>${item.title}</span>
+                  </div>
+                  ${item.subtitle ? `<div class="session-subtitle">${item.subtitle}</div>` : ''}
+                  ${item.workdir ? `<div class="session-workdir" title="${item.workdir}">${item.workdir}</div>` : ''}
+                </div>
+              </div>
+            `;
+
+            // Item classes
+            const itemClasses = [
+              'session-item',
+              item.id === this.activeSessionId ? 'active' : '',
+              'pinned'
+            ].filter(Boolean).join(' ');
+
+            return `
+              <div class="${itemClasses}"
+                   data-session-id="${item.id}"
+                   onclick="sessionManager.setActiveSession('${item.id}')"
+                   oncontextmenu="sessionManager.showContextMenu('${item.id}', event)">
+                ${activityDot}
+                <div class="session-expand-placeholder"></div>
+                ${titleHtml}
+              </div>
+            `;
+          };
+
           // Build HTML with pinned section first
           let html = '';
 
           // Render pinned sessions section (show in both pinned area and original location)
           if (pinnedItems.length > 0) {
             html += '<div class="pinned-section">';
-            html += '<div class="pinned-section-header"><span class="pinned-icon">📌</span> Pinned</div>';
-            html += renderItems(pinnedItems);
+            pinnedItems.forEach(item => {
+              html += renderPinnedItem(item);
+            });
+            html += '<div class="pinned-section-divider"></div>';
             html += '</div>';
           }
 

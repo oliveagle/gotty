@@ -3774,23 +3774,19 @@ body.sidebar-auto-hide #sidebar-trigger {
 /* ==================== Pinned Sessions ==================== */
 /* Pinned section container */
 .pinned-section {
-    border-bottom: 1px solid rgba(74, 158, 255, 0.3);
-    margin-bottom: 8px;
+    margin-bottom: 0;
 }
 
-/* Pinned section header */
+/* Pinned section divider (simple line) */
+.pinned-section-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(74, 158, 255, 0.3), transparent);
+    margin: 8px 4px;
+}
+
+/* Pinned section header - hidden now */
 .pinned-section-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #4a9eff;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    background: rgba(74, 158, 255, 0.1);
-    border-left: 2px solid #4a9eff;
+    display: none;
 }
 
 .pinned-icon {
@@ -3829,13 +3825,6 @@ body.sidebar-auto-hide #sidebar-trigger {
 
 .session-item.pinned.active {
     background: rgba(74, 158, 255, 0.3);
-}
-
-/* Pinned section divider */
-.pinned-section {
-    border-bottom: 1px dashed rgba(74, 158, 255, 0.3);
-    padding-bottom: 8px;
-    margin-bottom: 8px;
 }
 
 
