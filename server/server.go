@@ -475,6 +475,13 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	siteMux.HandleFunc(pathPrefix+"api/webauthn/login/finish", server.handleWebAuthnLoginFinish)
 	siteMux.HandleFunc(pathPrefix+"api/webauthn/validate", server.handleWebAuthnValidateToken)
 
+	// AG-UI Protocol API (SSE streaming + REST endpoints)
+	siteMux.HandleFunc(pathPrefix+"api/agui", authMiddleware.Wrap(server.handleAGUI))
+	siteMux.HandleFunc(pathPrefix+"api/agui/chat", authMiddleware.Wrap(server.handleAGUIChat))
+	siteMux.HandleFunc(pathPrefix+"api/agui/tool_result", authMiddleware.Wrap(server.handleAGUIToolResult))
+	siteMux.HandleFunc(pathPrefix+"api/agui/human_response", authMiddleware.Wrap(server.handleAGUIHumanResponse))
+	siteMux.HandleFunc(pathPrefix+"api/agui/state", authMiddleware.Wrap(server.handleAGUIState))
+
 	// IRC chatroom routes
 	if server.options.EnableIRC && server.ircHandler != nil {
 		ircData := struct {

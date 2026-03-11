@@ -1803,7 +1803,9 @@
 
         createAGUIHumanInTheLoopElement(event) {
           const elem = document.createElement('div');
-          elem.className = 'agui-event';
+          elem.className = 'agui-event hitl';
+
+          const actions = this.getHITLActions(event);
 
           elem.innerHTML = `
             <div class="agui-event-header">
@@ -1811,9 +1813,105 @@
               <span class="agui-event-title">Human In The Loop</span>
             </div>
             <div class="agui-event-content">${this.escapeHtml(event.message)}</div>
+            <div class="hitl-actions">${actions}</div>
           `;
 
+          // Bind action handlers
+          this.bindHITLActions(elem, event);
+
           return elem;
+        }
+
+        getHITLActions(event) {
+          switch (event.requestType) {
+            case 'confirm':
+              return `
+                <button class="hitl-btn hitl-btn-confirm" data-action="confirm">确认</button>
+                <button class="hitl-btn hitl-btn-cancel" data-action="cancel">取消</button>
+              `;
+            case 'input':
+              return `
+                <input type="text" class="hitl-input" placeholder="请输入..." data-action="input">
+                <button class="hitl-btn hitl-btn-submit" data-action="submit">提交</button>
+              `;
+            case 'select':
+              if (event.schema && event.schema.options) {
+                const options = event.schema.options.map(opt =>
+                  `<option value="${this.escapeHtml(opt.value)}">${this.escapeHtml(opt.label)}</option>`
+                ).join('');
+                return `
+                  <select class="hitl-select" data-action="select">${options}</select>
+                  <button class="hitl-btn hitl-btn-submit" data-action="submit">提交</button>
+                `;
+              }
+              return `<div class="hitl-error">Invalid schema</div>`;
+            default:
+              return `<div class="hitl-error">Unknown request type: ${event.requestType}</div>`;
+          }
+        }
+
+        bindHITLActions(elem, event) {
+          const confirmBtn = elem.querySelector('[data-action="confirm"]');
+          const cancelBtn = elem.querySelector('[data-action="cancel"]');
+          const submitBtn = elem.querySelector('[data-action="submit"]');
+          const input = elem.querySelector('.hitl-input');
+          const select = elem.querySelector('.hitl-select');
+
+          if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+              this.sendHITLResponse(event.id, { confirm: true });
+            });
+          }
+
+          if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+              this.sendHITLResponse(event.id, { confirm: false });
+            });
+          }
+
+          if (submitBtn) {
+            submitBtn.addEventListener('click', () => {
+              if (input && input.value) {
+                this.sendHITLResponse(event.id, { value: input.value });
+              } else if (select) {
+                this.sendHITLResponse(event.id, { value: select.value });
+              }
+            });
+          }
+
+          // Enter key for input
+          if (input) {
+            input.addEventListener('keypress', (e) => {
+              if (e.key === 'Enter' && input.value) {
+                this.sendHITLResponse(event.id, { value: input.value });
+              }
+            });
+          }
+        }
+
+        async sendHITLResponse(requestId, data) {
+          if (!this.aguiClient) {
+            console.error('[AG-UI] Cannot send HITL response: client not connected');
+            return;
+          }
+
+          try {
+            await this.aguiClient.sendHumanResponse(requestId, data);
+            console.log('[AG-UI] HITL response sent:', data);
+          } catch (error) {
+            console.error('[AG-UI] Failed to send HITL response:', error);
+          }
+        }
+
+        showAGUIHumanInTheLoop(event) {
+          // Add HITL event to message list
+          this.aguiMessages.push({
+            type: 'human_in_the_loop',
+            ...event,
+            timestamp: Date.now()
+          });
+          this.renderAGUIMessages();
+          console.log('[AG-UI] Human in the loop request:', event);
         }
 
         createAGUISystemMessageElement(event) {
@@ -1831,11 +1929,6 @@
           `;
 
           return elem;
-        }
-
-        showAGUIHumanInTheLoop(event) {
-          // TODO: Implement HITL UI
-          console.log('[AG-UI] Human in the loop request:', event);
         }
 
         escapeHtml(text) {

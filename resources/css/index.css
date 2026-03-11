@@ -3792,6 +3792,91 @@ body.sidebar-auto-hide #sidebar-trigger {
     }
 }
 
+/* AG UI HITL (Human-in-the-Loop) styles */
+.agui-event.hitl {
+    background: #2a2a3e;
+    border-color: #4a9eff;
+}
+
+.hitl-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #3a3a5a;
+}
+
+.hitl-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.hitl-btn-confirm {
+    background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+    color: white;
+}
+
+.hitl-btn-confirm:hover {
+    background: linear-gradient(135deg, #5cbf60 0%, #4caf50 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+.hitl-btn-cancel {
+    background: linear-gradient(135deg, #f44336 0%, #e53935 100%);
+    color: white;
+}
+
+.hitl-btn-cancel:hover {
+    background: linear-gradient(135deg, #ff5252 0%, #f44336 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+}
+
+.hitl-btn-submit {
+    background: linear-gradient(135deg, #4a9eff 0%, #3a8eef 100%);
+    color: white;
+}
+
+.hitl-btn-submit:hover {
+    background: linear-gradient(135deg, #5aafff 0%, #4a9eff 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(74, 158, 255, 0.3);
+}
+
+.hitl-input,
+.hitl-select {
+    flex: 1;
+    padding: 6px 10px;
+    background: #1a1a2e;
+    border: 1px solid #3a3a5a;
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.hitl-input:focus,
+.hitl-select:focus {
+    border-color: #4a9eff;
+}
+
+.hitl-select {
+    cursor: pointer;
+}
+
+.hitl-error {
+    color: #f44336;
+    font-size: 11px;
+    font-style: italic;
+}
+
 /* ==================== Pinned Sessions ==================== */
 /* Pinned section container */
 .pinned-section {
