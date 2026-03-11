@@ -478,9 +478,15 @@ func (server *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		// Determine cwd: use provided cwd, or folder's cwd if parent_id is set
 		workDir := req.Cwd
 		if workDir == "" && req.ParentID != "" {
-			// Try to get cwd from parent folder
+			// Try to get cwd from parent folder first
 			if folderCwd, ok := server.sessionManager.GetFolderCwd(req.ParentID); ok && folderCwd != "" {
 				workDir = folderCwd
+			} else {
+				// If folder has no cwd, try to get the most recent/relevant cwd from existing sessions in this folder
+				cwdOptions := server.sessionManager.GetFolderCwdOptions(req.ParentID)
+				if len(cwdOptions) > 0 {
+					workDir = cwdOptions[0] // Use the most frequent one
+				}
 			}
 		}
 
@@ -1232,10 +1238,13 @@ func (server *Server) handleURLProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Security: Block private/internal IP ranges to prevent SSRF attacks
-	if isPrivateIP(parsedURL.Hostname()) {
-		log.Printf("[SECURITY] Blocked request to private IP: %s", targetURL)
-		http.Error(w, "Access to private IP addresses is not allowed", http.StatusForbidden)
+	// Security: For iframe preview, we allow localhost and private IPs
+	// since the user is explicitly requesting to preview local services.
+	// The endpoint is protected by GoTTY's authentication.
+	// We only block obviously dangerous patterns
+	if shouldBlockURL(parsedURL) {
+		log.Printf("[SECURITY] Blocked potentially dangerous URL: %s", targetURL)
+		http.Error(w, "URL not allowed", http.StatusForbidden)
 		return
 	}
 
@@ -1304,6 +1313,58 @@ func (server *Server) handleURLProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(buf.Bytes())
+}
+
+// shouldBlockURL checks if a URL should be blocked for security reasons
+// For iframe preview, we allow localhost and private IPs since the endpoint
+// is protected by GoTTY authentication. We only block obviously dangerous patterns.
+func shouldBlockURL(parsedURL *url.URL) bool {
+	hostname := parsedURL.Hostname()
+
+	// Block data URLs
+	if parsedURL.Scheme == "data" {
+		return true
+	}
+
+	// Block file URLs
+	if parsedURL.Scheme == "file" {
+		return true
+	}
+
+	// Block javascript URLs
+	if parsedURL.Scheme == "javascript" {
+		return true
+	}
+
+	// Block blob URLs
+	if parsedURL.Scheme == "blob" {
+		return true
+	}
+
+	// Allow http and https only
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return true
+	}
+
+	// Resolve hostname to check for dangerous patterns
+	ips, err := net.LookupIP(hostname)
+	if err != nil {
+		// If we can't resolve, still allow common local hostnames
+		// since this is for local development preview
+		return false
+	}
+
+	// Check for IPv6 link-local with zone ID (potentially dangerous)
+	for _, ip := range ips {
+		if ip.IsLinkLocalUnicast() && strings.Contains(hostname, "%") {
+			// Block link-local with zone IDs like fe80::1%eth0
+			return true
+		}
+	}
+
+	// Allow all other URLs including localhost and private IPs
+	// since the user is explicitly requesting to preview local services
+	return false
 }
 
 // isPrivateIP checks if a hostname resolves to a private IP address

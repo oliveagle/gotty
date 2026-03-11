@@ -3422,6 +3422,37 @@ body.sidebar-auto-hide #sidebar-trigger {
     word-wrap: break-word;
 }
 
+/* Git diff view styles */
+.right-panel-diff-view {
+    padding: 16px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-y: auto;
+}
+
+.diff-addition {
+    color: #4ade80;  /* Green for additions */
+}
+
+.diff-deletion {
+    color: #ef4444;  /* Red for deletions */
+}
+
+.diff-hunk {
+    color: #a855f7;  /* Purple for hunk headers */
+}
+
+.diff-header {
+    color: #6b7280;  /* Gray for file headers */
+}
+
+.diff-context {
+    color: #888;     /* Muted gray for context lines */
+}
+
 /* HTTP iframe preview */
 .right-panel-iframe {
     width: 100%;

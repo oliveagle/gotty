@@ -1980,12 +1980,24 @@
           }
         }
 
-        async loadRightPanelFile(filePath) {
-          console.log('[RightPanel] Loading file:', filePath);
+        async loadRightPanelFile(filePath, source = 'session') {
+          console.log('[RightPanel] Loading file:', filePath, 'source:', source);
           const pathInput = document.getElementById('right-panel-file-path');
           const contentDiv = document.getElementById('right-panel-file-content');
+          const statusText = document.getElementById('file-status-text');
 
           if (pathInput) pathInput.value = filePath;
+
+          // Update status bar
+          if (statusText) {
+            statusText.textContent = 'Loading...';
+          }
+
+          // For git files, load diff view
+          if (source === 'git') {
+            await this.loadGitDiff(filePath);
+            return;
+          }
 
           try {
             const url = `/api/preview/file?path=${encodeURIComponent(filePath)}`;
@@ -1997,6 +2009,12 @@
             }
             const data = await response.json();
             console.log('[RightPanel] Response data:', data);
+
+            // Update status bar
+            if (statusText) {
+              statusText.textContent = filePath;
+            }
+
             if (data.content) {
               contentDiv.innerHTML = `<pre class="right-panel-file-text">${this.escapeHtml(data.content)}</pre>`;
               console.log('[RightPanel] File content displayed');
@@ -2005,8 +2023,101 @@
             }
           } catch (error) {
             console.error('[RightPanel] Error loading file:', error);
+            // Update status bar
+            if (statusText) {
+              statusText.textContent = `Error: ${error.message}`;
+            }
             contentDiv.innerHTML = `<div class="right-panel-empty-state"><div class="empty-text">Error: ${error.message}</div></div>`;
           }
+        }
+
+        async loadGitDiff(filePath) {
+          console.log('[RightPanel] Loading git diff for:', filePath);
+          const contentDiv = document.getElementById('right-panel-file-content');
+          const statusText = document.getElementById('file-status-text');
+
+          try {
+            const sessionId = this.getSessionId?.() || '';
+            const url = `/api/git/diff?path=${encodeURIComponent(filePath)}&session_id=${encodeURIComponent(sessionId)}`;
+            console.log('[RightPanel] Fetching git diff:', url);
+            const response = await this.authFetch(url);
+            console.log('[RightPanel] Git diff response status:', response.status);
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`Failed to load git diff: ${response.statusText} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log('[RightPanel] Git diff data:', data);
+
+            // Update status bar
+            if (statusText) {
+              statusText.textContent = data.diff ? `${filePath} (modified)` : `${filePath} (no changes)`;
+            }
+
+            if (data.diff && data.diff.trim()) {
+              // Parse and render diff with ANSI color codes
+              const diffHtml = this.parseAnsiDiff(data.diff);
+              contentDiv.innerHTML = `<div class="right-panel-diff-view">${diffHtml}</div>`;
+              console.log('[RightPanel] Git diff displayed');
+            } else {
+              contentDiv.innerHTML = `<div class="right-panel-empty-state"><div class="empty-text">No changes detected</div></div>`;
+            }
+          } catch (error) {
+            console.error('[RightPanel] Error loading git diff:', error);
+            // Update status bar
+            if (statusText) {
+              statusText.textContent = `Error: ${error.message}`;
+            }
+            contentDiv.innerHTML = `<div class="right-panel-empty-state"><div class="empty-text">Error: ${error.message}</div></div>`;
+          }
+        }
+
+        parseAnsiDiff(diffText) {
+          // Parse ANSI color codes and convert to HTML
+          const lines = diffText.split('\n');
+          const htmlLines = [];
+
+          for (const line of lines) {
+            let htmlLine = '';
+
+            // First, convert ANSI codes to HTML spans
+            let processedLine = this.escapeHtml(line);
+
+            // ANSI color codes conversion
+            // \u001b[32m = green (additions)
+            // \u001b[31m = red (deletions)
+            // \u001b[36m = cyan (hunk headers)
+            // \u001b[0m = reset
+            processedLine = processedLine
+              .replace(/\u001b\[32m/g, '<span class="diff-addition">')
+              .replace(/\u001b\[31m/g, '<span class="diff-deletion">')
+              .replace(/\u001b\[36m/g, '<span class="diff-hunk">')
+              .replace(/\u001b\[0m/g, '</span>')
+              .replace(/\u001b\[m/g, '</span>');
+
+            // If no ANSI codes, apply styling based on line prefix
+            if (!line.includes('\u001b[')) {
+              if (line.startsWith('+')) {
+                htmlLine = `<span class="diff-addition">${processedLine}</span>`;
+              } else if (line.startsWith('-')) {
+                htmlLine = `<span class="diff-deletion">${processedLine}</span>`;
+              } else if (line.startsWith('@@')) {
+                htmlLine = `<span class="diff-hunk">${processedLine}</span>`;
+              } else if (line.startsWith('diff') || line.startsWith('index') || line.startsWith('---') || line.startsWith('+++')) {
+                htmlLine = `<span class="diff-header">${processedLine}</span>`;
+              } else {
+                htmlLine = `<span class="diff-context">${processedLine}</span>`;
+              }
+            } else {
+              htmlLine = processedLine;
+            }
+
+            htmlLines.push(htmlLine);
+          }
+
+          return htmlLines.join('\n');
         }
 
         loadRightPanelHttp() {
